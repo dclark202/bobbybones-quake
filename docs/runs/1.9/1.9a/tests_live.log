@@ -1,0 +1,8 @@
+17:26:57    LIVE ACCEPT: PASS
+17:26:57 PASS live_accept: the start's live.json and every file the ramp will write are accepted by the trainer's reader
+17:27:39 after update 1: live.json {'INS_GATE': -6.0, 'INS_COPY': 0.5, 'INS_G': 0.5, 'FOLLOW_PAY': 0.005, 'H2_INS_PG': 0.5, 'SFADE': 0.5}
+17:28:39 PASS the trainer ran and applied live.json (status applied)
+17:28:39 PASS mid values of all 6 dials written after update 1 are applied (from update 4)
+17:28:40 PASS ... and in the save's record of what was played
+17:28:40 PASS the save's play variables carry the binding and the items' judge (INS_BIND 1, INSTR 1, WEAPON_OWN 1.0, JUDGE_ITEMS None)
+17:28:40 ALL PASSED (5 checks)

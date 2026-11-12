@@ -2287,7 +2287,8 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "EDGE_PAY", "COVER_PAY", "SPACE_GATE",                                                                # (2.0b, the pay by the place; the inputs' gate)
              "DRILL_INS_P", "INS_DRILL_SECS", "DRILL_INS_VERBS", "DRILL_INS_QUIET", "DRILL_INS_RATE",                                                    # (2.1, the drills of the instruction)
              "FIN_RATE",                                                                                            # (2.1, the finish time's table: his own damage a second, re-measured as his aim changes)
-             "INTENT_SWITCH", "WEAPON_OWN",                                                                         # (2.1a: the switch cost and "a held weapon is choosable", read only in intend() and in the pay: live, so they go out with the fades and no restart is needed)
+             "FOLLOW_PAY",                                                                                          # (1.9a, the hands' pay for carrying an instruction out)
+             "INTENT_SWITCH", "WEAPON_OWN",                                                                         # (2.1a:the switch cost and "a held weapon is choosable", read only in intend() and in the pay: live, so they go out with the fades and no restart is needed)
              ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ", "DRILL_INS_VERBS", "FIN_RATE")                   # (B-265) the live names whose value is a string, not one number
 
@@ -2344,6 +2345,9 @@ def live_values(get):
     if not 0.0 <= v["INTENT_SWITCH"] <= 0.1:
         raise ValueError("INTENT_SWITCH must be within 0 .. 0.1")
     v["WEAPON_OWN"] = float(get("WEAPON_OWN") or 0.0) > 0   # (2.1a) a held weapon is choosable, live (a PLAY_VAR too); unset: off
+    v["FOLLOW_PAY"] = float(get("FOLLOW_PAY") or 0.0)        # (1.9a) the hands' pay a second for carrying an instruction out; unset: 0
+    if not 0.0 <= v["FOLLOW_PAY"] <= 0.2:
+        raise ValueError("FOLLOW_PAY must be within 0 .. 0.2")
     cf_ = get("CONTACT_FREE")                                # (b1.4a) the chance a contact is free of the lock, live; unset: 0
     v["CONTACT_FREE"] = float(cf_) if (cf_ or "").strip() else 0.0
     if not 0.0 <= v["CONTACT_FREE"] <= 1.0:
@@ -3421,6 +3425,17 @@ if SPAWN_TRUTH:
 HEAD_PAY_TRUTH = float(os.environ.get("HEAD_PAY_TRUTH") or 0.0) > 0
 if HEAD_PAY_TRUTH:
     AUX_COLS = AUX_COLS + ("win_raw",)
+# JUDGE_ITEMS=<file.json> (1.9a; the owner, 2026-11-12: "Judge with items. As long as the head understands the value of items, we're good";
+# "the judge just pays the head") the HEAD's win_raw reads the judge with the next mega's and red armor's race in it (sim/win_judge.py
+# chance_items: the stack each would bring, by the judge's own value of a stack, weighted by the chance each player gets there first and
+# by how soon it is back; its numbers fitted by tools/run/fit_items.py on his own games). The hands' win part (wb_raw, WIN_ADD) is the
+# judge as before. Unset: win_raw is wb_raw, as before. A label, never an input; nothing of the game changes.
+JUDGE_ITEMS = os.environ.get("JUDGE_ITEMS") or ""
+# FOLLOW_PAY (1.9a; live; 0 = off) the hands' pay a second while the instruction he is under is being carried out (its state "doing":
+# docs/runs/2.1/INSTRUCTION.md's table: at the hold's place with its weapon, on the contested item's ground, at the spam's place with its
+# weapon and the point in reach, the enemy in view under push, at the cut-off's place, on his way to check). Temporary: it teaches the hands
+# what an instruction asks; faded out at the run's end. Paid by the simulator into his own pay, so the head's stream (win_raw) never sees it.
+FOLLOW_PAY = float(os.environ.get("FOLLOW_PAY") or 0.0)
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -4164,6 +4179,7 @@ class DuelEnv:
         self.flinch = np.zeros(self.n, np.float32)        # extra error on that direction after being hit, degrees
         ng_ = len(self._mates(0)) + 1                       # players per group
         self.it_t = np.full((self.n, 2), 99.0, np.float32)  # seconds since mega / red armor were last known taken (99 = not known)
+        self.race_n = np.zeros((self.n, 2), np.int64)       # (1.9a, the item race: the truth) how many megas / red armors each player has taken
         self.bel_t = np.full((self.n, len(ROUTE_ITEMS)), 99.0, np.float32)   # the same for every route goal (ITEM_BELIEF)
         self.bel_prev = None                                # the goals' true state at the last look (to notice a pickup)
         self.bel_tick = 0
@@ -4402,6 +4418,7 @@ class DuelEnv:
                         for j_ in range(self.hold_n):
                             self.intent_gi[HOLD_INTENT + j_] = self.hold_g0 + j_
                         self.hold_tg = [[float(x_) for x_ in p_] for p_ in self.hold_pos]
+        self.bsp_path = bsp                                 # (1.9a: item_race finds the map's walking table by it)
         self.om = None                                      # (1.7, COMBAT) the map's numbers for the order (tools/order_maps.py)
         if (COMBAT or INSTR) and self.route is not None:     # (2.1, INSTR: the seconds of walking to the instruction's place)
             of_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "order_maps", os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz")
@@ -7953,6 +7970,11 @@ class DuelEnv:
                              (lrn_ & ~ct_now_ & heard_).sum(), (rk_ & ~ct_now_ & heard_).sum(), (lrn_ & ~ct_now_ & ~heard_).sum(),
                              (rk_ & ~ct_now_ & ~heard_).sum()], np.float64)
             self.stats["keep2"] = k2_
+        if INSTR:                                            # (1.9a, the copy lesson) the target his own network chose at its last reading
+            ot_ = getattr(self, "ins_own_tg", None)          # (before any instruction or force is put in its place): what the head's
+            if ot_ is None or len(ot_) != n:                 # scorer is first taught to give (a record: nothing of the game reads it)
+                ot_ = np.full(n, -1, np.int64)
+            self.ins_own_tg = np.where(live, choice, ot_)
         fi_ = getattr(self, "force_intent", None)       # (2.0c, tools/run/branch_hook.py: a measurement) a seat's target forced while
         if fi_ is not None:                              # its entry is 0 or more: read at once and held; not there: nothing changes
             f_ = who & (np.asarray(fi_[:n]) >= 0)
@@ -11461,6 +11483,11 @@ class DuelEnv:
         # (WIN_W / FADE_V, v0.5.1) the blend's own chance, kept up in every game whatever the switches (they are live)
         self.wb_tab, self.wb_scale = None, 0.0
         self.wb_p = np.full(self.M, 0.5, np.float64)
+        self.wh_raw = np.zeros(self.n, np.float64)           # (1.9a, JUDGE_ITEMS) the head's win part of this frame: the judge with the items
+        self.wh_off = np.zeros(self.M, np.float64)           # ... the items' part of the chance as last counted (the chance with them less without)
+        self.wh_tick = np.full(self.M, -10, np.int64)        # ... the game's frame it was counted on (another than the frame before: a new start)
+        self.ji_P = None                                     # (JUDGE_ITEMS) the items' numbers (sim/win_judge.py items_load)
+        self._ir_nodes = None
         self.wb_raw = np.zeros(self.n, np.float64)           # this frame's win part at G = 1, per player
         self.wb_cb = np.zeros(self.n, np.float64)            # this frame's combat pay (frags, deaths, damage), per player
         self.wb_gm = np.zeros(self.n, bool)                  # this frame: a game under way in his match
@@ -11489,6 +11516,8 @@ class DuelEnv:
                 if WIN_JUDGE:                               # (WIN_JUDGE) the judge in the table's place, its own scale
                     import win_judge as wj_
                     self.wb_judge = wj_.load(WIN_JUDGE)[0]
+                    if JUDGE_ITEMS:                          # (1.9a) the head's judge reads the items' race
+                        self.ji_P = wj_.items_load(JUDGE_ITEMS)
                     z1_, w0_, s0_ = np.ones(1), np.zeros((1, 3)), wj_.parts(np.full(1, wj_.SPAWN), np.zeros(1), np.zeros(1, bool))
                     p1_ = float(wj_.chance(self.wb_judge, z1_, z1_ * GAME_LEN, s0_, w0_, s0_, w0_)[0])
                     assert p1_ > 0.5, "WIN_JUDGE: a lead of 1 must be worth more than a level score"
@@ -11501,6 +11530,48 @@ class DuelEnv:
         if self.wb_tab is None:
             raise RuntimeError("WIN_W / FADE_V: no win_chance.json (or no whole games: GAME_P / LATE_P)")
         return True
+
+    def item_race(self, idx):
+        """(1.9a, JUDGE_ITEMS; the self-play rows of tools/run/ws_eval.py) the next mega's and red armor's race for players idx, the
+        truth: -> dict(present [k, 2] the map has it, tsp [k, 2] seconds until it is back (0: up), walk [k, 2] his seconds of walking
+        to it on the route field (dead: his respawn's wait + the judge's dead_walk; no way: 60), took [k, 2] how many he has
+        taken). A read: nothing changes"""
+        idx = np.atleast_1d(np.asarray(idx, np.int64))
+        k = len(idx)
+        g_ = self._others_arr().shape[1] + 1
+        m = idx // g_
+        far_ = float(self.ji_P.get("far", 60.0)) if self.ji_P is not None else 60.0
+        dw_ = float(self.ji_P.get("dead_walk", 8.0)) if self.ji_P is not None else 8.0
+        pres, tsp, walk = np.zeros((k, 2), bool), np.zeros((k, 2), np.float64), np.full((k, 2), far_, np.float64)
+        R = self.route                                   # (his seconds to it on the route field: the way he would take, its jumps, pads and
+        nh = R.locate(self.state[idx, :3].astype(np.float32)) if R is not None else None    # teleporters in it; R.T)
+        for j_, (lab_, it_) in enumerate(zip(("MH", "RA"), self.big_ids)):
+            if it_ < 0:
+                continue
+            pres[:, j_] = True
+            tsp[:, j_] = np.where(self.item_up[m, it_], 0.0, self.item_t[m, it_])
+            if nh is not None and lab_ in self.route_goal:
+                wt_ = np.asarray(R.T[self.route_goal.index(lab_), nh], np.float64)
+                walk[:, j_] = np.where(wt_ < 1e4, np.minimum(wt_, far_), far_)
+        dead_ = (self.hp[idx] <= 0) | (self.rsp_wait[idx] > 0)
+        walk = np.where(dead_[:, None], np.minimum(np.asarray(self.rsp_wait[idx], np.float64)[:, None] + dw_, far_), walk)
+        return dict(present=pres, tsp=tsp, walk=walk, took=np.asarray(self.race_n[idx]).copy())
+
+    def _wb_items_off(self, m, left):
+        """(1.9a, JUDGE_ITEMS) the items' part of the head's chance for the first seat of matches m: the judge with the items' race
+        less the judge without it (the same stacks, weapons, lead and time as _wb_chance)"""
+        import win_judge as wj_
+        g_ = self._others_arr().shape[1] + 1
+        a_, b_ = m * g_, m * g_ + 1
+        d_ = (self.frags_r[a_] - self.frags_r[b_]).astype(np.float64)
+        left = np.maximum(np.broadcast_to(np.asarray(left, np.float64), m.shape), 0.0)
+        dead_ = (self.hp <= 0) | (self.rsp_wait > 0)
+        w_ = lambda i_: np.where(dead_[i_][:, None], 0.0, self.has[i_][:, [RL, LG, RG]].astype(np.float64))     # noqa: E731
+        hp_, ar_ = np.asarray(self.hp, np.float64), np.asarray(self.armor, np.float64)
+        p1_ = wj_.chance_items(self.wb_judge, self.ji_P, d_, left, hp_[a_], ar_[a_], dead_[a_], w_(a_), hp_[b_], ar_[b_], dead_[b_], w_(b_),
+                               self.item_race(a_), self.item_race(b_))
+        p0_ = wj_.chance(self.wb_judge, d_, left, wj_.parts(hp_[a_], ar_[a_], dead_[a_]), w_(a_), wj_.parts(hp_[b_], ar_[b_], dead_[b_]), w_(b_))
+        return p1_ - p0_
 
     def _wb_chance(self, m, left):
         """(WIN_W) the blend's chance for the first seat of matches m with `left` seconds to play: W(lead, left) of
@@ -11746,6 +11817,7 @@ class DuelEnv:
             self.win_shadow[:] = 0.0
         self.wb_raw[:] = 0.0
         self.wb_gm[:] = False
+        self.wh_raw[:] = 0.0
         self.wsh_pay[:] = 0.0
         gm = np.nonzero(self.game > 0)[0]
         if not len(gm):
@@ -11775,6 +11847,12 @@ class DuelEnv:
             yb_ = self.wb_scale * (pb_ - self.wb_p[gm])
             self.wb_p[gm] = pb_
             self.wb_raw[ab_], self.wb_raw[bb_] = yb_, -yb_
+            if self.ji_P is not None and self.wb_judge is not None:    # (1.9a, JUDGE_ITEMS) the head's: the same change, and the items' part's
+                off_ = self._wb_items_off(gm, lb_)          # change since the frame before (a game's first counted frame: its base, no pay)
+                cont_ = self.g_tick[gm] == self.wh_tick[gm] + 1
+                yh_ = yb_ + self.wb_scale * np.where(cont_, off_ - self.wh_off[gm], 0.0)
+                self.wh_off[gm], self.wh_tick[gm] = off_, self.g_tick[gm]
+                self.wh_raw[ab_], self.wh_raw[bb_] = yh_, -yh_
             self.wsh_now[:] = np.nan
             if WIN_SHAPE_K > 0:                              # (WIN_SHAPE_K, v0.6.1) the shaping: k (g PSI - PSI before), zero-sum
                 ps_ = self._wsh_psi(gm, lb_)
@@ -11886,6 +11964,11 @@ class DuelEnv:
         y = self.wb_scale * (res - float(self.wb_p[m]))
         self.wb_raw[a_] += y
         self.wb_raw[b_] -= y
+        if self.ji_P is not None and self.wb_judge is not None:    # (1.9a) the head's: the result less its chance with the items' part
+            yh_ = y - self.wb_scale * float(self.wh_off[m])
+            self.wh_raw[a_] += yh_
+            self.wh_raw[b_] -= yh_
+            self.wh_off[m], self.wh_tick[m] = 0.0, -10
         self.wb_p[m] = res
         self.stats["win_end"] += (1.0, abs(y), float(abs(y) > 0.1 * self.wb_scale))
 
@@ -14080,7 +14163,7 @@ class DuelEnv:
                 out[:, C["en_spawn"]] = np.where(born_, self.last_spawn[foe], -1)
                 out[:, C["en_dead_t"]] = np.minimum(self.ins_dead_t[:n], 99.0)
         if HEAD_PAY_TRUTH and st is not None and getattr(self, "wb_raw", None) is not None:   # (2.1) the head's pay: the judge's win part of this frame
-            out[:, C["win_raw"]] = np.asarray(self.wb_raw, np.float64)[:n]
+            out[:, C["win_raw"]] = np.asarray(self.wh_raw if self.ji_P is not None else self.wb_raw, np.float64)[:n]   # (1.9a: with the items)
         return out
 
     def _fight_step(self, done, out, st, died):
@@ -14401,6 +14484,16 @@ class DuelEnv:
         reward = -JERK_COST * COST_JERK_W * jerk.astype(np.float32)
         self._pt_begin()
         self._ps("jerk", reward)
+        if INSTR and (FOLLOW_PAY > 0 or (self.ins_v[:self.n] > 0).any()):   # (1.9a, FOLLOW_PAY) carrying out the instruction he is under: a pay
+            nf_ = self.n                                     # a second while its state is "doing" (this frame's _ins_step); a seat under none: 0.
+            fol_ = (self.ins_v[:nf_] > 0) & (self.ins_st[:nf_] == INS_DOING) & (self.hp[:nf_] > 0) & np.asarray(human, bool)[:nf_]
+            if FOLLOW_PAY > 0:                               # (counted whenever an instruction stands, paid only with FOLLOW_PAY above 0)
+                reward = reward + (FOLLOW_PAY * DT) * fol_.astype(np.float32)
+            FP_ = self.stats.get("follow")
+            if FP_ is None:
+                FP_ = self.stats["follow"] = np.zeros(3)
+            c_ = self._counted(np.arange(nf_))
+            FP_ += (float(((self.ins_v[:nf_] > 0) & c_).sum()), float((fol_ & c_).sum()), float(FOLLOW_PAY * DT * (fol_ & c_).sum()))
         wb_on_ = self._wb_on()                               # (WIN_W / FADE_V) the blend this frame (live: read once a frame)
         self.wb_cb[:] = 0.0
         self.r_long = r_long = np.zeros(n, np.float32)      # the game's part of this frame's pay (see r_long in __init__)
@@ -15017,6 +15110,8 @@ class DuelEnv:
                             PS_[11] += float(self._counted(int(i)))
                     if int(it) in self.big_ids:              # (--aux, "who gets there first") the mega or the red armor: who took it
                         self.aux_take.append((int(i), self.big_ids.index(int(it))))
+                        if i < len(self.race_n):             # (1.9a) the item race's count (a record of the truth: nothing reads it in play)
+                            self.race_n[int(i), self.big_ids.index(int(it))] += 1
                     if WAY_MEASURE and int(it) in self.route_item:
                         self._way_trip(int(i), self.route_item.index(int(it)))
                 own_ = bool(self.jrun[i]) and it == self.jrun_it[i]    # (a jump run: his target stays for the other seats' tries)

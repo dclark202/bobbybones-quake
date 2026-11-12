@@ -201,6 +201,7 @@ class Policy:
             self.h2_ah = head2_.mlp_of(sd, "ahead")         # (its inputs: the brain's readouts; the "in control" one if the network has it)
             self.h2_ct = head2_.np_ctrl_params(sd, self.h2)     # (the ctrl slot: the layout's "ctrl_src" readout, None: zeros)
             self.h2_fo = head2_.np_fight_params(sd, self.h2)    # (1.7b, the part fight: the fight odds readout, None: zeros)
+            self.h2_wv = head2_.np_wv_params(ck, self.h2)       # (1.9a, the part wv: the shadow win value, None: zeros)
             self.h2_live = head2_.np_open(self.h2W)          # (gate 0 or its links at zero: the network without it, not stepped)
             self.W = self.h2_at + head2_.np_state_width(self.h2)
         self.o_at = None                                     # (1.7) the combat order's held numbers a seat (head2.CMB_HELD), after the head's state
@@ -649,6 +650,7 @@ class Policy:
                                      ahead=head2_.np_mlp(self.h2_ah, sb_) if self.h2_ah is not None else None,
                                      ctrl=head2_.np_ctrl(self.h2_ct, sb_, hfast[tk_]),
                                      fight=head2_.np_fight(self.h2_fo, sb_, hfast[tk_]),
+                                     wv=head2_.np_wv(getattr(self, "h2_wv", None), sb_, hfast[tk_]),
                                      obs=xa[tk_], hands=hfast[tk_],
                                      ins=(self._ins_u(ist[tk_]) if ist is not None else None))
                 h2s = h2s.copy()

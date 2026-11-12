@@ -155,6 +155,9 @@ class SeatClock:
 # state (256) and the hands' fast memory (512), rounded to half precision, through Linear-ReLU-Linear
 WS_COLS = ("seed", "match", "t", "my_score", "op_score", "my_hp", "my_ar", "op_hp", "op_ar", "my_dead", "op_dead",
            "my_rl", "my_lg", "my_rg", "op_rl", "op_lg", "op_rg", "v_raw", "frags_d")
+WS_ITEMS = (os.environ.get("WS_ITEMS") or "") == "1"       # (1.9a, tools/run/fit_items.py) the next mega's and red armor's race, the truth (env.item_race)
+if WS_ITEMS:
+    WS_COLS = WS_COLS + tuple("{}_{}".format(it_, c_) for it_ in ("mh", "ra") for c_ in ("present", "tsp", "my_walk", "op_walk", "my_took", "op_took"))
 
 
 def ws_attach(pol, path):
@@ -185,6 +188,10 @@ def ws_row(E, env, t, ev, h, pol, score, seed):
     v = ws_value(pol, h)
     cols = [np.full(len(ev), seed), ev // 2, np.full(len(ev), t), score[ev], score[op], env.hp[ev], env.armor[ev], env.hp[op], env.armor[op],
             dead[ev], dead[op]] + [env.has[s_, w_] for s_ in (ev, op) for w_ in (E.RL, E.LG, E.RG)] + [v, env.frags_r[ev] - env.frags_r[op]]
+    if WS_ITEMS:                                             # (1.9a) the items' race of each row's two seats
+        ra_, rb_ = env.item_race(ev), env.item_race(op)
+        for j_ in range(2):
+            cols += [ra_["present"][:, j_], ra_["tsp"][:, j_], ra_["walk"][:, j_], rb_["walk"][:, j_], ra_["took"][:, j_], rb_["took"][:, j_]]
     return np.stack([np.asarray(c, np.float64) for c in cols], 1).astype(np.float32)
 
 

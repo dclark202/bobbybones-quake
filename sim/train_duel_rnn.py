@@ -158,6 +158,15 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                 st_ = env.ins_st[:env.n][env.ins_drill[:env.n]]                                # instruction's state (on the way, doing, done, failed)
                 delta["idr_n"], delta["idr_doing"], delta["idr_done"], delta["idr_failed"] = (
                     float(len(st_)), float((st_ == E_.INS_DOING).sum()), float((st_ == E_.INS_DONE).sum()), float((st_ == E_.INS_FAILED).sum()))
+            fp_ = env.stats.get("follow") if INS_W else None  # (1.9a, FOLLOW_PAY) seat-frames under an instruction, those "doing", the pay
+            if fp_ is not None and fp_[0] > 0:
+                delta["fol_n"], delta["fol_doing"], delta["fol_pay"] = (float(x_) for x_ in fp_)
+                env.stats["follow"] = np.zeros(3)
+            if getattr(env, "ji_P", None) is not None and getattr(env, "wh_raw", None) is not None:   # (1.9a, JUDGE_ITEMS) the head's stream
+                gs_ = np.nonzero(env.wb_gm[:env.n])[0]                   # against the judge without the items, on the game seats of this frame
+                if len(gs_):
+                    delta["ji_n"], delta["ji_d"], delta["ji_h"], delta["ji_w"] = (float(len(gs_)), float(np.abs(env.wh_raw[gs_] - env.wb_raw[gs_]).sum()),
+                                                                              float(np.abs(env.wh_raw[gs_]).sum()), float(np.abs(env.wb_raw[gs_]).sum()))
             if INS_W and getattr(env, "ins_norow", None) is not None and env.ins_norow[0] > 0:      # (2.1a, INS_NO_NONE) the readings since the last step
                 delta["inr_n"], delta["inr_0"], delta["inr_map"] = (float(x_) for x_ in env.ins_norow)
                 env.ins_norow = np.zeros(3, np.float64)
@@ -296,6 +305,8 @@ LIVE_RANGE["H2_INS_PG"] = (0.0, 1.0)                         # the lesson's temp
 LIVE_RANGE["INS_TEMP"] = (0.01, 100.0)
 LIVE_RANGE["INS_TEACH"] = (0.0, 100.0)
 LIVE_RANGE["INS_ENT"] = (0.0, 1.0)
+LIVE_TRAINER = LIVE_TRAINER + ("INS_COPY",)                # (1.9a, --ins-copy) the copy lesson: the scorer taught toward his old head's target
+LIVE_RANGE["INS_COPY"] = (0.0, 100.0)                       # and the weapon in his hand (0 stops it)
 LIVE_TRAINER = LIVE_TRAINER + ("KNOWN_W", "SPAWN_W")         # (2.1, --known-odds, --spawn-odds) a factor on each of the brain's two new lessons
 LIVE_RANGE["KNOWN_W"] = (0.0, 100.0)
 LIVE_RANGE["SPAWN_W"] = (0.0, 100.0)
@@ -1553,6 +1564,9 @@ def main():
     ap.add_argument("--ins-lr", type=float, default=3e-4, help="(retired 2026-11-11: the scorer is inside the head and learns at the head's rate, "
                     "--head2-lr-scale, in the optimizer's group 'ins'; the value is read and not used)")
     ap.add_argument("--ins-teach", type=float, default=1.0, help="... the lesson toward the appraisals' order (live INS_TEACH)")
+    ap.add_argument("--ins-copy", type=float, default=0.0, help="(1.9a) the copy lesson's weight at the start (live INS_COPY): the scorer taught toward "
+                    "the rows of the target his own network chose at its last reading, and the weapon in his hand, at every kept reading played or not "
+                    "(the instruction opens as the choice it stands in for); 0: off, as before")
     ap.add_argument("--ins-pg", type=float, default=0.0, help="... the game's pay on its choice, by the head's own advantage (live H2_INS_PG)")
     ap.add_argument("--ins-temp", type=float, default=0.05, help="... the lesson's temperature: softmax(the appraisals' dV / this) (live INS_TEMP)")
     ap.add_argument("--ins-ent", type=float, default=0.0, help="... an entropy bonus on the rows (live INS_ENT; 0: none)")
@@ -3271,7 +3285,7 @@ def main():
     IST = IGEN = INS_RNG = None
     INS_ACT = [None, None]                                   # (the rollout's own copy of the appraisals in [1]: it plays while they learn; the
     #                                                          scorer is in the network that plays: net.head2)
-    INS_LIVE = dict(g=0.0, teach=0.0, pg=0.0, temp=1.0, ent=0.0)
+    INS_LIVE = dict(g=0.0, teach=0.0, pg=0.0, temp=1.0, ent=0.0, copy=0.0)
     INS_SEEN = [int((INS_CK or {}).get("seen", 0))]          # the appraisals' branches seen so far (the warm-up's count)
     INS_VCOL, INS_NONE, INS_Q, INS_BLK = None, -1, False, None
     if INSL and not INS:
@@ -3292,7 +3306,7 @@ def main():
         INS_RNG = np.random.default_rng(4069)                # (the seats kept for the lesson)
         IST = head2_.InsState(N, I_, dev)
         INS_LIVE.update(g=float(pol.head2.ins_g), teach=max(0.0, float(a.ins_teach)), pg=min(1.0, max(0.0, float(a.ins_pg))),
-                        temp=max(0.01, float(a.ins_temp)), ent=max(0.0, float(a.ins_ent)))
+                        temp=max(0.01, float(a.ins_temp)), ent=max(0.0, float(a.ins_ent)), copy=max(0.0, float(a.ins_copy)))
         nm_ = [str(x_) for x_ in getattr(E_, "INS_FEAT", ())]
         INS_VCOL = [i_ for i_, x_ in enumerate(nm_) if x_.startswith("v_")] or None        # (the rows' verb columns, for the record)
         INS_Q = a.ins_quiet > 0 and head2_.has_quiet(pol.head2)   # (quiet movement: the head has the logit and the appraisals read the bit)
@@ -4223,6 +4237,7 @@ def main():
                         INS_LIVE["pg"] = min(1.0, max(0.0, float(lt_.get("H2_INS_PG", INS_LIVE["pg"]))))
                         INS_LIVE["temp"] = max(0.01, float(lt_.get("INS_TEMP", INS_LIVE["temp"])))
                         INS_LIVE["ent"] = max(0.0, float(lt_.get("INS_ENT", INS_LIVE["ent"])))
+                        INS_LIVE["copy"] = max(0.0, float(lt_.get("INS_COPY", INS_LIVE["copy"])))     # (1.9a)
                         with torch.no_grad():
                             pol.head2.ins_g.fill_(INS_LIVE["g"])
                     H2_OPG_[0] = min(1.0, max(0.0, float(lt_.get("H2_OPG", H2_OPG_[0]))))   # (1.7b) the order's share of the head's term
@@ -4317,7 +4332,7 @@ def main():
                                   **({"BRANCH_P": BR_P[0], "BRANCH_WPN_P": BR_WP[0]} if BR_ON else {}),
                                   **({"BRANCH_LONG_P": BR_LP[0], "INS_LONG_W": INS_LW[0]} if BR_LG else {}),
                                   **({"INS_G": INS_LIVE["g"], "INS_TEACH": INS_LIVE["teach"], "H2_INS_PG": INS_LIVE["pg"],
-                                      "INS_TEMP": INS_LIVE["temp"], "INS_ENT": INS_LIVE["ent"]} if INS else {}),
+                                      "INS_TEMP": INS_LIVE["temp"], "INS_ENT": INS_LIVE["ent"], "INS_COPY": INS_LIVE["copy"]} if INS else {}),
                                   **({"H2_OPG": H2_OPG_[0], "ORD_KL": ORD_KL_[0]} if CMB else {}),
                                   **({"PFSP": PFSP_D[0]} if LG is not None else {}),
                                   **({"WIN_VALUE_W": WV_LIVE[0]} if WV_ON else {}),
@@ -4861,6 +4876,7 @@ def main():
                        wok=torch.zeros(J_, K_, Wi_, dtype=torch.bool), xw=torch.zeros(J_, K_, Fi_, dtype=torch.float16),
                        dvw=torch.zeros(J_, K_, Wi_), c=torch.zeros(J_, K_, dtype=torch.long), w=torch.zeros(J_, K_, dtype=torch.long),
                        lp=torch.zeros(J_, K_), own=torch.zeros(J_, K_, dtype=torch.bool), tm=torch.zeros(J_, K_, dtype=torch.bool),
+                       cq=torch.zeros(J_, K_, Ci_, dtype=torch.bool), cw=torch.full((J_, K_), -1, dtype=torch.long),    # (1.9a, the copy lesson's targets)
                        read=torch.zeros(J_, dtype=torch.bool), verb=np.zeros(len(INS_VCOL) if INS_VCOL else 1), weapon=np.zeros(Wi_), picks=0,
                        **(dict(block=np.zeros(len(INS_BLK[0])), block_names=INS_BLK[0]) if INS_BLK is not None else {}),
                        **(dict(q=torch.zeros(J_, K_, dtype=torch.long), dq=torch.zeros(J_, K_), quiet=np.zeros(len(INS_VCOL) if INS_VCOL else 1)) if INS_Q else {}),
@@ -5030,7 +5046,8 @@ def main():
                     rd_ = dict(brain=sb_, trk=net.track(sb_), trz=net.trackz(sb_) if TRZ else None, ahead=net.ahead(sb_) if AH else None,
                                obs=x)
                     u2_ = head2_.feats(H2L, hands=h, ctrl=head2_.control_t(net, sb_, h, head2_.ctrl_src(H2L)),
-                                       fight=head2_.fight_t(net, sb_, h, H2L), ins=IU_ if INS else None, **rd_)
+                                       fight=head2_.fight_t(net, sb_, h, H2L), ins=IU_ if INS else None,
+                                       wv=head2_.wv_t(WV_ACT if WV_ACT is not None else WV, sb_, h, H2L), **rd_)   # (1.9a: his shadow win value)
                     b_u2[t // BK] = u2_.half().cpu()
                     H2S.tick(net.head2, u2_)
                     if has_snaps and onet.h2_open:                       # (the league's own head on the same brain's answer, its own hands)
@@ -5231,6 +5248,9 @@ def main():
                                                            quiet=torch.full((len(SS_), 1), q_, device=dev))[:, 0] for q_ in (1, 0)]
                             IB_["dq"][j_i] = (head2_.ins_dv(fq_[0], IB_["lw"]) - head2_.ins_dv(fq_[1], IB_["lw"])).cpu()
                     IB_["tm"][j_i] = (any_ & ~dr_ & ~frc_)[SS_].cpu()
+                    if len(IX_) > 13:                                    # (1.9a, the copy lesson) his old head's target's rows, the weapon in his hand
+                        IB_["cq"][j_i] = torch.from_numpy(np.asarray(IX_[13], bool)).to(dev)[SS_].cpu()
+                        IB_["cw"][j_i] = torch.from_numpy(np.asarray(IX_[10], np.int64)).to(dev)[SS_].cpu()
                     if IB_["warm"]:                                      # the chosen row under each weapon: the weapon's lesson
                         Wn_ = wki_.shape[1]
                         IB_["dvw_"] = appraise_.forecast_rows(INS_ACT[1], APR_L, sit_[SS_], xs_[SS_][:, None, :].expand(-1, Wn_, -1),
@@ -5698,6 +5718,8 @@ def main():
                       tw=head2_.ins_target(g_("dvw"), wok_, INS_LIVE["temp"]), twm=tm_ & K_["warm"] & wok_.any(-1), em=tm_)
             if "q" in INS_B:
                 B_["q"], B_["tqq"] = g_("q"), torch.sigmoid(g_("dq") / INS_LIVE["temp"])
+            if "cq" in INS_B:                                            # (1.9a, the copy lesson: every kept reading of a live seat, not a drill's nor a forced one)
+                B_["cq"], B_["cw"], B_["tm_c"] = g_("cq"), g_("cw"), tm_
             if adv is not None:
                 st_ = K_["seats"][kk_]
                 B_["adv"] = adv[K_["fr"].to(adv.device)][:, st_.to(adv.device)].float().to(dev)
@@ -6654,7 +6676,7 @@ def main():
                         ip_ = ins_piece(ho2_, chunk, ADV_W if ADV_W is not None else ADV_H)   # readings, from the re-run head: its terms in the head's loss (--ins-pay-win: the advantage of the win chance alone)
                         if ip_ is not None:
                             li_, oi_ = head2_.ins_loss(pol.head2, ip_[1], ip_[0], INS_LIVE["teach"] if INS_K["warm"] else 0.0,
-                                                       INS_LIVE["pg"], INS_LIVE["ent"], clip)
+                                                       INS_LIVE["pg"], INS_LIVE["ent"], clip, copy_w=INS_LIVE["copy"])
                             with torch.no_grad():
                                 own_i_ = ip_[0]["own"].float()
                                 dl_ = float(((ip_[0]["lp"] - oi_["lp"]) * own_i_).sum())
@@ -6666,6 +6688,8 @@ def main():
                                     INS_ACC[9] += oi_["pg"]
                                     INS_ACC[10] += oi_["ent"]
                                     INS_ACC[11] += 1.0
+                                    INS_ACC[18] += oi_.get("copy", 0.0)  # (1.9a) the copy lesson's term and how often the scorer's best row is his old
+                                    INS_ACC[19] += oi_.get("copy_agree", 0.0)   # head's target
                                     INS_ACC[12] += dl_                   # log p(played) - log p(the learner now), his own readings: the
                                     #                                      staleness of the network that played (--overlap), near 0 without
                                 elif epoch == 2:
@@ -7368,7 +7392,8 @@ def main():
                 INS_REC["tick"] = dict(played=tick_rec(INS_B["sh"][0]), shadow=tick_rec(INS_B["sh"][1]))
             np_i = max(1.0, float(INS_ACC[11]))                          # (inside the head) the three terms' sizes (a piece's mean, the first
             INS_REC["terms"] = dict(teach=round(float(INS_ACC[8]) / np_i, 5), pg=round(float(INS_ACC[9]) / np_i, 5),    # epoch), the choice's KL
-                                    ent=round(float(INS_ACC[10]) / np_i, 5), ent_w=round(float(INS_LIVE["ent"]), 5))
+                                    ent=round(float(INS_ACC[10]) / np_i, 5), ent_w=round(float(INS_LIVE["ent"]), 5),
+                                    copy=round(float(INS_ACC[18]) / np_i, 5), copy_agree=round(float(INS_ACC[19]) / np_i, 4), copy_w=round(float(INS_LIVE["copy"]), 5))
             INS_REC["kl"] = dict(played_to_before=round(float(INS_ACC[12]) / max(1.0, float(INS_ACC[1])), 6),            # (his own readings: the
                                  played_to_after=round(float(INS_ACC[13]) / max(1.0, float(INS_ACC[14])), 6))            # play's staleness; the update's move)
             if float(INS_ACC[17]) > 0:                                   # the head's memory's gradient: from the instruction's terms, from his target's
@@ -7868,6 +7893,14 @@ def main():
         if INS_W_ON and agg.get("inr_n"):                                # (2.1a, INS_NO_NONE) living network seats' readings with no valid real row
             rec["ins_norow"] = dict(readings=int(agg["inr_n"]), no_real_row=round(float(agg.get("inr_0", 0.0)) / float(agg["inr_n"]), 6),
                                     n=int(agg.get("inr_0", 0.0)), on_a_map_without_tables=int(agg.get("inr_map", 0.0)), no_none=bool(getattr(E_, "INS_NO_NONE", False)))
+        if agg.get("fol_n"):                                             # (1.9a, FOLLOW_PAY) of the seat-frames under an instruction: "doing", the pay
+            fn_ = float(agg["fol_n"])
+            rec["follow"] = dict(seat_secs=round(fn_ * float(E_.DT), 1), doing=round(float(agg.get("fol_doing", 0.0)) / fn_, 4),
+                                 pay_per_seat_min=round(float(agg.get("fol_pay", 0.0)) / fn_ / float(E_.DT) * 60.0, 5))
+        if agg.get("ji_n"):                                              # (1.9a, JUDGE_ITEMS) the head's stream: its size, the judge's without the
+            jn_ = float(agg["ji_n"])                                     # items, and the items' part's (a frame's |change|, the game seats)
+            rec["judge_items"] = dict(head_abs=round(float(agg["ji_h"]) / jn_, 7), judge_abs=round(float(agg["ji_w"]) / jn_, 7),
+                                      items_abs=round(float(agg["ji_d"]) / jn_, 7))
         if INS_W_ON and agg.get("idr_n"):                                # (2.1a) the drills: the drilled seats' frames and their share in each state
             dn_ = float(agg["idr_n"])
             rec["drill_ins"] = dict(seat_secs=round(dn_ * float(E_.DT), 1), doing=round(float(agg.get("idr_doing", 0.0)) / dn_, 4),

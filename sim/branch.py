@@ -481,7 +481,20 @@ def worker_feat(env):
             np.asarray(cpk, bool)[:env.n].copy() if cpk is not None else np.zeros((env.n, C), bool),
             np.asarray(env.weapon, np.int16)[:env.n].copy(),
             np.full(env.n, len(sp) if sp is not None else 0, np.int16),
-            (np.asarray(env.instr_pattern(), np.int8) if hasattr(env, "instr_pattern") else np.zeros(env.n, np.int8)))   # (field 12: the pattern's moments)
+            (np.asarray(env.instr_pattern(), np.int8) if hasattr(env, "instr_pattern") else np.zeros(env.n, np.int8)),   # (field 12: the pattern's moments)
+            copy_rows(env, ok))                              # (field 13, 1.9a: the rows of the target his own network chose: the copy lesson)
+
+
+def copy_rows(env, ok):
+    """(1.9a, the copy lesson) [n, C] the offered rows whose target is the one his own network chose at its last reading (the
+    simulator's ins_own_tg, kept before an instruction is put in its place); none where it chose "nothing" or no row has it"""
+    ot = getattr(env, "ins_own_tg", None)
+    tg = getattr(env, "ins_ctg", None)
+    ok = np.asarray(ok, bool)
+    if ot is None or tg is None:
+        return np.zeros(ok.shape, bool)
+    ot = np.asarray(ot, np.int64)[:env.n]
+    return ok & (np.asarray(tg, np.int64)[:env.n] == ot[:, None]) & (ot > 0)[:, None]
 
 
 def worker_spawns(env, smax):

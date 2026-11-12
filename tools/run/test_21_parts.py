@@ -789,7 +789,7 @@ def test_questions():
     wf = BR.worker_feat(Env())
     sp_, k_ = BR.worker_spawns(Env(), 8)
     check("worker: the reply has the rows' spawn points, places, the weapon in hand and the map's spawn points' count; the spawn points padded",
-          len(wf) == 13 and wf[7].shape == (4, C) and wf[8].shape == (4, C, 3) and wf[9].shape == (4, C) and wf[10].tolist() == [0, 1, 2, 6]
+          len(wf) == 14 and wf[7].shape == (4, C) and wf[8].shape == (4, C, 3) and wf[9].shape == (4, C) and wf[10].tolist() == [0, 1, 2, 6]
           and wf[11].tolist() == [5] * 4 and sp_.shape == (8, 3) and k_ == 5 and np.allclose(sp_[:5], Env.spawns) and not sp_[5:].any())
     ixs = tuple(np.asarray(v) for v in wf)
     Xp, bqp = H2.np_ins_prep(ixs, fill, dict(I, xf=F + 8, fx=F), np.zeros((4, 16), np.float32), np.zeros((4, 24), np.float32), zone=np.full((4, 4), 0.25, np.float32),
@@ -1210,7 +1210,7 @@ def test_cleanup():
         def instr_pattern(self):
             return np.array([0, 1, 2, 0], np.int8)
     wfe = BR.worker_feat(Env())
-    check("pattern: the worker's reply carries each seat's pattern mark as its thirteenth field", len(wfe) == 13 and wfe[12].tolist() == [0, 1, 2, 0])
+    check("pattern: the worker's reply carries each seat's pattern mark as its thirteenth field (1.9a: the copy rows the fourteenth)", len(wfe) == 14 and wfe[12].tolist() == [0, 1, 2, 0])
 
     # ---- the head's pay: the win chance alone
     m = H2.make_module(Lm)

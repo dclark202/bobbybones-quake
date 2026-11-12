@@ -94,8 +94,11 @@ import os
 import numpy as np
 
 VERSION = 1
-PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "obs", "hands", "ins", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide);
+PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "wv", "obs", "hands", "ins", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide);
 #                                                          (1.7b) fight: the brain's fight odds, two chances - 0.5 (sim/fightodds.py; without: 0 wide)
+#                                                          (1.9a) wv: his own reading of his chance of winning beyond what the score and the clock say
+#                                                          (the shadow win value, sim/win_value.py, on the brain's state and his hands' memory; one
+#                                                          number, in frags; without: 0 wide)
 KEEP_F = 7                                                   # (1.7a) the keep choice's own numbers: age, contact, log p held, arrived, since arrival, sound, hit unseen
 KEEP_FEAT = 7                                                # (1.7a) the simulator's keep_feat() columns (duel_env.KEEP_FEAT)
 KEEP_AGE_MAX, KEEP_LP_MIN, KEEP_RECENT = 20.0, -10.0, 2.0
@@ -319,12 +322,12 @@ def make_module(L, seed=4044):
         return Head2()
 
 
-def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None):
+def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None):
     """u [B, u_width] (float32 holding half-precision numbers) from the parts (a part None or off: zeros). obs: his
     normalised inputs [B, all inputs] (the columns are taken here). (2.1) ins: the instruction he is on (ins_u; before wobs: what
     inp reads; a layout without the part: 0 wide)"""
     import torch
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv)
     ref = next(v for v in src.values() if v is not None)
     B = ref.shape[0]
     cols = []
@@ -341,7 +344,7 @@ def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, ha
             v = v[:, torch.as_tensor(L[p + "_cols"], dtype=torch.long, device=v.device)]
         if v.shape[1] != w:                                  # (ctrl: the readout's first columns, zeros past its end)
             v = v[:, :w] if v.shape[1] > w else torch.cat([v, v.new_zeros(B, w - v.shape[1])], 1)
-        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins"):
+        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins", "wv"):
             v = v.clamp(-CLIP, CLIP)
         cols.append(v)
     return torch.cat(cols, 1).half().float()
@@ -412,6 +415,39 @@ def fight_t(net, s_brain, hands, L=None):
         m = int(f["both"][0].in_features) - x.shape[1]
         x = torch.cat([x, hands.detach()[:, :m].float()], 1)
         return (torch.sigmoid(f["both"](x.half().float()).float()) - 0.5).detach()
+
+
+def wv_t(mod, s_brain, hands, L=None):
+    """(1.9a, the part wv) his shadow win value (sim/win_value.py's module beside the network: the brain's state and the hands' memory,
+    at half precision) -> [B, 1] (no_grad, detached); None (zeros in the part) for a layout without the part or no module"""
+    import torch
+    if mod is None or (L is not None and not int(L["widths"].get("wv", 0))):
+        return None
+    with torch.no_grad():
+        x = s_brain.detach().float()
+        m = int(mod[0].in_features) - x.shape[1]
+        x = torch.cat([x, hands.detach()[:, :m].float()], 1)
+        return mod(x.half().float()).float().detach()
+
+
+def np_wv_params(ck, L):
+    """(1.9a, the part wv, numpy) the shadow win value's arrays from a checkpoint's top-level "win_value", None for a layout without
+    the part or a file without it"""
+    if not int(L["widths"].get("wv", 0)) or not ck.get("win_value"):
+        return None
+    sd = ck["win_value"]["model"]
+    g = lambda k: np.asarray(sd[k].float().numpy() if hasattr(sd[k], "numpy") else sd[k], np.float32)    # noqa: E731
+    return (g("0.weight"), g("0.bias"), g("2.weight"), g("2.bias"))
+
+
+def np_wv(P, s_brain, hands):
+    """(1.9a) wv_t() in numpy: P from np_wv_params (None: None)"""
+    if P is None:
+        return None
+    x = np.asarray(s_brain, np.float32)
+    m = int(P[0].shape[1]) - x.shape[1]
+    x = np.concatenate([x, np.asarray(hands, np.float32)[:, :m]], 1).astype(np.float16).astype(np.float32)
+    return (np.maximum(x @ P[0].T + P[1], 0.0) @ P[2].T + P[3]).astype(np.float32)
 
 
 class State:
@@ -874,9 +910,9 @@ def np_fight(P, s_brain, hands):
     return (1.0 / (1.0 + np.exp(-np_mlp(P, x))) - 0.5).astype(np.float32)
 
 
-def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None):
+def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None):
     """feats() in numpy"""
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv)
     B = len(next(v for v in src.values() if v is not None))
     cols = []
     for p in PARTS:
@@ -892,7 +928,7 @@ def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None,
             v = v[:, np.asarray(L[p + "_cols"], np.int64)]
         if v.shape[1] != w:
             v = v[:, :w] if v.shape[1] > w else np.concatenate([v, np.zeros((B, w - v.shape[1]), np.float32)], 1)
-        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins"):
+        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins", "wv"):
             v = np.clip(v, -CLIP, CLIP)
         cols.append(v)
     return np.concatenate(cols, 1).astype(np.float16).astype(np.float32)
@@ -1142,7 +1178,7 @@ def np_ins_fill(X, ok, fill, known=None, unsure=None, spodds=None, cspawn=None, 
     return X.astype(np.float16)
 
 
-def ins_loss(m, s, B, teach_w, pg_w, ent_w, clip=0.2):
+def ins_loss(m, s, B, teach_w, pg_w, ent_w, clip=0.2, copy_w=0.0):
     """the head's instruction terms at kept readings, from the head's state s [..., size] AS GIVEN: the learning step gives the
     re-run state (seq's s_held at the readings' frames) with its gradient, so the terms reach the scorer AND the head's memory and
     input layer. B (tensors with s's leading shape):
@@ -1156,8 +1192,11 @@ def ins_loss(m, s, B, teach_w, pg_w, ent_w, clip=0.2):
                  seat, not a drill's nor a forced one); tw [..., nw], twm [...] the same for the weapon of the drawn row;
                  tqq [...] the chance quiet should be asked (with q)
       em [...]   (optional) where the entropy bonus counts (default: the live seats)
+      cq [..., C], cw [...]   (1.9a, the copy lesson; optional) the rows of the target his own network chose (uniform over them)
+                 and the weapon in his hand; taught where tm_c [...] (live, not a drill's nor a forced one, a copy row offered)
     teach_w x the cross-entropies toward the targets + pg_w x the PPO-clipped surrogate on his own readings (the second clip as
-    the target's: a bad choice's ratio counts at most 3) - ent_w x the rows' entropy.
+    the target's: a bad choice's ratio counts at most 3) - ent_w x the rows' entropy + copy_w x the cross-entropies toward the
+    copy targets (1.9a: the scorer opens as the choice it stands in for, his old head's target and the weapon in his hand).
     -> (the loss: a plain zero without a gradient where nothing counts, a dict: lp (now, a number), lr (the rows' log-probabilities,
     a number), live, and the three terms' values)"""
     import torch
@@ -1171,7 +1210,21 @@ def ins_loss(m, s, B, teach_w, pg_w, ent_w, clip=0.2):
     lr0, lw0 = torch.where(ok, lr, torch.zeros_like(lr)), torch.where(wok, lw, torch.zeros_like(lw))
     tm, twm, own = B["tm"].float(), B["twm"].float(), B["own"].float()
     loss = lr.new_zeros(())
-    out = dict(lp=lp.detach(), lr=lr.detach(), live=live, teach=0.0, pg=0.0, ent=0.0)
+    out = dict(lp=lp.detach(), lr=lr.detach(), live=live, teach=0.0, pg=0.0, ent=0.0, copy=0.0, copy_agree=0.0)
+    if copy_w > 0 and "cq" in B and float(B["tm_c"].float().sum()) > 0:      # (1.9a) the copy lesson
+        cq_ = (B["cq"] & ok).float()
+        tmc_ = B["tm_c"].float() * (cq_.sum(-1) > 0).float()
+        if float(tmc_.sum()) > 0:
+            tq_ = cq_ / cq_.sum(-1, keepdim=True).clamp(min=1.0)
+            cw_ = B["cw"].long().clamp(min=0, max=lw0.shape[-1] - 1)
+            okw_ = wok.gather(-1, cw_[..., None]).squeeze(-1) & (B["cw"] >= 0)
+            twc_ = tmc_ * okw_.float()
+            c_ = (-(tq_ * lr0).sum(-1) * tmc_).sum() / tmc_.sum().clamp(min=1.0)                 + (-lw0.gather(-1, cw_[..., None]).squeeze(-1) * twc_).sum() / twc_.sum().clamp(min=1.0)
+            loss = loss + float(copy_w) * c_
+            out["copy"] = float(c_.detach())
+            with torch.no_grad():
+                hit_ = cq_.gather(-1, lr.argmax(-1, keepdim=True)).squeeze(-1)
+                out["copy_agree"] = float((hit_ * tmc_).sum() / tmc_.sum().clamp(min=1.0))
     if teach_w > 0 and float(tm.sum() + twm.sum()) > 0:
         t_ = (-(B["tq"] * lr0).sum(-1) * tm).sum() / tm.sum().clamp(min=1.0) + (-(B["tw"] * lw0).sum(-1) * twm).sum() / twm.sum().clamp(min=1.0)
         if qz is not None and q is not None and "tqq" in B:  # quiet: toward the chance the appraisals' two forecasts (asked, not asked) give

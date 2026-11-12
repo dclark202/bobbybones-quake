@@ -1,0 +1,235 @@
+ok   map sense: a map without a table is skipped, not an error
+ok   map sense: the nearest walking point of a walking point is itself
+ok   map sense: samples at ticks with a second behind and the horizon ahead ([79, 119, 159])
+ok   map sense: a new one forecasts 0 everywhere
+ok   map sense: made without a draw of the global random stream
+ok   map sense: a batch of the right shapes
+ok   map sense: 200 steps summed where nothing ends the stay ([200. 400.])
+ok   map sense: the window is cut at a round's end, its own step counted ([22. 44.])
+ok   map sense: ... and at his death ([ 72. 144.])
+ok   map sense: no sample without a believed place (19)
+ok   map sense: the class is the weapon in HIS hand (his enemy's row)
+ok   map sense: rate 0 scores and does not learn
+ok   map sense: the lesson lowers its error ((323.34600018048286, 10.448583064362744))
+ok   map sense: the corrections moved
+ok   map sense: the pull multiplies the corrections by 1 - rate x pull after each step (0.8999999870655546)
+ok   map sense: the record names the maps without a table
+ok   map sense: a map without a table reads zeros
+ok   map sense: no samples, no error
+ok   appraisals: the candidate's width has room for the whole instruction
+ok   appraisals: a target-only candidate: no verb, the target, weapon 'none', no map sense
+ok   appraisals: a full candidate
+ok   appraisals: made without a draw of the global random stream
+ok   appraisals: a new one forecasts 0 damage, chances of a half, no change
+ok   appraisals: the lesson lowers the labelled outputs' error ((51.380000330209754, 0.5140308543918299))
+ok   appraisals: an output without a label is not taught
+ok   appraisals: the record
+ok   branch: a share of the self-play matches are destinations, 8 a source
+ok   branch: sources are eligible and never destinations
+ok   branch: share 0 plans nothing
+ok   branch: his five best allowed targets and three others, all distinct, never 'none' ([14, 13, 12, 11, 10, 5, 6, 4])
+ok   branch: fewer allowed targets, fewer candidates
+ok   branch: every simulator gets its plan
+ok   branch: the trainer's seats of the plan
+ok   branch: sources and destinations are self-play seats of the same simulator
+ok   branch: off, nothing is sent
+ok   branch: a destination's rows are its source's (tensors, arrays, a history's columns, an object's)
+ok   branch: every other seat's rows are untouched
+ok   branch: the simulator copies the moment and forces the even seat's target
+ok   branch: the hindsight books' queries of the copied seats are shut
+ok   branch: on a forced frame the forced seats' target and keep choice count as not read
+ok   branch: after the hold the targets are free again
+ok   branch: damage over the window
+ok   branch: the frag, the item (his own take only), his target at the hold's end
+ok   branch: dv = the discounted pay + gamma^W x the head's value then - its value now (14.925924209980872)
+ok   branch: a round's end cuts the window: its own step counts, nothing after, no bootstrap ((np.float64(10.0), np.float64(3.7808962495597758)))
+ok   branch: the judge's pay summed beside it
+ok   branch: without the head's value there is no dv
+ok   branch: a forced target that did not hold is dropped; the source is a free example of his own target
+ok   branch: the log has a line a branch and a source
+ok   branch: the record
+ok   off: the default of "--map-sense" is off
+ok   off: the default of "--appraise" is off
+ok   off: the default of "--branch" is off
+ok   off: the default of "--branch-p" is off
+ok   off: the modules are made only under their flags
+ok   off: a simulator is sent a branch only with the rounds on and a share above 0
+ok   live: the four new names are the trainer's, the share within 0 .. 1
+ok   live: a file with the four names is accepted
+ok   live: a share above 1 is refused
+ok   ins: the head's input grows by the part 'ins' alone, before the weapon part's
+ok   ins: no instruction given: the part reads zeros, the rest as before
+ok   ins: making the head with its scorer draws nothing from the global stream
+ok   ins: at the start every offered row scores alike, a row not offered never
+ok   ins: the weapon's scores: a weapon he cannot use never
+ok   ins: the lesson's target is softmax(dV / temperature) over the offered rows; none offered: zeros
+ok   ins: the checks' numpy scorer gives the trainer's numbers ((2.6226043701171875e-06, 4.708766937255859e-06))
+ok   ins: the lesson moves the scorer toward the appraisals' order (KL to the target falls) ((1.8412, 0.0002))
+ok   ins: a reading that was not his own (a drill's, a forced branch's) and may not be taught moves nothing
+ok   ins: his own readings learn from the game's pay (the head's advantage)
+ok   ins: the record has the share, the entropy, the verbs, the weapons, the rows by block and quiet by verb
+ok   quiet: the scorer's third choice is there only where asked for, and at the start it is all but never asked
+ok   quiet: the appraisals read the bit; the lesson's candidates and the rollout's are written alike
+ok   quiet: the lesson moves the logit toward the chance the appraisals' two forecasts give ((-6.0, -5.754225730895996))
+ok   ins: a round's end: no instruction, the coin anew at the share
+ok   ins: the part of the head's input is zero for a seat under none
+ok   appraise: a row's numbers are read; the numpy forecasts are the trainer's
+ok   appraise: the lesson's candidates and the rollout's are written alike; no target named: none
+ok   appraise: a layout without the rows (xf 0) is the one before
+ok   branch: an instruction's row 0 is a row as any other; the best first, the rest drawn
+ok   branch: the plan forces instructions: a row and the weapon the head scores best for it
+ok   branch: the simulator's seat is forced to the row and its weapon; its enemy is not
+ok   branch: the hold over: the force is lifted
+ok   worker: a seat under an instruction did not play its drawn target; a drill's and a forced seat did not keep or re-decide
+ok   branch: an instruction branch teaches twice (with its weapon, and with none named); a source only if it was under the head's
+ok   branch: the record counts every forced instruction as held
+ok   long: a branch read across rollouts: the discounted pay of the whole window, the head's value at its end as the bootstrap, less its value at the copy ((-5.371353720552457, -5.371353720552456))
+ok   long: cut at a round's end: that step counts, nothing after it, no bootstrap ((-2.4829630819359343, -2.4829630819359343))
+ok   long: the seats of a long branch being read, and their enemies, are left alone by later plans
+ok   long: a plan takes no match that is not free ([4, 5, 3, 0, 6, 7])
+ok   long: a share of a plan's branches is marked long, and the sources of those
+ok   long: off (share 0): the plan is the one before, nothing more is drawn
+ok   long: the lesson's number is the live mix of the two windows
+ok   long: the appraisals have the seventh output, a regression
+ok   live: the long window's two names are accepted
+ok   live: {'BRANCH_LONG_P': 1.1} is refused
+ok   live: {'INS_LONG_W': -0.2} is refused
+ok   live: the instruction's five names are the trainer's, with their ranges
+ok   live: the drills' three names are the simulator's live names
+ok   live: a file with the instruction's and the drills' names is accepted
+ok   live: the simulator's shape is read from its module, not written here
+ok   live: {'DRILL_INS_P': 1.5} is refused
+ok   live: {'INS_DRILL_SECS': 0.5} is refused
+ok   live: {'DRILL_INS_VERBS': 'dance:1'} is refused
+ok   live: {'DRILL_INS_QUIET': 1.5} is refused
+ok   live: {'INS_G': 1.2} is refused
+ok   live: {'H2_INS_PG': -0.1} is refused
+ok   live: {'INS_TEMP': 0.0} is refused
+ok   known: made without a draw of the global stream
+ok   known: a new readout says a half for both
+ok   known: a sample every second tick, the brain's and the hands' columns, none with the enemy dead
+ok   known: rate 0 scores without learning; the lesson lowers the Brier score; the record names its two outputs (([0.25, 0.25], [0.0055, 0.0035]))
+ok   known: numpy as torch
+ok   spawn: a new readout is uniform over the map's own points, zero past them, zeros for a map with none
+ok   spawn: numpy as torch
+ok   spawn: a sample at every tick he was dead at within the wait before the respawn's row; none across a round's end or without points ((3, [2, 2, 2]))
+ok   spawn: the samples are the ticks of frames 23, 31, 39 (seat 1)
+ok   spawn: the rule's prior: the truth is in the far half, a guess of one in two, of both in three
+ok   spawn: scored before it is learnt from (the uniform guess at the start); the lesson finds the point; the record has the prior (({'w': 1.0, 'frames': 3, 'ce': 1.3863, 'ce_uniform': 1.3863, 'top1': 0.0, 'top3': 1.0, 'uniform_top1': 0.25, 'uniform_top3': 0.75, 'prior_top1': 0.5, 'prior_top3': 1.0, 'truth_in_far_half': 1.0}, {'w': 1.0, 'frames': 3, 'ce': -0.0, 'ce_uniform': 1.3863, 'top1': 1.0, 'top3': 1.0, 'uniform_top1': 0.25, 'uniform_top3': 0.75, 'prior_top1': 0.5, 'prior_top3': 1.0, 'truth_in_far_half': 1.0}))
+ok   unsure: one zone 0, every zone alike 1, no answer 0; the places ahead: their mean distance in thousands of units, at most 2 ((array([0., 1., 0.], dtype=float32), array([0. , 0.4, 2. ], dtype=float32)))
+ok   unsure: no readouts: zeros
+ok   fill: the brain's answers in every offered row, not in a row the map does not offer; the spawn rows get their point's odds; the map sense after the row's own numbers
+ok   fill: nothing given: the rows as they came
+ok   layout: a row is the simulator's numbers and the map sense's eight; the head's input has the brain's three numbers
+ok   head: a seat under no instruction still reads the brain's three numbers; the rest of the part is zeros for him
+ok   head: a layout without them has no such state
+ok   held: the checks' and the plugin's numbers of a seat give the same part as the trainer's
+ok   map sense at a row's place: eight numbers a row; zeros for a row without a place, a seat without a believed place, a map without a table; numpy as torch
+ok   reading: a free seat picks an offered row and a usable weapon; a drill's and a forced seat pick nothing; a seat on a row of his own draws anew at this tick whatever the keep choice says (2.1a: every 0.2 s); a seat whose coin is off is cleared ((array([ 1, -1, -1,  2, -1,  2]), array([ 0, -1, -1,  0, -1,  2]), array([ True, False, False,  True,  True,  True])))
+ok   reading: the held numbers keep their layout and the brain's three numbers
+ok   worker: the reply has the rows' spawn points, places, the weapon in hand and the map's spawn points' count; the spawn points padded
+ok   prep: the worker's reply through the fill: a new 'known' readout writes a half, the zones' spread 1, the map sense's place kept at zero without a table
+ok   off: the default of "--known-odds" is off
+ok   off: the default of "--spawn-odds" is off
+ok   off: the default of "--ins-ms" is off
+ok   off: the two readouts are made only under their flags; the spawn points are asked for only with --spawn-odds
+ok   live: KNOWN_W and SPAWN_W are the trainer's names and are accepted
+ok   live: {'KNOWN_W': -1.0} is refused
+ok   live: {'SPAWN_W': 101.0} is refused
+ok   server: sim/knownodds.py imports no torch at its top (a game server's plugin reads it)
+ok   server: sim/spawnodds.py imports no torch at its top (a game server's plugin reads it)
+ok   server: sim/mapsense.py imports no torch at its top (a game server's plugin reads it)
+ok   server: sim/appraise.py imports no torch at its top (a game server's plugin reads it)
+ok   server: sim/head2.py imports no torch at its top (a game server's plugin reads it)
+ok   inside: the scorer's layers are layers of the head's module (8 layers with quiet and the win-chance value), its share a buffer of the head
+ok   inside: the scorer's layers are made after every older draw: the rest of the head is the head without them, to the bit
+ok   inside: at the start every offered row and every usable weapon is alike, quiet all but never asked (zero effect)
+ok   inside (play): a drawn row is an offered one and a drawn weapon a usable one, wherever the seat is live
+ok   inside (1.7c's lesson): with unchanged weights the learning step's log-probability of EVERY kept reading is the stored one: rows, weapon and quiet; masked rows, the row 'none' alone, a seat with nothing offered, a drill's, a forced one's (ratio 1, KL 0) (0.0)
+ok   inside: a seat that is not live reads every row alike and is never his own; a masked row has no chance
+ok   inside: the checks' player's and the plugin's numpy definition gives the trainer's log-probabilities; the weights are read from the head's or the whole network's names alike
+ok   inside: readings that are a drill's, a forced branch's or not live put nothing into the head's loss (no gradient at all)
+ok   inside: the lesson toward the appraisals' order: its gradient reaches the head's memory (the GRU), the head's input layer (the part 'ins' too) and the scorer ((0.014867868274450302, 0.5135700106620789))
+ok   inside: the game's pay on his own readings: its gradient reaches the head's memory (the GRU), the head's input layer (the part 'ins' too) and the scorer ((0.008815107867121696, 0.4539923369884491))
+ok   inside: the entropy bonus: its gradient reaches the head's memory (the GRU), the head's input layer (the part 'ins' too) and the scorer ((0.0003019404539372772, 0.037729475647211075))
+ok   inside: with the three weights at 0 nothing reaches the head (the loss has no gradient)
+ok   inside: a step of the instruction's terms changes the head's GRU weights
+ok   inside: the pay's term clips around the given reference (decoupled PPO: the learner before the update) with its weights
+ok   start: the converter puts the scorer's layers into the network's own weights (head2.ins_*), the last layers at zero, the share 0, the head's old input columns as they were and the new ones zero; a head of the new layout loads it whole
+ok   trainer: no scorer beside the network is left (no module, no Adam of its own, no lesson after the PPO epochs)
+ok   trainer: the rollout draws from the one definition on the network that plays, the learning step and the proximal pass score the kept readings again with it from the re-run head, and the terms are added to the head's loss
+ok   trainer: the scorer's layers are out of the head's optimizer group and in a group 'ins' of their own, added by name on a resume and after the load for a save without it; a file without them (a league's) gets the network's own, its share 0
+ok   trainer: the checkpoint's entry 'ins' holds no weights (they are in the network's)
+ok   finish: the table is weapons x three distance bands; unset: the placeholder; the lightning gun's far band is 0 (its reach)
+ok   finish: a table written as FIN_RATE's string is read back
+ok   finish: FIN_RATE '1,2,3' is refused
+ok   finish: FIN_RATE '1,2;1,2;1,2;1,' is refused
+ok   finish: FIN_RATE '1,2,x;1,2,x;1,' is refused
+ok   finish: FIN_RATE '1,2,-3;1,2,-3;' is refused
+ok   finish: FIN_RATE '1,2,999;1,2,99' is refused
+ok   finish: FIN_RATE is a live name (a string), a play variable; the wake's drop a play variable
+ok   live: a measured table and the pattern's share are accepted
+ok   live: {'FIN_RATE': '1,2,3'} is refused
+ok   live: {'BRANCH_WPN_P': 1.5} is refused
+ok   live: {'BRANCH_WPN_P': -0.1} is refused
+ok   finish: the sizes: 27 numbers a candidate row after the 37, 7 more hands' inputs (48), 8 change signals, the same in the head
+ok   finish: the belief is the stack belief's (health and armor, its spread); the band from the enemy in view, the middle one for no belief of a place
+ok   finish: seconds to finish = the believed stack over his rate at that distance (/ 5); the cautious one adds the spread
+ok   finish: a weapon without ammunition or not owned: 2 (never) and no seconds of fire; a dead seat: zeros; the gauntlet's fire: 2
+ok   finish: seconds of fire = ammunition x refire time (/ 10)
+ok   finish: nothing of it reads the enemy's true stack
+ok   finish: a table twice as fast halves the time
+ok   finish: an enemy out of view is not placed by the truth
+ok   finish: a life on the brain reads the brain's stack band (its middle, the spread of its odds); the other seat the stack belief
+ok   finish: odds over two bands: the mean between them and a spreadC:\Users\dacla\anaconda3\Lib\site-packages\numpy\lib\_nanfunctions_impl.py:2035: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+C:\Users\dacla\Documents\gh\BobbyBones\tools\run\prune_inputs.py:140: RuntimeWarning: Mean of empty slice
+  res = dict(rows=int(len(X)), moments=int(len(np.unique(grp))), fits=n, outs=outs, skill={o: float(np.nanmean(base[:, j])) for j, o in enumerate(outs)},
+
+ok   finish: a life on the brain without an answer has no belief: every finish time 2, the mark 0
+ok   wake: the one rule: done, failed or a wake ends a keep (numpy and torch alike)
+ok   wake: the trainer's rollout and the checks' player read that one rule
+ok   wake (2.1a: every tick a redraw): with or without a wake both seats draw anew, whatever the keep choice says ((array([1, 1]), array([ True,  True])))
+ok   pattern: one row (the one he is on), each weapon he can use, no other
+ok   pattern: under 'none' the head's best instruction is taken, never 'none'; at most k weapons
+ok   pattern: one usable weapon, or no instruction offered: nothing to compare
+ok   pattern: a share of 0 leaves the plan's draws as they were
+ok   pattern: a share of 1 takes every source at a pattern's moment (while there are any); sources are not destinations
+ok   pattern: the weapon-only branches keep the row he is on, differ in the weapon alone, ask no quiet; their sources are the pattern's moments
+ok   pattern: the simulator's job carries the row once a branch and a weapon each
+ok   pattern: the share at 0: the plan, the jobs and the keys as before
+ok   pattern: the record counts the weapon-only branches, their kind and what each weapon brought
+ok   pattern: the worker's reply carries each seat's pattern mark as its thirteenth field (1.9a: the copy rows the fourteenth)
+ok   head pay: the head has a value of the win-chance pay of its own (ins_vv), at zero, among the scorer's parameters (the optimizer's group 'ins')
+ok   head pay: the new layer is made last: every older layer of the head as it was drawn before
+ok   head pay: another pay table: the head's advantage and returns from the win chance do not move; the hands' whole-pay advantage does
+ok   head pay: a branch's dv from the win chance is the same under either pay table; from the whole pay it is not
+ok   head pay: the long window's dv is made of the stream and the value it is given (the win chance's)
+ok   head pay: the readout: over the moments with two branches or more, how often the best by win chance is another than the best by the whole pay
+ok   head pay: the trainer's wiring: the branches' dv
+ok   head pay: the trainer's wiring: the long window
+ok   head pay: the trainer's wiring: the instruction's advantage
+ok   head pay: the trainer's wiring: the pay on his instruction choices
+ok   head pay: the trainer's wiring: the forecast's calibration
+ok   head pay: the trainer's wiring: the stream: win_raw alone
+ok   head pay: the trainer's wiring: off by default
+ok   head pay: the trainer's wiring: the pattern off by default
+ok   head pay: the simulator's label is a switch of its own, off by default, and names no pay table entry
+ok   finish: the measuring tool: damage by the weapon that did it over the trigger's seconds, by the band; a cell with too little trigger keeps the placeholder
+ok   readout: of his shots under an instruction's weapon, the share fired with another, by the weapon asked for
+ok   inputs: the new columns' statistics by design (a finish time, seconds of fire, the belief's mark)
+ok   bind: the asked weapon in his hand = keep, another he owns with ammunition = its key, the gauntlet needs none ([ 0  3 -1 -1 -1 -1  9 -1])
+ok   bind: no instruction, no weapon asked, not owned, no ammunition, dead: his own choice stands ([ 0  3 -1 -1 -1 -1  9 -1])
+ok   bind: a play variable, off by default; the switch cost and 'a held weapon is choosable' are live names
+ok   live: unset = the import's values (0.02, off); 0 and 1 read; a cost out of range refused
+ok   server pass: the weapon key's column set where the instruction binds, his own elsewhere
+ok   server pass: by rows
+ok   mask: the recomputed log-probability equals the stored one with bound rows (largest difference 0)
+ok   mask: a bound frame counts nothing, a free one as before; without the mask the two differ (the guard has teeth)
+ok   trainer: --ins-bind; every head_masks call of the learning step passes the stored binding (wd=B_WD) (6)
+ok   prune: every branch of a moment is in one fold
+ok   prune: the group 'finish' is the row's three finish numbers; a block of the situation by name
+ok   prune: the forecast of dV has skill on unseen moments (0.72); the long dV, without a label, has none
+ok   prune: the group dV depends on passes (gain +0.635), a group of noise does not (-0.0019), nor one it does not depend on (-0.0006)
+ok   prune: the dumps load as they were written; moments of two dumps never share a number
+ALL PASSED (230 checks)

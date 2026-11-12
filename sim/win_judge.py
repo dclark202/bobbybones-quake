@@ -126,3 +126,73 @@ def load(path):
     for k, s in SHAPES.items():
         assert P[k].shape == s, "win judge {}: {} is {}, not {}".format(path, k, P[k].shape, s)
     return P, meta
+
+
+# ---- (1.9a, JUDGE_ITEMS; the owner, 2026-11-12: "Judge with items. As long as the head understands the value of items, we're good";
+# "the judge just pays the head") the judge with the next mega's and red armor's race in it, for the HEAD's pay only.
+#   mu' = mu + sum over the two items of  K_item x w x [ p x (h_a(stack_a + item) - h_a(stack_a)) - (1 - p) x (h_b(stack_b + item) - h_b(stack_b)) ]
+#     h            the judge's own value of a stack (value() above, at this time left): what the item is worth to each is the judge's
+#     p            the chance seat a takes it first: sigmoid((T_b - T_a) / tau), T = max(his walking seconds to it, seconds until it is back)
+#     w            how soon it counts: exp(-seconds until it is back / horizon), 0 if it is back only after the game's end
+#     K_item >= 0, tau > 0, horizon > 0: fitted (tools/run/fit_items.py: tau on who really took it first, K and horizon on how games ended)
+# Its axioms, by construction (K >= 0, h rising with the stack, p rising as a gets nearer): an item is never worth less than nothing to
+# the one who takes it, and being nearer to an item can only raise a's chance; an item absent on the map adds 0.
+ITEM_GAIN = (("MH", 100.0, 0.0, 200.0), ("RA", 0.0, 100.0, 200.0))     # (the item, health it adds, armor it adds, the cap; QL duel)
+SPAWN_HP = 125.0
+
+
+def items_default():
+    return dict(version=1, tau=2.0, horizon=15.0, k=[1.0, 1.0], dead_walk=8.0, far=60.0)
+
+
+def items_load(path):
+    import json
+    IP = json.load(open(path))
+    assert int(IP.get("version", 0)) == 1, "the items' judge {}: version {}".format(path, IP.get("version"))
+    assert IP.get("accepted", True) is not False, "the items' judge {}: its fit was NOT accepted (tools/run/fit_items.py)".format(path)
+    assert float(IP["tau"]) > 0 and float(IP["horizon"]) > 0 and all(float(k) >= 0 for k in IP["k"]) and len(IP["k"]) == 2, \
+        "the items' judge {}: tau and horizon above 0, two K of 0 or more".format(path)
+    return IP
+
+
+def _with_item(hp, ar, dead, j):
+    """the stack after taking item j: a dead player takes it after his respawn (health 125, no armor)"""
+    _, dh, da, cap = ITEM_GAIN[j]
+    h0 = np.where(dead, SPAWN_HP, np.maximum(np.asarray(hp, np.float64), 0.0))
+    a0 = np.where(dead, 0.0, np.maximum(np.asarray(ar, np.float64), 0.0))
+    return parts(np.minimum(h0 + dh, cap) if dh > 0 else h0, np.minimum(a0 + da, cap) if da > 0 else a0, np.zeros_like(np.asarray(dead, bool)))
+
+
+def items_term(P, IP, left, hpa, ara, deada, wa, hpb, arb, deadb, wb, ra, rb, xp=np, p_only=False):
+    """the items' part of mu [n] for seat a against b. ra / rb: dict(present [n, 2], tsp [n, 2], walk [n, 2]) of each seat
+    (the simulator's item_race(); tsp the same for both). p_only: (the chance a takes each item first [n, 2], w [n, 2])"""
+    t = _relu(np.asarray(left, np.float64) / GAME_LEN)
+    left = np.asarray(left, np.float64)
+    tau, H, far = float(IP["tau"]), float(IP["horizon"]), float(IP.get("far", 60.0))
+    Sa, Sb = parts(hpa, ara, deada), parts(hpb, arb, deadb)
+    ha, hb = value(P, Sa, wa, t, xp), value(P, Sb, wb, t, xp)
+    tsp = np.asarray(ra["tsp"], np.float64)
+    Ta = np.maximum(np.minimum(np.asarray(ra["walk"], np.float64), far), tsp)
+    Tb = np.maximum(np.minimum(np.asarray(rb["walk"], np.float64), far), tsp)
+    p = 1.0 / (1.0 + np.exp(-np.clip((Tb - Ta) / tau, -40.0, 40.0)))
+    wa_, wb_ = np.asarray(ra["walk"], np.float64), np.asarray(rb["walk"], np.float64)
+    reach = (wa_ < far) | (wb_ < far)                        # (an item neither can reach on the route field, e.g. a jump's: as absent)
+    w = np.asarray(ra["present"], bool) * reach * np.exp(-tsp / H) * (tsp < left[:, None])
+    if p_only:
+        return p, w
+    out = np.zeros(len(left))
+    for j in range(len(ITEM_GAIN)):
+        ga = value(P, _with_item(hpa, ara, deada, j), wa * (~np.asarray(deada, bool))[:, None], t, xp) - ha
+        gb = value(P, _with_item(hpb, arb, deadb, j), wb * (~np.asarray(deadb, bool))[:, None], t, xp) - hb
+        out = out + float(IP["k"][j]) * w[:, j] * (p[:, j] * np.maximum(ga, 0.0) - (1.0 - p[:, j]) * np.maximum(gb, 0.0))
+    return out
+
+
+def chance_items(P, IP, d, left, hpa, ara, deada, wa, hpb, arb, deadb, wb, ra, rb):
+    """P(seat a wins) with the items' race in mu (see above); with every K at 0 it is chance() to the bit"""
+    left = np.asarray(left, np.float64)
+    Sa, Sb = parts(hpa, ara, deada), parts(hpb, arb, deadb)
+    t = _relu(left / GAME_LEN)
+    mu = value(P, Sa, wa, t) - value(P, Sb, wb, t) + items_term(P, IP, left, hpa, ara, deada, wa, hpb, arb, deadb, wb, ra, rb)
+    s = np.sqrt(0.02 + left * _sp(_mlp(P, "s", t, np)[..., 0], np))
+    return _sig((np.asarray(d, np.float64) + mu) / s, np)
