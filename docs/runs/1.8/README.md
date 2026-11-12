@@ -17,7 +17,7 @@ the head's credit; b1.2d's end is the last network before it.
 
 | Attempt | What | Result |
 |---|---|---|
-| [1.8a](1.8a/CARD.md) | on the cleaned input list 18 and the tuned AIM3: AIM3 (updates 0 to 30), 1.3b's head opening (50 to 130), the rules on his target out (the restart at 150), the item teacher and speed pay out (160 to 190), the keep choice (210 to 250), the strategy inputs out of the hands (270 to 310): one run of 330 updates from b1.2d's end, the damage pay 0.005 and zero-sum from the start | **running since 2026-11-11 14:00** ([RUNS.md](../../RUNS.md) #47) |
+| [1.8a](1.8a/CARD.md) | on the cleaned input list 18 and the tuned AIM3: AIM3 (updates 0 to 30), 1.3b's head opening (50 to 130), the rules on his target out (the restart at 150), the item teacher and speed pay out (160 to 190), the keep choice (210 to 250), the strategy inputs out of the hands (270 to 310): one run of 330 updates from b1.2d's end, the damage pay 0.005 and zero-sum from the start | **stopped 2026-11-12 11:28 by the owner at update 197; end = update 190** ([RUNS.md](../../RUNS.md) #47) |
 
 **The order of work (owner, 2026-11-11):** (1) the input clean-up ([design/INPUTS_CLEANUP.md](../../design/INPUTS_CLEANUP.md): its "Final"
 table and "How it is done"; the measurements: [1.8a/INPUT_AUDIT.md](1.8a/INPUT_AUDIT.md)) and AIM3's open points

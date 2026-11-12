@@ -9,7 +9,7 @@ update 10, 53% at 50, 56% at the end; rockets 37% to 26%), under an aim model wh
 smallest. The family: [README](../README.md). The aim: [design/AIM3.md](../../../design/AIM3.md). What comes after:
 [2.1](../../2.1/DESIGN.md).*
 
-**STARTED 2026-11-11 14:00 (owner: "Go ahead and start it"): phase 1 for 900 minutes, the restart at update 150 unattended (`-AutoRestart 1050`). [RUNS.md](../../../RUNS.md) #47.** Built and tested on the cleaned inputs the same day.
+**STOPPED 2026-11-12 11:28 by the owner at update 197 ("Stop 1.8b now and save it"); the end is the save of update 190 (`keep/policy_end_18a.pt` + opt), the stage of the teacher and speed pay done; the keep choice and the strategy-input fade never opened. Results: [RUNS.md](../../../RUNS.md) #47.** STARTED 2026-11-11 14:00 (owner: "Go ahead and start it"): phase 1 for 900 minutes, the restart at update 150 unattended (`-AutoRestart 1050`). [RUNS.md](../../../RUNS.md) #47.** Built and tested on the cleaned inputs the same day.
 What changed since the morning's build: the start is on the cleaned input list 18 ([design/INPUTS_CLEANUP.md](../../../design/INPUTS_CLEANUP.md),
 "As built"), AIM3 is tuned ([design/AIM3.md](../../../design/AIM3.md) section 9), the schedule is the condensed one with the head at 80
 updates, and the last stage (the strategy inputs out of the hands) is built. Every test below was run again on that start.
@@ -130,6 +130,24 @@ lightning in hand over 50% (reported, not acted on). Negative frags and lopsided
 `stop_18a.ps1 -Update 150` and then `start.ps1 -Restart -Minutes <m>`, once, with every check of both scripts; a refusal is written to
 `auto_restart.log` as AUTO RESTART FAILED and nothing is retried. Tested dry (the waiting and the hand-over); the two scripts it calls run
 for the first time in the run. The restart renames phase 1's `live_status.json` (it deleted it before): nothing is deleted.
+
+## The restart (11-12)
+
+**The unattended restart failed at update 150 (03:29):** `stop_18a.ps1` named a variable `$all` beside its parameter `$All` (one name in
+PowerShell), found "0 trainers" and refused; phase 1 ran on until its 900 minutes ended at 05:05 (update 168). On the owner's word
+("Just start it from u150 as planned") phase 2 was started by hand at 07:12 from the save of update 150: phase 1's state after 150 is kept
+in `data/sim_runs/duel_gru_1_8a/phase1_after150/` (its policy and optimizer at 168, its metrics to 168, its live.json, the four snapshots
+after 150), the run's metrics cut back to its first 150 lines, live.json set to the ramp's dials at clock 150; nothing deleted. The stop
+script is fixed (`$procs`).
+
+## The fallback (owner, 2026-11-11, during the run: "keep going as planned but have that as a fallback plan if things don't go well")
+
+If the head's stage fails here (the checks do not rise as 1.3b's did, or the lightning takes his hand again with the credit over updates
+50 to 130): **the head is opened once, in 2.1's form, from the save of update 50** ("b1.2d under AIM3", `keep/policy_u50_18a.pt` with its
+optimizer), with 2.1's changes already in place, not re-run in 1.3b's form. Why it was not the first plan: 2.1 is five new parts, none
+built or tested yet, and opening the head inside it would put the one known gain (1.3b's 89%) and five untested parts in one run. Seen
+before the credit opened: the lightning in his hand in training games rose from 43% to 50% over updates 10 to 39 under AIM3 alone
+(rockets 34% to 29%, rail 6% to 3%), so the head's credit is not the slide's only cause. He decides if and when the fallback is taken.
 
 ## After the run
 
