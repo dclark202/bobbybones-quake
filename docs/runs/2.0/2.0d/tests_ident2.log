@@ -1,0 +1,39 @@
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 7.82e-14, the brain's input layer 1.42e-13, the head's 8.88e-15, the weapon part's 2.22e-15, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_20d_start_b\w_anchor_16a.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 79 columns (2 cut), the weapon part's 45; the dodge columns at zero, the token 'dodge' last, shut
+
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 7.82e-14, the brain's input layer 1.42e-13, the head's 0.00e+00, the weapon part's 0.00e+00, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_20d_start_b\w_anchor_b12d.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 0 columns (0 cut), the weapon part's 0; the dodge columns at zero, the token 'dodge' last, shut
+
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 8.53e-14, the brain's input layer 1.28e-13, the head's 1.24e-14, the weapon part's 2.22e-15, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_20d_start_b\w_snap_0001.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 79 columns (2 cut), the weapon part's 45; the dodge columns at zero, the token 'dodge' last, shut
+
+13:48:52 scratch_20d_id_z0_b: done in 0.5 min; the log ends: exit 0
+13:48:52 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+13:48:52 PASS z0: the optimizer's state loaded, not a cold start; the dodge token's first layer fresh, the encoder carried over
+13:48:52 PASS z0: the dodge token found, no REFUSED live file, no opening of the other gates
+13:49:13 scratch_20d_id_z0b_b: done in 0.3 min; the log ends: exit 0
+13:49:13 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+13:49:13 PASS z0b: the optimizer's state loaded, not a cold start; the dodge token's first layer fresh, the encoder carried over
+13:49:13 PASS z0b: the dodge token found, no REFUSED live file, no opening of the other gates
+13:49:35 scratch_20d_id_z3_b: done in 0.3 min; the log ends: exit 0
+13:49:35 PASS z3: the trainer ran 2 updates and dumped them (2 dumps)
+13:49:35 PASS z3: the optimizer's state loaded, not a cold start; the dodge token's first layer fresh, the encoder carried over
+13:49:35 PASS z3: the dodge token found, no REFUSED live file, no opening of the other gates
+13:49:57 scratch_20d_id_zg_b: done in 0.3 min; the log ends: exit 0
+13:49:57 PASS zg: the trainer ran 2 updates and dumped them (2 dumps)
+13:49:57 PASS zg: the optimizer's state loaded, not a cold start; the dodge token's first layer fresh, the encoder carried over
+13:49:57 PASS zg: the dodge token found, no REFUSED live file, no opening of the other gates
+13:49:57 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
+13:49:57 PASS the END AIM dials reach the simulators: update 1's actions differ from z0's (0.1278 of them)
+13:49:57 PASS DODGE_G 1 reaches the network (the token in the attention): update 1's actions differ from z0's (0.1603 of them)
+13:49:57 PASS the metrics' dodge gate: z0 columns 0 token -30, zg columns 1 token 0 ([{'cols': 0.0, 'token': -30.0}] / [{'cols': 1.0, 'token': 0.0}])
+13:49:57 ALL PASSED

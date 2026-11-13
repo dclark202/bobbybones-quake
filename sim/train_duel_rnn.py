@@ -499,11 +499,12 @@ def ls_apply(E_, vals, env=None, move_only=False):
             os.environ.pop(k_, None)
         else:
             os.environ[k_] = str(x_)
-    for k_, x_ in g.items():
-        if isinstance(x_, np.ndarray) and isinstance(getattr(E_, k_, None), np.ndarray):
-            getattr(E_, k_)[...] = x_                        # (SHOT_W: the module's own table, in place)
+    M_ = getattr(E_, "_B", E_)                               # (2.0d) a list's module (duel_env_ffa18, 20d, 21) is a wrapper whose simulator code
+    for k_, x_ in g.items():                                 # reads the group module's globals: set them there (on the wrapper they only hid
+        if isinstance(x_, np.ndarray) and isinstance(getattr(M_, k_, None), np.ndarray):   # the group module's live values from this process)
+            getattr(M_, k_)[...] = x_                        # (SHOT_W: the module's own table, in place)
         else:
-            setattr(E_, k_, (dict(x_) if isinstance(x_, dict) else x_))
+            setattr(M_, k_, (dict(x_) if isinstance(x_, dict) else x_))
     left = []
     if env is not None:
         if "JUMP_RUN_P" in vals:
@@ -3982,6 +3983,18 @@ def main():
         GATE_M = GATE_M & ~INSG_M                                        # (--gate-open's line never opens it, nor the others with it)
         print("the instruction's token (2.1a): gate {:.2f} now (live INS_GATE opens it, never lowered; --gate-open leaves it)".format(
             float(pol.attn.gate[INSG_M].max())), flush=True)
+    DGT_M = None                                                         # (2.0d) the dodge token (kind "dodge"): its gate follows the simulator's
+    if GATE_M is not None and any(k_["name"] == "dodge" for k_ in ATT["kinds"]):   # live DODGE_G (the columns' own gate): log(DODGE_G), shut (left
+        DGT_M = torch.zeros_like(GATE_M)                                 # out) at 0; both ways, as the dial goes
+        r_ = 0
+        for k_ in ATT["kinds"]:
+            if k_["name"] == "dodge":
+                DGT_M[r_:r_ + len(k_["idx"])] = True
+            r_ += len(k_["idx"])
+        GATE_M = GATE_M & ~DGT_M                                         # (--gate-open's line never opens it)
+        assert bool(getattr(E_, "DODGE_IN", False)), "the network has a dodge token: set DODGE_IN=1 (its columns are zeros without it)"
+        print("the dodge token (2.0d): gate {:.2f} now (follows live DODGE_G = {:g}: log of it, shut at 0)".format(
+            float(pol.attn.gate[DGT_M].max()), float(E_.DODGE_G)), flush=True)
     assert a.gate_open <= 0 or (GATE_M is not None and a.gate_from <= 0), \
         "--gate-open: the network has no gated attention part (tools/targets_init.py makes one), or --gate-from is above 0"
     ka0 = a.keys_add_start if a.keys_add_start >= 0 else elapsed0       # (--keys-add-open) the minute its clock counts from
@@ -4402,6 +4415,11 @@ def main():
         if INSG_V[0] is not None:                                        # (2.1a, live INS_GATE) the instruction's token, played and learnt at it
             with torch.no_grad():
                 pol.attn.gate[INSG_M] = pol.attn.gate[INSG_M].clamp(min=INSG_V[0])
+        if DGT_M is not None:                                            # (2.0d) the dodge token at the columns' gate of this rollout
+            import math as math_
+            dgv_ = float(E_.DODGE_G)
+            with torch.no_grad():
+                pol.attn.gate[DGT_M] = max(float(attn_.GATE_SHUT), math_.log(dgv_)) if dgv_ > 0.0 else float(attn_.GATE_SHUT)
         if a.keys_add_open > 0 and KA_ON:                                # (--keys-add-open) before the rollout, as the turn's below
             kf_ = min(1.0, max(0.0, mins - ka0) / a.keys_add_open)
             if kf_ < 1.0 or update == 1:
@@ -7712,6 +7730,8 @@ def main():
                 plan_in_w=round(float(pin_), 6), target_w=round(float(pol.head2.target.weight.norm()), 6),
                 pay=a.head2_pay, pay_abs=[round(x_, 6) for x_ in H2_PAYS], v=round(float(B_VH[:T].mean()), 4), ret=round(float(RET_H.mean()), 4), adv_sd=round(float(ADV_H.std()), 4),
                 lr=opt.param_groups[-1]["lr"], opp_open=bool(snaps and opp.h2_open))
+            if DGT_M is not None:                                        # (2.0d) the dodge inputs' gate: the columns' (live DODGE_G) and the token's
+                rec["dodge_gate"] = dict(cols=float(E_.DODGE_G), token=round(float(pol.attn.gate[DGT_M].max()), 3))
             if CMB or FIRE:                                              # (1.7) the combat order: its share, readings asked, p(an order), drawn and
                 K_ = head2_.CMB_KINDS                                    # p by kind (the learner's pass); the simulators' count (stats["cmb"]); the
                 NK_ = len(K_)                                            # brain's pass lesson; the pointer's sizes; the fire push and its credit

@@ -1,0 +1,35 @@
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 8.53e-14, the brain's input layer 1.28e-13, the head's 1.24e-14, the weapon part's 2.22e-15, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_20d_start\w_snap_0001.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 79 columns (2 cut), the weapon part's 45; the dodge columns at zero, the token 'dodge' last, shut
+
+13:45:38 scratch_20d_smoke: done in 1.0 min; the log ends: exit 0
+13:45:38 PASS the trainer exited 0
+13:45:38 PASS on the CPU
+13:45:38 PASS the optimizer's state loaded from S1's opt.pt
+13:45:38 PASS the keep choice not frozen, no REFUSED
+13:45:38 PASS 8 or more updates (10)
+13:45:38 update 1: dmg 0.0469 / -0.2344 frag None death None win 0.6492 | frags a match-minute 0.0 | keep {'g': 1.0, 'kl': 6.6e-05} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 2: dmg 2.0469 / -2.0781 frag None death None win -5.1661 | frags a match-minute 0.0 | keep {'g': 1.0, 'kl': 0.002533} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 3: dmg 1.8125 / -1.5469 frag None death -1.5625 win 1.2767 | frags a match-minute 1.562 | keep {'g': 1.0, 'kl': 0.001894} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 4: dmg 1.1875 / -2.4219 frag 1.5625 death None win -3.0349 | frags a match-minute 1.562 | keep {'g': 1.0, 'kl': -0.002531} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 5: dmg 0.6562 / -0.6172 frag None death None win -0.6701 | frags a match-minute 0.0 | keep {'g': 1.0, 'kl': 0.004354} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 6: dmg 2.7812 / -1.9063 frag None death -3.125 win 2.1256 | frags a match-minute 1.562 | keep {'g': 1.0, 'kl': 0.001287} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 7: dmg 0.4219 / -0.2578 frag None death -1.5625 win -1.5141 | frags a match-minute 1.562 | keep {'g': 1.0, 'kl': 0.002415} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 8: dmg 2.2969 / -2.8428 frag None death -3.125 win -2.1424 | frags a match-minute 3.125 | keep {'g': 1.0, 'kl': -0.001309} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 9: dmg 2.2812 / -1.9219 frag 1.5625 death -1.5625 win 1.021 | frags a match-minute 3.125 | keep {'g': 1.0, 'kl': 0.002309} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 update 10: dmg 1.6875 / -2.1016 frag 1.5625 death -1.5625 win -0.5498 | frags a match-minute 3.125 | keep {'g': 1.0, 'kl': -0.005856} | dodge gate {'cols': 1.0, 'token': 0.0}
+13:45:38 PASS the ledger on every update
+13:45:38 PASS damage taken weighs as dealt (zero-sum): the two cancel within 15% over the run
+13:45:38 PASS the dodge gate on every update, open
+13:45:38 PASS no NaN in the head's lessons or the trainer's kl and entropy
+13:45:38 PASS the encoder's dodge columns learnt (largest weight 6.66e-03, from 0)
+13:45:58 scratch_20d_smoke: done in 0.3 min; the log ends: exit 0
+13:45:58 PASS a restart from the save with its optimizer: loaded, no cold start, one more update (10 -> 11)
+13:47:05 check: exit 0; memory never start over) | opponent the whole game (clock, score and memory never start over)
+    he        bare 20% | first weapon 3.1 s | 150+ 37% | weapons 2.0/min | mega 73%, red 42% of spawns | yellow 1.5/min | in view 21% | firing 15% (64% of the time in view) | speed 320, standing 4% (over 3 s: 0%) | lives 3.75/min, own deaths 0.0 a game
+    opponent  bare 11% | first weapon 1.8 s | 150+ 35% | weapons 2.75/min | mega 44%, red 52% of spawns | yellow 1.0/min | in view 22% | firing 16% (64% of the time in view) | speed 334, standing 3% (over 3 s: 0%) | lives 3.5/min, own deaths 0.0 a game
+
+13:47:05 PASS a one-map check of the save against S0 finished (1-1)
+13:47:05 ALL PASSED

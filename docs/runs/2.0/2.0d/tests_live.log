@@ -1,0 +1,15 @@
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 8.53e-14, the brain's input layer 1.28e-13, the head's 1.24e-14, the weapon part's 2.22e-15, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_20d_start\w_snap_0001.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 79 columns (2 cut), the weapon part's 45; the dodge columns at zero, the token 'dodge' last, shut
+
+13:44:38 PASS the start's live.json carries 2.0d's start ({'DMG_REWARD': 0.005, 'DMG_TAKEN_W': 1.0, 'RAIL_FAR_PAY': 0.1, 'KEEP_G': 1.0, 'HABIT_P': 0.0, 'WIN_ADD': 0.33, 'AIM3_W': 0.0, 'AIM3_SIZE_A': 1.0, 'AIM3_SIZE_B': 0.0, 'AIM3_LEAD': 0.0, 'AIM3_RELOAD': 1.0, 'DODGE_G': 0.0})
+13:44:58 after update 1: live.json {'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18, 'AIM3_LEAD': 0.5, 'AIM3_RELOAD': 0.5, 'DODGE_G': 0.5}
+13:45:18 PASS no refusal in the log
+13:45:18 PASS live_status.json says applied ({'update': 4, 'status': 'applied', 'reason': None, 'time': '2026-11-13 13:45:00'})
+13:45:18 PASS 3 updates or more (5)
+13:45:18 PASS live_applied.json carries the mid values by the end ({'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18, 'AIM3_LEAD': 0.5, 'AIM3_RELOAD': 0.5, 'DODGE_G': 0.5}, from update 4)
+13:45:18 PASS the save's record of what the SIMULATORS played carries the mid values ({'AIM3_W': '0.5', 'AIM3_SIZE_A': '0.7', 'AIM3_SIZE_B': '0.18', 'AIM3_LEAD': '0.5', 'AIM3_RELOAD': '0.5', 'DODGE_G': '0.5'})
+13:45:18 FAIL the last update's dodge gate: columns 0.5, token log(0.5) ({'cols': 0.0, 'token': -30.0})
+13:45:18 FAILED

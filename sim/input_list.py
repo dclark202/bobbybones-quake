@@ -111,7 +111,8 @@ def extend(version, base, groups):
     assert new and not any(tuple(x) in have for x in new), "nothing to add, or the base has it already"
     nh = int(B["n_hands"])
     L = dict(version=version, base=base, full=len(R), n_brain=int(B["n_brain"]), n_hands=nh + len(new),
-             names=B["names"][:nh] + new + B["names"][nh:], cut=B["cut"], added=list(groups),
+             names=B["names"][:nh] + new + B["names"][nh:], cut={k_: v_ for k_, v_ in B["cut"].items() if k_.split("|")[0] not in groups},
+             added=list(groups),                                  # (2.0d: a group the base cut may be taken back, "b17 order")
              note="brain = the first n_brain; the hands' encoder = the first n_hands; the tail is read by no first layer")
     json.dump(L, open(path(version), "w", encoding="utf-8"), indent=0)
     full = {(r["group"], r["input"]): r for r in R}

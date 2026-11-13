@@ -1,5 +1,8 @@
 # 2.1a: the head opened once, in 2.1's form, from 1.8a's update 50
 
+> **2026-11-13: 2.1 will start from 2.0d's end (list 20d), not from 1.8a.** What 2.0d does, what is deferred to 2.1 and what this
+> build must change: [../PLAN_FROM_17A.md](../PLAN_FROM_17A.md), "Status 2026-11-13".
+
 *2026-11-12 (owner, on 1.8a's progress: "the strategy head needs to be 'correct' when it opens otherwise it just strangles other weapons
 but LG"; on the plan: "That looks reasonable, but I need to see the exact details"; "begin the build and give me an update when it is
 ready to start"). The design: [../DESIGN.md](../DESIGN.md); what is built: [../INSTRUCTION.md](../INSTRUCTION.md),

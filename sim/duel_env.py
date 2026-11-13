@@ -2285,6 +2285,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
              "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
              "EDGE_PAY", "COVER_PAY", "SPACE_GATE",                                                                # (2.0b, the pay by the place; the inputs' gate)
+             "DODGE_G",                                                                                             # (2.0d, the dodge inputs' gate)
              "DRILL_INS_P", "INS_DRILL_SECS", "DRILL_INS_VERBS", "DRILL_INS_QUIET", "DRILL_INS_RATE",                                                    # (2.1, the drills of the instruction)
              "FIN_RATE",                                                                                            # (2.1, the finish time's table: his own damage a second, re-measured as his aim changes)
              "FOLLOW_PAY",                                                                                          # (1.9a, the hands' pay for carrying an instruction out)
@@ -2385,6 +2386,10 @@ def live_values(get):
     v["SPACE_GATE"] = float(sg_) if (sg_ or "").strip() else 1.0
     if not 0.0 <= v["SPACE_GATE"] <= 1.0:
         raise ValueError("SPACE_GATE must be within 0 .. 1")
+    dg_ = get("DODGE_G")                                     # (2.0d) the dodge inputs' gate, live; unset: 1
+    v["DODGE_G"] = float(dg_) if (dg_ or "").strip() else 1.0
+    if not 0.0 <= v["DODGE_G"] <= 1.0:
+        raise ValueError("DODGE_G must be within 0 .. 1")
     v.update(_win_live(get))                                 # (v0.5.1) the cross-fade to the win pay, its long part, the stack term
     v.update(_aim2_values(get))                              # (AIM2) its live numbers
     for k_, d_ in (("FLINCH_PER_DMG", "flinch_per_dmg"), ("FLINCH_MAX", "flinch_max"), ("FLINCH_TAU", "flinch_tau")):
@@ -3269,8 +3274,40 @@ assert 0.0 <= DRILL_INS_RATE <= 1.0, "DRILL_INS_RATE within 0 .. 1"
 INS_DRILL_SECS = float(os.environ.get("INS_DRILL_SECS") or 8.0)
 DRILL_INS_VERBS = {k_.strip(): float(x_) for k_, x_ in (p_.split(":") for p_ in (os.environ.get("DRILL_INS_VERBS") or "").split(",") if ":" in p_)}
 assert 0.0 <= DRILL_INS_P <= 1.0 and 1.0 <= INS_DRILL_SECS <= 60.0 and all(k_ in INS_VERBS[1:] and x_ >= 0 for k_, x_ in DRILL_INS_VERBS.items()),     "DRILL_INS_P within 0 .. 1, INS_DRILL_SECS within 1 .. 60, DRILL_INS_VERBS verb:share pairs"
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS
-CELL_COLS = None                                           # no learned cell table in the network any more
+# (2.0d, docs/runs/2.0/2.0d/CARD.md item 9; the owner, 2026-11-13: "add inputs for helping to dodge"; "Dodging inputs are good")
+# DODGE_IN=1 (a PLAY_VAR: a network trained with it plays with it; off: the columns are zeros, nothing is kept, no random number is
+# drawn, the simulator bit-identical) the last N_DG inputs (group "b20d dodge"), for being shot at. All from his own senses: the
+# enemy as he sees him (the same old sighting and place as his other enemy inputs: opp_hist's pick), his own movement, what he feels.
+# "Around the enemy" = the horizontal turn seen from the enemy, + counter-clockwise from above (to the enemy's left); the aim and the
+# crossing share that sign, so "his aim on my +side and I move +" is moving into it.
+#   dg_aim_lr    where the enemy's aim passes him, sideways: the miss at his distance, units / 100 (-3 .. 3; a body is 30 wide).
+#                From the enemy's facing (yaw, pitch) as seen at the sighting, with a drifting error of SM_FACE_DEG (SM_FACE_TAU),
+#                none while a beam of the enemy's is drawn this frame (the lightning, the rail: it shows the aim). Aimed away (the
+#                aim's point is behind the enemy's eye): +-3 by the side. Only while the enemy is in view; 0 otherwise
+#   dg_aim_ud    the same, up-down: the aim's height against his body's middle at that point, units / 100 (-3 .. 3)
+#   dg_cross     how fast he crosses the enemy's line of fire as the enemy sees it: degrees a second around the enemy (his own
+#                velocity less the enemy's as he reads it, the enemy's at the believed place) / 100, -3 .. 3. While the enemy is in
+#                view or was within 5 s (as his other enemy inputs); 0 otherwise
+#   dg_cross_d   dg_cross less dg_cross DG_BACK seconds ago (/ 100, -3 .. 3): a reversal reads about twice his crossing
+#   dg_hurt_s    the damage he took, a sum fading with DG_TAU_S seconds (/ 50, at most 2)
+#   dg_hurt_l    the same with DG_TAU_L seconds (/ 200, at most 2)
+#   dg_lg_hit    the share of the enemy's lightning ticks he perceived (the enemy in view, or the tick hit him) that hit him, both
+#                counts fading with DG_TAU_LG seconds; 0 while under half a tick is counted
+# Every column times DODGE_G (live, 0 .. 1; unset 1; a PLAY_VAR: a save plays at its gate): 2.0d opens it over updates 30 to 60, the
+# network's weights on them starting at zero (slow twice, as 2.0b's SPACE_GATE). The histories and sums run whatever the gate.
+# The step books, a frame: which seats fired the lightning or the rail (dg_fire, dg_fire_lg) and the lightning ticks that hit each seat
+# (dg_lghit). The plugins call observe() only: a server playing such a network must set those three (not built: no server before it).
+N_DG = 7
+DODGE_IN = float(os.environ.get("DODGE_IN") or 0.0) > 0
+DG_BACK, DG_TAU_S, DG_TAU_L, DG_TAU_LG = 0.25, 0.5, 2.0, 1.0
+DG_COLS = ("dg_aim_lr", "dg_aim_ud", "dg_cross", "dg_cross_d", "dg_hurt_s", "dg_hurt_l", "dg_lg_hit")
+assert len(DG_COLS) == N_DG
+_dgg = (os.environ.get("DODGE_G") or "").strip()
+DODGE_G = float(_dgg) if _dgg else 1.0
+assert 0.0 <= DODGE_G <= 1.0, "DODGE_G must be within 0 .. 1"
+PLAY_VARS = PLAY_VARS + ("DODGE_IN", "DODGE_G")
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS + N_DG
+CELL_COLS = None                                          # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
 # Never an input, never paid; nothing in the simulator reads it. "The enemy" is the one his enemy inputs are about: the
@@ -4880,6 +4917,7 @@ class DuelEnv:
         self.fire_q = np.zeros(n, bool)                 # shots triggered last frame (they leave this frame)
         self.fire_w = np.zeros(n, np.int64)
         self.opp_hist = []                              # delayed opponent state (reaction time)
+        self.dg_st = None                               # (DODGE_IN) its histories and fading sums, made by _dodge
         self.stats = dict(frags=0, suicides=0, dmg=0.0, self_dmg=0.0, jerk=0.0,
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
                           arena=np.zeros(8),              # frags, player-frames, sum of speed, frames with the enemy in view, damage,
@@ -8423,8 +8461,90 @@ class DuelEnv:
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
                               self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot),
                               self._ord(pos, eye, yaw, pit), self._yt(), self._sp(pos, c, si, known, visible, opp),
-                              self._ins(pos, eye, yaw, pit, rot)], 1)
+                              self._ins(pos, eye, yaw, pit, rot),
+                              self._dodge(pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick if self.focus_on else None)], 1)
         return obs.astype(np.float32)
+
+    def _dodge(self, pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick):
+        """(2.0d, DODGE_IN) the inputs of N_DG (see there). Keeps its own history of every player's facing and place (beside
+        opp_hist and as long, as sm_hist), the crossing of the last DG_BACK seconds and the fading sums; a random stream of its
+        own (the simulator's is not touched). Called once a frame by observe()"""
+        n = self.n
+        out = np.zeros((n, N_DG), np.float32)
+        if not DODGE_IN:
+            return out
+        g = self.dg_st
+        nb_ = max(1, int(round(DG_BACK / DT)))
+        if g is None or len(g["face"]) != n:
+            g = self.dg_st = dict(hist=[], face=np.zeros((n, 2), np.float32), cross=[], hs=np.zeros(n, np.float32),
+                                  hl=np.zeros(n, np.float32), lgn=np.zeros(n, np.float32), lgh=np.zeros(n, np.float32),
+                                  rng=np.random.default_rng(int(self.rng.bit_generator.state["state"]["state"] % (2 ** 63))
+                                                            if "state" in self.rng.bit_generator.state.get("state", {}) else 0))
+        ar = np.arange(n)
+        o_ = np.asarray(opp, np.int64).reshape(-1)[:n]
+        # the enemy's facing and place at the sighting his other inputs are read from
+        g["hist"].append((self.yaw[:n].astype(np.float32).copy(), self.pitch[:n].astype(np.float32).copy(),
+                          self.state[:n, :3].astype(np.float32).copy()))
+        L_ = max(1, len(self.opp_hist))
+        while len(g["hist"]) > L_:
+            g["hist"].pop(0)
+        while len(g["hist"]) < L_:
+            g["hist"].insert(0, g["hist"][0])
+        pk = np.asarray(pick, np.int64) if pick is not None else np.broadcast_to(np.maximum(0, L_ - 1 - np.asarray(rf_, np.int64)), (n,))
+        pk = np.clip(pk, 0, L_ - 1)
+        H = [np.stack([h_[k_] for h_ in g["hist"]]) for k_ in range(3)]
+        rho = math.exp(-DT / max(SM_FACE_TAU, 1e-3))
+        g["face"] = (rho * g["face"] + math.sqrt(1.0 - rho * rho) * SM_FACE_DEG * g["rng"].normal(0, 1, (n, 2))).astype(np.float32)
+        beam = np.asarray(getattr(self, "dg_fire", np.zeros(n, bool)), bool)[:n][o_]
+        err = np.where(beam[:, None], 0.0, g["face"])
+        ey_ = np.radians(H[0][pk, o_] + err[:, 0])
+        ep_ = np.radians(H[1][pk, o_] + err[:, 1])
+        epos = H[2][pk, o_]
+        eeye = epos + np.array([0, 0, VIEW_H], np.float32)
+        fd = np.stack([np.cos(ep_) * np.cos(ey_), np.cos(ep_) * np.sin(ey_), -np.sin(ep_)], 1)
+        me = pos[:n] + np.array([0, 0, 4.0], np.float32)
+        r = me - eeye
+        rh = np.hypot(r[:, 0], r[:, 1]) + 1e-6
+        u = np.stack([-r[:, 1] / rh, r[:, 0] / rh], 1)        # around the enemy, + counter-clockwise
+        t = (r * fd).sum(1)
+        miss = eeye + fd * np.maximum(t, 0.0)[:, None] - me
+        lr = np.where(t > 0, (miss[:, :2] * u).sum(1) / 100.0, 3.0 * np.sign((fd[:, :2] * u).sum(1) + 1e-9))
+        ud = np.where(t > 0, miss[:, 2] / 100.0, 0.0)
+        live = (self.hp[:n] > 0) & (self.hp[o_] > 0)
+        vis = np.asarray(visible, bool)[:n] & live
+        out[:, 0] = np.clip(lr, -3, 3) * vis
+        out[:, 1] = np.clip(ud, -3, 3) * vis
+        # his crossing of the enemy's line of fire, from where he believes the enemy is
+        rk = pos[:n] - np.asarray(known, np.float32)[:n]
+        rkh2 = rk[:, 0] ** 2 + rk[:, 1] ** 2 + 1.0
+        rv = vel[:n] - np.asarray(opp_vel, np.float32)[:n] * vis[:, None]
+        cr = np.degrees((rk[:, 0] * rv[:, 1] - rk[:, 1] * rv[:, 0]) / rkh2) / 100.0
+        sens = live & (np.asarray(seen_t)[:n] < 5)
+        cr = np.where(sens, cr, 0.0).astype(np.float32)
+        g["cross"].append(cr)
+        while len(g["cross"]) > nb_ + 1:
+            g["cross"].pop(0)
+        out[:, 2] = np.clip(cr, -3, 3)
+        out[:, 3] = np.clip(cr - g["cross"][0], -3, 3) * sens
+        # what he feels: damage taken (this frame's, as fb has it) and the enemy's lightning ticks he perceived
+        tk_ = np.asarray(self.fb[:n, 1], np.float32) * 100.0
+        g["hs"] = (g["hs"] * math.exp(-DT / DG_TAU_S) + tk_).astype(np.float32)
+        g["hl"] = (g["hl"] * math.exp(-DT / DG_TAU_L) + tk_).astype(np.float32)
+        hit_ = np.asarray(getattr(self, "dg_lghit", np.zeros(n)), np.float32)[:n]
+        shot_ = np.asarray(getattr(self, "dg_fire_lg", np.zeros(n, bool)), bool)[:n][o_]
+        seen_ = (shot_ & np.asarray(visible, bool)[:n]) | (hit_ > 0)
+        g["lgn"] = (g["lgn"] * math.exp(-DT / DG_TAU_LG) + np.maximum(seen_.astype(np.float32), hit_)).astype(np.float32)
+        g["lgh"] = (g["lgh"] * math.exp(-DT / DG_TAU_LG) + hit_).astype(np.float32)
+        out[:, 4] = np.where(g["hs"] >= 0.5, np.minimum(g["hs"] / 50.0, 2.0), 0.0)      # (a sum under half a point reads none)
+        out[:, 5] = np.where(g["hl"] >= 0.5, np.minimum(g["hl"] / 200.0, 2.0), 0.0)
+        out[:, 6] = np.where(g["lgn"] >= 0.5, np.minimum(g["lgh"] / np.maximum(g["lgn"], 1e-6), 1.0), 0.0)
+        # (the beams and hits are this frame's: spent once read, so an observe() without a step reads none)
+        self.dg_fire = np.zeros(n, bool)
+        self.dg_fire_lg = np.zeros(n, bool)
+        self.dg_lghit = np.zeros(n, np.float32)
+        if DODGE_G < 1.0:                                    # (the live gate; at 1 the columns as they are, to the bit)
+            out *= np.float32(DODGE_G)
+        return out
 
     # ------------------------------------------------------------------------------------------- 2.0b: the table of the map
     def _sp_bel(self):
@@ -10816,6 +10936,8 @@ class DuelEnv:
         self.stats["dmg_h"] += float(dmg) * (self.script[i] == 0)
         self.stats["dmg_from_script"] += float(dmg) * (self.script[v] == 0 and self.script[i] != 0)
         st["attacker"][v] = i
+        if DODGE_IN and wpn == LG and int(i) != int(v):     # (DODGE_IN) a lightning tick on him
+            st.setdefault("dg_lg", []).append(int(v))
         if wpn == RG and int(i) != int(v):                  # (RAIL_FAR_PAY) the rail hits of this frame: (shooter, victim)
             st.setdefault("rail", []).append((int(i), int(v)))
         self._book(st, i, v, dmg, wpn)
@@ -14928,6 +15050,14 @@ class DuelEnv:
         if st["kicked"]:
             self.state = s = self.w.state()                  # knockback changed velocities
         dmg_taken, attacker, kill_w = st["dmg_taken"], st["attacker"], st["kill_w"]
+        if DODGE_IN:                                         # (DODGE_IN) this frame's beams and lightning hits, for _dodge
+            df_ = np.asarray(do_fire, bool)[:n]
+            dw_ = np.asarray(do_w)[:n]
+            self.dg_fire = df_ & ((dw_ == LG) | (dw_ == RG))
+            self.dg_fire_lg = df_ & (dw_ == LG)
+            self.dg_lghit = np.zeros(n, np.float32)
+            for v_ in st.get("dg_lg", ()):
+                self.dg_lghit[v_] += 1.0
 
         # shaping (curriculum): reward damage dealt to the opponent
         opp_all = ar ^ 1

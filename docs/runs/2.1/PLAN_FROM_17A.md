@@ -6,6 +6,46 @@ full plan for 2.1". Read with: [1.7a's card](../1.7/1.7a/CARD.md) and [postmorte
 [DESIGN.md](DESIGN.md), [RUNDOWN.md](RUNDOWN.md) and its built, never-started card [2.1a/CARD.md](2.1a/CARD.md);
 [1.9a's postmortem](../1.9/1.9a/POSTMORTEM.md).
 
+## Status 2026-11-13: step 1 is 2.0d; what 2.1 picks up
+
+**Step 1 became 2.0d** ([../2.0/2.0d/CARD.md](../2.0/2.0d/CARD.md); built and tested 11-13, a 90-update overnight run from 1.7a's
+update 90). The owner's scope (11-13): "2.0d is an overnight run to clean up the network by removing dead inputs, and make the structural
+fixes for aim/dodging and simulator. That's it" ... "2.1's goal is to get the head to make weapon decisions, including the map sense,
+and detailed action breakdown." The step-1 questions below were answered differently from my recommendations there: see the table.
+
+**What 2.0d does (so 2.1 does not):**
+
+| | In 2.0d |
+|---|---|
+| Inputs | **list 20d** (`sim/input_list_20d.json`, 821 columns: list 18's cut and re-measured statistics, **the combat order's 10 inputs kept** (owner, 11-13: they carry his target's look point; 1.7a u90 reads them a little), the dodge group added). `tools/inputs20d.py` converts a 990-column 1.7a-line network, its head and weapon part, its optimizer and the league's anchors (`same`: 1 of 44,800 actions differs with the brain's rounding off) |
+| Dodge inputs | group "b20d dodge" (7, the hands': where the enemy's aim passes him, his crossing of the line of fire and its change, damage taken short and long, the enemy's lightning share on him); `DODGE_IN=1`, live gate `DODGE_G` 0 → 1 over updates 30 to 60, the token "dodge" following it. The blank test at the end (200 games, the group blanked) says whether they stay |
+| Simulator | `KNOCK_QL=1`, `KNOCK_NOW=1` (the game's knockback, the hit frame's order) |
+| Aim | AIM3 at the 11-11 tuning, ramped over updates 0 to 30 (`AIM3_FIX_TAU` 0.05, `AIM3_LEAD` 1, `AIM3_RELOAD` 0). **No tracking or hand-lag limit** (owner, 11-13: "Just keep aim3 as it is"; the calibration of 11-13, AIM3.md section 3's correction: no crossing-speed effect; the pros' lightning is hurt by a reversal about twice as much as his, x1.31 against x1.14 at 75-150 ms: a hand lag, not built) |
+| Pay and league | damage 0.005 zero-sum and far-rail 0.1 as steps at the start; `HABIT_P` 0 |
+| Keep choice | share 1 (the lock's last 2.5% out); **learning**, flagged at each check (trips over 70, reached under 9%, quiet re-decisions over 0.08) |
+| Combat order | **not removed**: its parts stay in the file, never asked (`CMB_G`, `PADD`, `FADD` 0, token shut), `COMBAT=1` for its 10 inputs; the brain's pass-odds lesson off (`--pass-odds 0`; the readout's weights stay) |
+| The head | **untouched**: its target choice and credit (`H2_PG` 1), the weapon part (`--head2-wpg 1`, learning, `H2_L2` on both parts of each sum), its pay, its 79 input columns (two cut "exists" folded) |
+
+**Deferred to 2.1 (owner, 11-13):** everything about the head: the instruction (verb, place, point, weapon), the frozen moments and
+appraisals, the drills, the map sense, the head paid by the win chance alone, the strategy inputs out of the hands (`SFADE`), the
+binding weapon, what happens to the head's weapon part beside it, removing the combat order's parts, and the head's own columns (the
+yellows' timers are in list 20d's tail, read by nothing).
+
+**What 2.1's build must change because of 2.0d:**
+1. **The start is 2.0d's result on list 20d**, not 1.8a's on list 18: `tools/inputs21.py` and `tools/head21_init.py` assume list 18 and a
+   network with no combat order. A list "21 from 20d" (`sim/input_list.py extend` from `20d`) and a converter for it are needed, with
+   the combat order's removal and `same` on a 2.0d save.
+2. **The combat order's 10 inputs:** 2.0d keeps them; 2.1's instruction carries its own point, so they go then (faded out of the hands,
+   then removed: the owner's 11-11 rule for rerouted inputs).
+3. **The dodge inputs** stay in the hands unless 2.0d's blank test shows no drop.
+4. **The controls:** 2.0d's end is 2.1's control; the long-term control 1.7a u90.
+5. **No server can play a 2.0d network yet:** the plugins and `sim/export_duel.py` know neither list 20d nor the dodge inputs (the step
+   books three per-frame arrays the plugins do not set: `sim/duel_env.py` above `N_DG`). Needed before any 2.0d or 2.1 network plays people.
+
+**Still open for step 2** (below, unchanged): 5 commitment under the instruction, 6 the head's lesson in stage I, 7 the binding weapon.
+
+---
+
 **The lightning comparison** ([../../design/LG_REAL_VS_SIM.md](../../design/LG_REAL_VS_SIM.md)): the simulator does not give him a
 better lightning than the game (33.8% real, 37.5% simulated, close at every distance). The gap is the opponent: people hit him 43% at
 200-600 units against his 29-39%, and his self-play copies are as easy to track as he is. Nothing in the simulator's lightning to fix

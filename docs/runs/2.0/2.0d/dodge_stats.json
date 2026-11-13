@@ -1,0 +1,48 @@
+{
+ "note": "the dodge inputs' measured average and spread (rows of living seats, every frame): 1.7a u90 against itself, 40 games of 5 minutes, the ten duel maps (4 a map), under 1.7a's command, the checks' play switches, AIM3 at its 11-11 end values, KNOCK_QL=1 KNOCK_NOW=1, DODGE_IN=1; 2026-11-13 (docs/runs/2.0/2.0d/CARD.md)",
+ "rows": 969753,
+ "inputs": {
+  "dodge: the enemy's aim passes him, sideways": {
+   "group": "b20d dodge",
+   "mean": -0.00041,
+   "std": 0.48433,
+   "nonzero": 0.1454
+  },
+  "dodge: the enemy's aim passes him, up or down": {
+   "group": "b20d dodge",
+   "mean": -0.01001,
+   "std": 0.35462,
+   "nonzero": 0.1348
+  },
+  "dodge: his crossing of the enemy's line of fire": {
+   "group": "b20d dodge",
+   "mean": -0.01167,
+   "std": 0.4714,
+   "nonzero": 0.6484
+  },
+  "dodge: the crossing's change": {
+   "group": "b20d dodge",
+   "mean": 0.00017,
+   "std": 0.49399,
+   "nonzero": 0.649
+  },
+  "dodge: damage taken, short": {
+   "group": "b20d dodge",
+   "mean": 0.05117,
+   "std": 0.15963,
+   "nonzero": 0.1967
+  },
+  "dodge: damage taken, long": {
+   "group": "b20d dodge",
+   "mean": 0.04841,
+   "std": 0.09199,
+   "nonzero": 0.5631
+  },
+  "dodge: the enemy's lightning on him": {
+   "group": "b20d dodge",
+   "mean": 0.09421,
+   "std": 0.21306,
+   "nonzero": 0.2248
+  }
+ }
+}
