@@ -45,6 +45,10 @@ def _lib():
     lib.qsim_knockback.argtypes = [ctypes.c_int, F32, ctypes.c_int]
     if hasattr(lib, "qsim_knockback_t"):                  # (KNOCK_QL, 2026-11-13) a library built before it lacks it
         lib.qsim_knockback_t.argtypes = [ctypes.c_int, F32, ctypes.c_int]
+    if hasattr(lib, "qsim_step_one"):                     # (KNOCK_NOW, 2026-11-13)
+        lib.qsim_keep_one.argtypes = [ctypes.c_int]
+        lib.qsim_restore_one.argtypes = [ctypes.c_int, ctypes.c_int]
+        lib.qsim_step_one.argtypes = [ctypes.c_int, I8, F32, ctypes.c_int]
     lib.qsim_add_trigger.argtypes = [ctypes.c_int, ctypes.c_int, F32, ctypes.c_float]
     if hasattr(lib, "qsim_version"):                         # the library of 2026-10-09: masks, many contents, solid pieces
         I32 = np.ctypeslib.ndpointer(np.int32, flags="C_CONTIGUOUS")
@@ -300,6 +304,21 @@ class World:
 
     def knockback(self, i, kick, knockback):
         self.lib.qsim_knockback(i, np.asarray(kick, np.float32), int(knockback))
+
+    def backup(self):
+        """(KNOCK_NOW) every player's frame-start copy"""
+        self.lib.qsim_backup()
+
+    def keep_one(self, i):
+        self.lib.qsim_keep_one(int(i))
+
+    def restore_one(self, i, which):
+        """which 0: the frame-start copy, 1: the copy kept by keep_one"""
+        self.lib.qsim_restore_one(int(i), int(which))
+
+    def step_one(self, i, move, angles, msec):
+        """one player's move alone, as step() moves him"""
+        self.lib.qsim_step_one(int(i), np.ascontiguousarray(move, np.int8), np.ascontiguousarray(angles, np.float32), int(msec))
 
     def knockback_t(self, i, kick, t):
         """(KNOCK_QL) the kick with a no-friction time of t ms as given (0: none; no 50 ms floor), at most 200"""

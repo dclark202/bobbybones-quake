@@ -19,12 +19,13 @@ import minqlx
 D = "/tmp/practice"
 LINE_START = (-1377.0, -817.0, 538.1)       # longest flat, clear floor run on Campgrounds (1408 units, simulator search)
 LINE_YAW = 0.0
+LINE2 = (447.0, 255.0, 538.1, 270.0)       # (set 7) open air ahead: shooter here, target along -y (2026-11-13)
 WEAPON = {"g": 1, "mg": 2, "sg": 3, "gl": 4, "rl": 5, "lg": 6, "rg": 7, "pg": 8, "hmg": 14}
 REPEATS = 4
 
 
-def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None, pf=0, thp=200, air=0.0):
-    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre, pf=pf, thp=thp, air=air)
+def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None, pf=0, thp=200, air=0.0, line=None):
+    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre, pf=pf, thp=thp, air=air, line=line)
 
 
 SETS = {
@@ -65,6 +66,17 @@ SETS = {
          for w, d in (("lg", 300), ("mg", 300), ("hmg", 300), ("sg", 100), ("rg", 400), ("rl", 300))
          for where, a in (("ground", 0.0), ("air", 120.0))] +
         [("lgkick2_air", spec("lg", dist=300, hold=3, frames=24, thp=999, air=120.0))]),
+    # (2026-11-13) set 6's lifted targets at 300 units sat inside the geometry over the first line (they never moved); this line
+    # (Campgrounds, found by a simulator search) has 900 units of open air ahead of a target lifted 100: streams in the air, the
+    # vertical kick, and where the target is in the hit frame (the game moves it in that frame)
+    "7": dict(
+        [("lgstream_air_{}".format(d), spec("lg", dist=d, hold=h, frames=48, thp=999, air=100.0, line=LINE2))
+         for d in (150, 300) for h in (1, 16)] +
+        [("lgstream_ground_150", spec("lg", dist=150, hold=16, frames=40, thp=999, line=LINE2)),
+         ("mgstream_air_150", spec("mg", dist=150, hold=16, frames=40, thp=999, air=100.0, line=LINE2)),
+         ("rlkick_air_200", spec("rl", dist=200, hold=1, frames=40, thp=999, air=100.0, line=LINE2)),
+         ("rgkick_air_300", spec("rg", dist=300, hold=1, frames=40, thp=999, air=100.0, line=LINE2)),
+         ("sgkick_air_150", spec("sg", dist=150, hold=1, frames=40, thp=999, air=100.0, line=LINE2))]),
 }
 TESTS = SETS[os.environ.get("WEAPONLAB_SET", "1")]
 
@@ -90,9 +102,10 @@ class weaponlab(minqlx.Plugin):
 
     def setup_test(self, shooter, target, name):
         sp_ = TESTS[name]
-        dirx, diry = math.cos(math.radians(LINE_YAW)), math.sin(math.radians(LINE_YAW))
+        lx, ly, lz, lyaw = sp_.get("line") or (LINE_START[0], LINE_START[1], LINE_START[2], LINE_YAW)
+        dirx, diry = math.cos(math.radians(lyaw)), math.sin(math.radians(lyaw))
         dist = float(sp_["dist"])
-        sx, sy, sz = LINE_START
+        sx, sy, sz = lx, ly, lz
         sp = (sx + dirx * 64, sy + diry * 64, sz + 2)
         tp = (sp[0] + dirx * dist, sp[1] + diry * dist, sz + 2)
         for p, pos in ((shooter, sp), (target, tp)):
@@ -104,9 +117,9 @@ class weaponlab(minqlx.Plugin):
             p.ammo(mg=150, sg=25, gl=25, rl=50, lg=200, rg=50, pg=200, hmg=200)
         eye = (sp[0], sp[1], sp[2] + 26.0)
         if sp_["aim"] == "self":
-            pitch, yaw = 89.0, LINE_YAW
+            pitch, yaw = 89.0, lyaw
         elif sp_["aim"] == "pitch":                             # a fixed pitch along the line (negative: up)
-            pitch, yaw = float(sp_["off"]), LINE_YAW
+            pitch, yaw = float(sp_["off"]), lyaw
         else:
             if sp_["aim"] == "floor":
                 off = float(sp_["off"])
@@ -119,7 +132,7 @@ class weaponlab(minqlx.Plugin):
         self.cur = dict(name=name, spec=sp_, tpos=tp, shooter=shooter.id, target=target.id, weapon=WEAPON[sp_["weapon"]], pre=WEAPON[sp_["pre"] or sp_["weapon"]],
                         pitch=pitch, yaw=yaw, frame=-30, dist=dist, rows=[])
         minqlx.set_bot_input(shooter.id, 0, 0, 0, 0, self.cur["pre"], pitch, yaw)
-        minqlx.set_bot_input(target.id, 0, 0, 0, 0, 2, 0.0, LINE_YAW + 180.0)
+        minqlx.set_bot_input(target.id, 0, 0, 0, 0, 2, 0.0, lyaw + 180.0)
 
     def on_frame(self):
         now = time.time()

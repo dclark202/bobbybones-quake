@@ -2946,6 +2946,15 @@ FIRE_QL = float(os.environ.get("FIRE_QL") or 0.0) > 0
 # hit frame's ground friction and gave 33 / 9.5 / 24 / 303 in the air. Off = the simulator before, to the bit.
 KNOCK_QL = float(os.environ.get("KNOCK_QL") or 0.0) > 0
 KNOCK_QL_F = {2: 1.75, 3: 1.0, 7: 1.0, 4: 1.0}           # LG, MG, HMG, SG (the weapon indices: RL, RG, LG, MG, SG, GL, PG, HMG, G)
+# (KNOCK_NOW, 2026-11-13; weaponlab set 7, data/weaponlab7) an instant hit (rail, lightning, machine guns, shotgun, gauntlet) moves
+# its target in the hit frame, as the game does: the shooter's shot comes in his own frame before the target's move, so the target's
+# whole frame is moved with the kick (measured: in the hit frame the target goes velocity x 25 ms, its new velocity, for the lightning,
+# the machine gun and the rail). A rocket does not (its explosion comes after the players' moves: measured, no move in its hit frame),
+# so projectiles stay as they are. The simulator moves everyone first and shoots after; under KNOCK_NOW a player hit this frame is
+# put back to the frame's start, given the frame's kicks and moved again with the same commands (the same as the first move when
+# nothing else changed him this frame, checked each time; if something did, the kick goes on the frame's end as before). Off = the
+# simulator before, to the bit.
+KNOCK_NOW = float(os.environ.get("KNOCK_NOW") or 0.0) > 0
 HS_W = np.array([k_ != "proj" for k_ in W_KIND], bool)    # (FIRE_QL) the instant weapons
 FIRE_MZ, FIRE_FLY = 5.0, 0.050                            # (FIRE_QL) the plasma's and the grenade's muzzle and first flight
 PLAY_VARS = PLAY_VARS + ("FIRE_QL",)
@@ -10874,10 +10883,16 @@ class DuelEnv:
         if KNOCK_QL and wpn in KNOCK_QL_F:                  # (KNOCK_QL) per bullet, tick or pellet, as the game: int points, no floor
             kb1 = min(200, int(float(W_DMG[wpn]) * KNOCK_QL_F[wpn]))
             n_ = max(1, int(round(float(dmg) / float(W_DMG[wpn]))))
-            self.w.knockback_t(int(v), np.asarray(kdir, np.float32) * (5.0 * kb1 * n_), 2 * kb1 if 2 * kb1 >= 50 else 0)
+            kick_ = (1, np.asarray(kdir, np.float32) * (5.0 * kb1 * n_), 2 * kb1 if 2 * kb1 >= 50 else 0)
         else:
             kf = W_KNOCK[wpn]
-            self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * dmg / 200.0), int(min(200, dmg)))
+            kick_ = (0, np.asarray(kdir, np.float32) * (1000.0 * kf * dmg / 200.0), int(min(200, dmg)))
+        if KNOCK_NOW and getattr(self, "kn_hit", None) is not None and bool(np.any(kick_[1] != 0)):
+            if int(v) not in self.kn_hit:                   # (KNOCK_NOW) his frame's end before the first kick: kept, and its numbers
+                self.w.keep_one(int(v))
+                self.kn_hit[int(v)] = (self.w.state()[int(v)].copy(), [])
+            self.kn_hit[int(v)][1].append(kick_)
+        self._kick(int(v), kick_)
         took_h = self._damage(v, dmg)
         st["dmg_taken"][v] += took_h
         if int(i) != int(v):                                # (DMG_ENEMY_ONLY)
@@ -10890,6 +10905,37 @@ class DuelEnv:
         self._book(st, i, v, dmg, wpn)
         st["kicked"] = True
         self.stats["dmg"] += dmg
+
+    def _kick(self, v, kick_):
+        if kick_[0]:
+            self.w.knockback_t(v, kick_[1], kick_[2])
+        else:
+            self.w.knockback(v, kick_[1], kick_[2])
+
+    def _knock_now(self):
+        """(KNOCK_NOW) each player an instant hit kicked this frame: his frame moved again from its start with the kicks; only where his
+        first move is reproduced exactly (nothing else moved him this frame), else the kicks stay on the frame's end"""
+        done_ = False
+        for v, (pre_, kicks_) in self.kn_hit.items():
+            self.w.restore_one(v, 0)
+            for ang_, ms_ in self.kn_subs:
+                self.w.step_one(v, self.kn_moves[v], ang_[v], ms_)
+            again_ = self.w.state()[v]
+            if np.array_equal(again_, pre_):
+                self.w.restore_one(v, 0)
+                for k_ in kicks_:
+                    self._kick(v, k_)
+                for ang_, ms_ in self.kn_subs:
+                    self.w.step_one(v, self.kn_moves[v], ang_[v], ms_)
+                done_ = True
+                self.stats["knock_now"] = self.stats.get("knock_now", 0) + 1
+            else:
+                self.w.restore_one(v, 1)
+                for k_ in kicks_:
+                    self._kick(v, k_)
+                self.stats["knock_now_off"] = self.stats.get("knock_now_off", 0) + 1
+        self.kn_hit = None
+        return done_
 
     def _book(self, st, i, v, dmg, wpn):
         """player i did dmg to player v: booked per attacker (until 2026-10-08 a victim had one attacker per frame, the
@@ -14486,10 +14532,16 @@ class DuelEnv:
         p1 = np.clip(self.pitch * lev + dpit, -89, 89)
         done_ms = 0
         hs_s1 = None                                         # (FIRE_QL) the state after the frame's first substep
+        if KNOCK_NOW:                                        # (KNOCK_NOW) the frame's start, its commands, the players hit
+            self.w.backup()
+            self.kn_moves, self.kn_subs, self.kn_hit = moves, [], {}
         for ms in self.substeps:
             done_ms += ms
             f = done_ms / 25.0
-            self.w.step(moves, np.stack([self.pitch + (p1 - self.pitch) * f, y0 + turn * f], 1).astype(np.float32), ms)
+            ang_ = np.stack([self.pitch + (p1 - self.pitch) * f, y0 + turn * f], 1).astype(np.float32)
+            if KNOCK_NOW:
+                self.kn_subs.append((ang_, ms))
+            self.w.step(moves, ang_, ms)
             if FIRE_QL and hs_s1 is None:
                 hs_s1, hs_yaw1 = self.w.state(), y0 + turn * f
         self.pitch = p1
@@ -14909,6 +14961,11 @@ class DuelEnv:
                     self.stats[name + "_hits"] += hm
                     self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)
 
+        if KNOCK_NOW and self.kn_hit:                        # (KNOCK_NOW) the hit players moved again with their kicks, before the projectiles
+            self._knock_now()
+            self.state = s = self.w.state()
+        elif KNOCK_NOW:
+            self.kn_hit = None
         # projectiles fly: direct hits on the opponent, explosions on walls, grenades bounce and time out
         fresh = self.rnew.copy()
         self.rnew[:] = False

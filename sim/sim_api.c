@@ -276,6 +276,44 @@ API void qsim_step(int n, const signed char *moves, const float *angles, int mse
     }
 }
 
+/* (KNOCK_NOW, 2026-11-13) an instant hit moves its target in the hit frame, as Quake Live does (weaponlab set 7): the frame-start
+   copy of every player (qsim_backup), a copy of one player now (qsim_keep_one), either copy put back (qsim_restore_one), and one
+   player's move alone, exactly as qsim_step moves it (qsim_step_one), so the hit player's frame can be moved again with the kick */
+static playerState_t *bak0, *bak1;
+static int nbak;
+API void qsim_backup(void) {
+    if (nbak != nplayers) {
+        free(bak0); free(bak1);
+        bak0 = calloc(nplayers, sizeof(playerState_t));
+        bak1 = calloc(nplayers, sizeof(playerState_t));
+        nbak = (bak0 && bak1) ? nplayers : 0;
+    }
+    if (nbak) memcpy(bak0, players, nplayers * sizeof(playerState_t));
+}
+API void qsim_keep_one(int i) { if (i >= 0 && i < nbak) bak1[i] = players[i]; }
+API void qsim_restore_one(int i, int which) { if (i >= 0 && i < nbak) players[i] = which ? bak1[i] : bak0[i]; }
+API void qsim_step_one(int i, const signed char *move, const float *angles, int msec) {
+    playerState_t *ps;
+    pmove_t pm;
+    if (i < 0 || i >= nplayers) return;
+    ps = &players[i];
+    memset(&pm, 0, sizeof(pm));
+    pm.ps = ps;
+    pm.cmd.serverTime = ps->commandTime + msec;
+    pm.cmd.forwardmove = move[0];
+    pm.cmd.rightmove = move[1];
+    pm.cmd.upmove = move[2];
+    pm.cmd.angles[PITCH] = ANGLE2SHORT(angles[0]) - ps->delta_angles[PITCH];
+    pm.cmd.angles[YAW] = ANGLE2SHORT(angles[1]) - ps->delta_angles[YAW];
+    pm.cmd.weapon = WP_ROCKET_LAUNCHER;
+    pm.tracemask = MASK_PLAYERSOLID;
+    pm.trace = sim_trace;
+    pm.pointcontents = sim_pointcontents;
+    pm.noFootsteps = qtrue;
+    Pmove(&pm);
+    touch_triggers(ps);
+}
+
 /* ---------------- map triggers: jump pads and teleporters (game code, not Pmove) ---------------- */
 #define MAX_SIM_TRIGGERS 64
 typedef struct { clipHandle_t model; int type; vec3_t a; float angle; } sim_trigger_t;   /* type 0 push, 1 teleport */
