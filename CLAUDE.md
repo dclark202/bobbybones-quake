@@ -59,6 +59,11 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    from its own lessons (its value, its readouts, its pay on its own played choices) while it plays nothing or a small share, and its
    share or gate then opens slowly. **Once a hand-built rule is out it never comes back** (the 8-second lock: "I don't want to ever see the
    lock again").
+14. **Every decision is checked against the research notes** (owner, 2026-11-13: the issues "stem from a lack of understanding about
+   how the game works"). Before proposing a design, a pay change or a run card, read the relevant parts of `docs/research/`
+   (MECHANICS, DUEL_STRATEGY, PRO_INTERVIEWS, BOTS) and fill a **"Research check"** section answering the seven questions of
+   `docs/research/README.md`, citing file and section; "not covered" is said plainly. A change that works against a principle there,
+   or rests on a simulator value that the notes show is off the real game, says so up front. When a note proves wrong, fix it.
 
 ## Where things are
 
@@ -68,6 +73,7 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
 | `docs/PLAN.md` | the goal, where things stand, what's next |
 | `docs/HISTORY.md` | notes beyond the table: design ideas tried that did not work or were abandoned, open problems, measurements without training, incidents, lessons that are now rules. Read it before proposing anything |
 | `docs/BACKLOG.md` | open work and ideas, numbered `B-nn` |
+| `docs/research/` | **the game, the pros and other bots** (2026-11-13): mechanics checked against the sim, duel strategy, the pros' own words, game-AI research; `README.md` has the one-page core and the decision checklist (hard rule 14) |
 | `docs/runs/<family>/` | one folder per family (`1.7/`, `2.0/`; older `b1.N/`, `v0.6.x/`): a `README.md` (the goal, the attempts) and a folder per attempt (`2.0/2.0c/`) with `CARD.md` (the owner's page + the checklist), `train.cmd`, `start.ps1`, the reference command, reports |
 | `docs/design/` | current designs · `docs/guides/` how-tos · `docs/archive/` old versions, the old daily log, old CLAUDE.md (frozen) |
 | `tools/run/` | the run tools: `check_settings`, `make_train_cmd`, `watch` (checks), `panel` (behaviour), `selfplay_loop` / `selfplay_log`, `live_accept`, `backup` |
