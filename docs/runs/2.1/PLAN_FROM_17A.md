@@ -6,8 +6,10 @@ full plan for 2.1". Read with: [1.7a's card](../1.7/1.7a/CARD.md) and [postmorte
 [DESIGN.md](DESIGN.md), [RUNDOWN.md](RUNDOWN.md) and its built, never-started card [2.1a/CARD.md](2.1a/CARD.md);
 [1.9a's postmortem](../1.9/1.9a/POSTMORTEM.md).
 
-**Waiting on today's lightning comparison** (1.6a in the simulator against 1.6a on the servers): if the simulator's lightning is
-more generous than the game's, that gets fixed in the simulator before step 1, or step 1 trains the same bias in again.
+**The lightning comparison** ([../../design/LG_REAL_VS_SIM.md](../../design/LG_REAL_VS_SIM.md)): the simulator does not give him a
+better lightning than the game (33.8% real, 37.5% simulated, close at every distance). The gap is the opponent: people hit him 43% at
+200-600 units against his 29-39%, and his self-play copies are as easy to track as he is. Nothing in the simulator's lightning to fix
+before step 1; how hard he and his copies are to hit is a separate lever (proposals there).
 
 ## What 1.7a's update 90 is (from its card)
 
