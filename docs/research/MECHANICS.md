@@ -96,7 +96,8 @@ offsets do.
   point of knockback**, with knockback = damage x the weapon's factor, capped at 200 points (1,000 u/s). While knocked
   back the player gets 50 to 200 ms of no ground friction (`pm_time = 2 x knockback`, clamped).
   Examples: a direct rocket on an enemy, 100 x 0.9 x 5 = 450 u/s; a rail 80 x 0.85 x 5 = 340 u/s [ours: 340];
-  an LG tick 6 x 1.75 x 5 = 52.5 u/s (20 ticks a second: an LG stream pushes a target hard in the air).
+  an LG tick 6 x 1.75 = 10.5, cut to 10 points = 50 u/s (measured 2026-11-13; 20 ticks a second: an LG stream pushes a target
+  hard in the air).
 
 ### 1.3 Weapon by weapon
 
@@ -507,10 +508,10 @@ for the switches that are on.
 
 | Thing | Real QL | Our sim | Source | How sure the difference is real |
 |---|---|---|---|---|
-| **Knockback factor, LG** | 1.75 (6 x 1.75 x 5 = 52.5 u/s a tick) | `W_KNOCK` 1.167 (35 u/s) | [cvarlist], [esr-callvote] | **medium**: the sim's number was fitted on the server; the cvar says 1.75. 1.167 = 1.75 / 1.5 exactly, which hints at a scaling slip, or the fit measured speed after some ground friction. Re-check in the air |
-| **Knockback factor, MG** | 1 | 0.4 | [cvarlist] | medium (small pushes on the ground are partly eaten by friction once `pm_time` ends; same caveat) |
-| **Knockback factor, HMG** | 1 | 0.625 | [cvarlist] | medium (same) |
-| **Knockback factor, SG** | 1 (per pellet) | 0.85 | [cvarlist] | medium (same) |
+| **Knockback factor, LG** | 1.75 (6 x 1.75 = 10.5, cut to 10 points: 50 u/s a tick) | `W_KNOCK` 1.167 (35 u/s); **`KNOCK_QL=1` (2026-11-13): 50 u/s, as measured** | [cvarlist], [esr-callvote]; **[ours] weaponlab set 6 (2026-11-13, `data/weaponlab6`)** | **measured, fixed under `KNOCK_QL`**: a tick in the air pushes 47.5 u/s horizontal at an 18-degree aim = 50 u/s; on the ground friction takes 15 u/s a frame from the hit frame on (34.9, 19.9, 4.9), which is what the old 1.167 had been fitted to |
+| **Knockback factor, MG** | 1 (25 u/s a bullet) | 0.4; **`KNOCK_QL=1`: 1, as measured** | [cvarlist]; [ours] weaponlab set 6 | **measured, fixed under `KNOCK_QL`** (air 23.8 at 18 degrees; ground 9.9 = 25 - 15) |
+| **Knockback factor, HMG** | 1 (40 u/s a bullet) | 0.625; **`KNOCK_QL=1`: 1, as measured** | [cvarlist]; [ours] weaponlab set 6 | **measured, fixed under `KNOCK_QL`** (air 38.0; ground 24.9) |
+| **Knockback factor, SG** | 1 per pellet (500 u/s for 20 pellets) | 0.85; **`KNOCK_QL=1`: 1 a pellet** | [cvarlist]; [ours] weaponlab set 6 | **measured, fixed under `KNOCK_QL`** (air 357 at 44 degrees = 500; ground 415 after the hit frame's friction) |
 | **HMG spread** | 400 (about 2.8 degrees) | `MG_SPREAD` 1.4 degrees, shared with the MG | [esr-balance], [fandom-hmg] | high (no HMG on our ten maps, so it matters little) |
 | **Shotgun pattern** | fixed 3 rings (10 + 5 + 5), outer ring about 7 degrees, no centre pellet | gaussian, sigma 3 degrees, random (expected hits) | [fandom-sg], [esr-sg] | high on the shape; the sim's **mean** damage at 100/300/600 units was fitted to the game [ours] |
 | **Shotgun range** | 1500 units | 8192 | [fandom-sg] | medium (single source); little effect (beyond 1000 the sim's damage is already tiny) |
@@ -527,6 +528,8 @@ for the switches that are on.
 | **Upward kick on knockback** | `g_knockback_z 24` (meaning undocumented) | splash pushes upward; hitscan pushes along the shot | [cvarlist] | low (unknown meaning) |
 | **Respawn wait** | allowed from 2.1 s, forced at 2.4 s (cvar) | `RESPAWN_QL=1`: 2.1 s (Bobby taps fire); sim note says forced 4.5 s from demos | [cvarlist] | low (only matters for people) |
 | **Shot timing on a flick** | fires in the first 8 ms move of the frame | `FIRE_QL=1` handles it (audit gap 1) | [ours] | resolved if `FIRE_QL` is right |
+
+**The small kicks' friction (measured 2026-11-13, weaponlab set 6):** for the lightning, the machine guns and shotgun pellets the game sets no no-friction time (Q3 would floor it at 50 ms); a rail (136 ms) and a rocket (180 ms) keep their speed. The simulator's `KNOCK_QL=1` does the same (`sim/sim_api.c` `qsim_knockback_t`). One difference stays: the game applies the target's move after the hit within the hit frame, the simulator a frame later (the same for every weapon).
 
 ### 7.2 Values that match (checked)
 

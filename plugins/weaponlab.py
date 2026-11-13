@@ -23,8 +23,8 @@ WEAPON = {"g": 1, "mg": 2, "sg": 3, "gl": 4, "rl": 5, "lg": 6, "rg": 7, "pg": 8,
 REPEATS = 4
 
 
-def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None, pf=0, thp=200):
-    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre, pf=pf, thp=thp)
+def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None, pf=0, thp=200, air=0.0):
+    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre, pf=pf, thp=thp, air=air)
 
 
 SETS = {
@@ -57,6 +57,14 @@ SETS = {
     "5": dict(
         [("rl_{}_{}".format(a, b), spec(b, hold=100, frames=110, pin=True, pre=a, pf=1, thp=999))
          for a, b in (("rg", "lg"), ("rl", "lg"), ("rl", "rg"), ("rg", "rl"), ("sg", "lg"), ("gl", "lg"), ("mg", "lg"))]),
+    # (2026-11-13, docs/research/MECHANICS.md section 7.1: the cvars say LG 1.75, MG/HMG/SG 1; the simulator has 1.167, 0.4, 0.625, 0.85)
+    # knockback alone: one trigger frame at a target at 999 health, on the ground and in the air (lifted `air` units and let go two
+    # frames before the shot: no ground friction in the hit frame), every frame's velocity recorded
+    "6": dict(
+        [("{}kick_{}".format(w, where), spec(w, dist=d, hold=1, frames=24, thp=999, air=a))
+         for w, d in (("lg", 300), ("mg", 300), ("hmg", 300), ("sg", 100), ("rg", 400), ("rl", 300))
+         for where, a in (("ground", 0.0), ("air", 120.0))] +
+        [("lgkick2_air", spec("lg", dist=300, hold=3, frames=24, thp=999, air=120.0))]),
 }
 TESTS = SETS[os.environ.get("WEAPONLAB_SET", "1")]
 
@@ -104,7 +112,7 @@ class weaponlab(minqlx.Plugin):
                 off = float(sp_["off"])
                 aim = (tp[0] - dirx * (15 + off), tp[1] - diry * (15 + off), tp[2] - 24.0)   # floor, in front of the box
             else:
-                aim = (tp[0], tp[1], tp[2] + 4.0)                                            # body centre
+                aim = (tp[0], tp[1], tp[2] + 4.0 + float(sp_.get("air", 0.0)))              # body centre (set 6: where it is lifted to)
             dx, dy, dz = aim[0] - eye[0], aim[1] - eye[1], aim[2] - eye[2]
             pitch = -math.degrees(math.atan2(dz, math.hypot(dx, dy)))
             yaw = math.degrees(math.atan2(dy, dx))
@@ -153,6 +161,11 @@ class weaponlab(minqlx.Plugin):
                 tgt = self.player(c["target"])
                 if tgt is not None:
                     tgt.position(x=c["tpos"][0], y=c["tpos"][1], z=c["tpos"][2])
+            if f == -2 and float(sp_.get("air", 0.0)) > 0:    # (set 6) the target lifted and let go: in the air at the shot
+                tgt = self.player(c["target"])
+                if tgt is not None:
+                    tgt.position(x=c["tpos"][0], y=c["tpos"][1], z=c["tpos"][2] + float(sp_["air"]))
+                    tgt.velocity(reset=True)
             minqlx.set_bot_input(c["shooter"], 0, 0, 0, 0, c["pre"], c["pitch"], c["yaw"])
             return
         firing = f < sp_["hold"]

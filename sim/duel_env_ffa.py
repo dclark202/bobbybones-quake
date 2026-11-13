@@ -2937,6 +2937,15 @@ PLAY_VARS = PLAY_VARS + ("DRIFT_IN", "DRIFT_DELAY", "DRIFT_SIGMA", "DRIFT_WEBER"
 #     simulator's spread gives exactly 100, 60, 25).
 # The plugins send every press at once (duelbot.drive: no press_q hold; the rocket's only with RL_QL).
 FIRE_QL = float(os.environ.get("FIRE_QL") or 0.0) > 0
+# (KNOCK_QL, 2026-11-13; docs/research/MECHANICS.md section 7.1; weaponlab set 6, data/weaponlab6) the small kicks as Quake Live gives
+# them: the lightning, the machine guns and each shotgun pellet push by int(damage x g_knockback_<weapon>) points (LG 1.75, MG 1,
+# HMG 1, SG 1 a pellet; 5 u/s a point), and get NO no-friction time: on the ground friction eats 15 u/s a frame from the hit frame
+# on (measured: a tick 34.9, 19.9, 4.9). Q3 floors that time at 50 ms; the game behaves as if a time under 50 ms (2 x the points)
+# is not set at all (inferred: the rail's 136 ms and the rocket's 180 ms keep their speed, as measured). Measured in the air: 47.5 / 23.8 / 38.0 / 357 u/s horizontal (a lightning tick, a bullet, a heavy bullet, a full
+# shotgun shot, aimed 18-44 degrees up); the old W_KNOCK factors (1.167, 0.4, 0.625, 0.85) were fitted to the speed left after the
+# hit frame's ground friction and gave 33 / 9.5 / 24 / 303 in the air. Off = the simulator before, to the bit.
+KNOCK_QL = float(os.environ.get("KNOCK_QL") or 0.0) > 0
+KNOCK_QL_F = {2: 1.75, 3: 1.0, 7: 1.0, 4: 1.0}           # LG, MG, HMG, SG (the weapon indices: RL, RG, LG, MG, SG, GL, PG, HMG, G)
 HS_W = np.array([k_ != "proj" for k_ in W_KIND], bool)    # (FIRE_QL) the instant weapons
 FIRE_MZ, FIRE_FLY = 5.0, 0.050                            # (FIRE_QL) the plasma's and the grenade's muzzle and first flight
 PLAY_VARS = PLAY_VARS + ("FIRE_QL",)
@@ -10862,8 +10871,13 @@ class DuelEnv:
         """player i's weapon wpn hits player v for dmg, pushing along kdir"""
         if RESPAWN_QL and self.rsp_wait[v] > 0:             # (RESPAWN_QL) a body waiting to respawn: the shot stops on it, nothing more
             return
-        kf = W_KNOCK[wpn]
-        self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * dmg / 200.0), int(min(200, dmg)))
+        if KNOCK_QL and wpn in KNOCK_QL_F:                  # (KNOCK_QL) per bullet, tick or pellet, as the game: int points, no floor
+            kb1 = min(200, int(float(W_DMG[wpn]) * KNOCK_QL_F[wpn]))
+            n_ = max(1, int(round(float(dmg) / float(W_DMG[wpn]))))
+            self.w.knockback_t(int(v), np.asarray(kdir, np.float32) * (5.0 * kb1 * n_), 2 * kb1 if 2 * kb1 >= 50 else 0)
+        else:
+            kf = W_KNOCK[wpn]
+            self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * dmg / 200.0), int(min(200, dmg)))
         took_h = self._damage(v, dmg)
         st["dmg_taken"][v] += took_h
         if int(i) != int(v):                                # (DMG_ENEMY_ONLY)

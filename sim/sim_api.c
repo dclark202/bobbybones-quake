@@ -507,6 +507,19 @@ API void qsim_knockback(int i, const float *kick, int knockback) {
     }
 }
 
+/* (KNOCK_QL, 2026-11-13) knockback as Quake Live does it for the small kicks (lightning, machine guns, shotgun pellets), measured
+   on our server (weaponlab set 6): the no-friction time as the caller gives it (0: none, so ground friction starts at once), no
+   50 ms floor, at most 200 ms; set only if no knockback time is running */
+API void qsim_knockback_t(int i, const float *kick, int t) {
+    playerState_t *ps = &players[i];
+    VectorAdd(ps->velocity, kick, ps->velocity);
+    if (!ps->pm_time && t > 0) {
+        if (t > 200) t = 200;
+        ps->pm_time = t;
+        ps->pm_flags |= PMF_TIME_KNOCKBACK;
+    }
+}
+
 /* visibility cluster of the leaf containing a point: -1 = outside the playable map (void / inside walls) */
 API int qsim_cluster(const float *point) { return CM_LeafCluster(CM_PointLeafnum(point)); }
 

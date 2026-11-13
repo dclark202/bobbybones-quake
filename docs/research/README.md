@@ -47,7 +47,7 @@ without captions, thin map notes for Sinister and Battleforged) are listed in ea
   (OpenAI Five).
 
 **Where our simulator is off the real game** (MECHANICS.md section 7; to measure on the server before any fix):
-knockback of LG/MG/HMG/SG (sim lower), the shotgun's fixed ring pattern, the hit cylinder vs our box, players passing
+knockback of LG/MG/HMG/SG (sim lower; measured and fixed under `KNOCK_QL=1`, 2026-11-13), the shotgun's fixed ring pattern, the hit cylinder vs our box, players passing
 through each other, the "weapon already held" pickup and ammo caps, the footstep rule (keys vs speed) and hearing
 distances, fall-damage modifiers, plasma splash offset, the forced respawn time. The core numbers (damage, fire rates,
 projectile speeds, splash, armor, respawns, switch time, 125/0 spawn) match.
