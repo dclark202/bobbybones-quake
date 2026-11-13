@@ -69,7 +69,7 @@ the extra one at update 10. Both seats under AIM3's end values.
 |---|---|
 | 18:00 | `night_prep.vbs start` (a scheduled task, no window): the settings check; then, at once on all cores, his own damage a second (FIN_RATE, 120 games of 1.8a's end) and the items' race (200 games of 1.8a's end, every second recorded); then the fit |
 | about 19:00 | **only if both are made and the items' judge is ACCEPTED**: `start.ps1 -Minutes <until 08:00>`; its row in `docs/RUNS.md` at once |
-| 08:00 | the trainer stops at its minutes (a save every 10 updates); the same script gives the watcher's check up to 45 minutes to finish and stops the watcher, the ramp and the self-play logger (nothing deleted; every process matched by its own command line) |
+| 08:00, then about 09:40 | **to the full 120 updates** (owner, 19:40: "just let it go until it's done then the full 120 updates"): `finish_19a.ps1` (hidden) lets the trainer stop at 08:00 at its minutes (about update 106), resumes it at once from its own save (`start.ps1 -Resume`), ends the run at the kept save of update 120 (`stop_19a.ps1 -Update 120 -All`: `policy_end_19a.pt`), gives the watcher's check up to 45 minutes and stops it; the night script's morning pause was stopped for it |
 | If short of 120 | `night_prep.vbs resume` the next night (`start.ps1 -Resume`) finishes it, on the owner's word |
 
 ## Decided here (for the owner's review)
