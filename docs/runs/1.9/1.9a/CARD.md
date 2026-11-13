@@ -7,7 +7,7 @@ so, ALL of the hard coded bullshit has to come out and it can probably go most c
 decisions"; "Judge with items. As long as the head understands the value of items, we're good"; "the judge just pays the head"; "This is 1.9"
 (2.1 is its own tree). Built on branch `b19`, made from `b21` (2.1's build, committed as it was) with 1.8a's last docs merged in.*
 
-**NOT STARTED. The owner's go (11-12): "you can start the run when it's ready and run it until 8am"; "Start around 6pm"; "just give me the
+**RUNNING since 2026-11-12 18:20 (820 minutes, until 08:00; [RUNS.md](../../../RUNS.md) #48).** The owner's go (11-12): "you can start the run when it's ready and run it until 8am"; "Start around 6pm"; "just give me the
 final schedule to review, ideally we get through everything" -> one night, 120 updates (below), the measurements from 18:00, the run until 08:00.**
 Owner, 11-12, on the lock: "I don't want to ever see the lock again after we get it out"; on the far-rail pay: "Far rail pay should stay in,
 0.1 just set it to there from the beginning".

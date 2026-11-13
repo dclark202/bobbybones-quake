@@ -1,0 +1,73 @@
+11-12 18:19:24 train.cmd, 820 minutes: train.cmd written: 820 minutes; INSTR=1, INS_NO_NONE=1, INS_WAY=1, INS_BIND=1, HEAD_PAY_TRUTH=1, FOLLOW_PAY=0, DRILL_INS_P=0, FIGHT_TRUTH=1, FIN_RATE=39.21,9.81,1.57;20.30,17.11,0.77;51.83,29.68,1.98;2, JUDGE_ITEMS=C:\Users\dacla\Documents\gh\BobbyBones\docs\runs
+11-12 18:19:24 train.cmd, 820 minutes: check_settings: --allow=--run,--minutes,--env,FIGHT_TRUTH,--fight-odds,--fight-warm,INSTR,INS_NO_NONE,INS_WAY,INS_BIND,HEAD_PAY_TRUTH,JUDGE_ITEMS,FOLLOW_PAY,DRILL_INS_P,FIN_RATE,--appraise,--branch,--branch-p,--branch-ins,--ins,--ins-g,--ins-teach,--ins-copy,--ins-pg,--ins-quiet,--ins-ms,--ins-pay-win,--ins-bind
+11-12 18:19:24 no firing cost in the command: every one at zero
+11-12 18:19:24 allowed set DRILL_INS_P: run '0' | reference '<unset>'
+11-12 18:19:24 allowed set FIGHT_TRUTH: run '1' | reference '<unset>'
+11-12 18:19:24 allowed set FIN_RATE: run '39.21,9.81,1.57;20.30,17.11,0.77;51.83,29.68,1.98;20.09,8.36,12.00;40.00,15.00,0.37;25.00,12.00,4.00;46.02,16.80,4.32;35.00,28.00,20.00;40.00,0.00,0.00' | reference '<unset>'
+11-12 18:19:24 allowed set FOLLOW_PAY: run '0' | reference '<unset>'
+11-12 18:19:24 allowed set HEAD_PAY_TRUTH: run '1' | reference '<unset>'
+11-12 18:19:24 allowed set INSTR: run '1' | reference '<unset>'
+11-12 18:19:24 allowed set INS_BIND: run '1' | reference '<unset>'
+11-12 18:19:24 allowed set INS_NO_NONE: run '1' | reference '<unset>'
+11-12 18:19:24 allowed set INS_WAY: run '1' | reference '<unset>'
+11-12 18:19:24 allowed set JUDGE_ITEMS: run 'C:\\Users\\dacla\\Documents\\gh\\BobbyBones\\docs\\runs\\1.9\\1.9a\\items_19a.json' | reference '<unset>'
+11-12 18:19:24 allowed arg --appraise: run '1' | reference '<unset>'
+11-12 18:19:24 allowed arg --branch: run '1' | reference '<unset>'
+11-12 18:19:24 allowed arg --branch-ins: run '1' | reference '<unset>'
+11-12 18:19:24 allowed arg --branch-p: run '0' | reference '<unset>'
+11-12 18:19:24 allowed arg --env: run 'duel_env_ffa21' | reference 'duel_env_ffa18'
+11-12 18:19:24 allowed arg --fight-odds: run '1' | reference '<unset>'
+11-12 18:19:24 allowed arg --fight-warm: run '0' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins: run '1' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins-bind: run '1' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins-copy: run '1' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins-g: run '0' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins-ms: run '0' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins-pay-win: run '1' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins-pg: run '0' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins-quiet: run '0' | reference '<unset>'
+11-12 18:19:24 allowed arg --ins-teach: run '0' | reference '<unset>'
+11-12 18:19:24 allowed arg --minutes: run '820' | reference '1050'
+11-12 18:19:24 allowed arg --run: run 'duel_gru_1_9a' | reference 'duel_gru_1_8a'
+11-12 18:19:24 settings check: PASS
+11-12 18:19:25 1.8a's end against its command: DIFF    checkpoint AIM3_LEAD: checkpoint '1.0' | command '0'
+11-12 18:19:25 1.8a's end against its command: DIFF    checkpoint AIM3_RELOAD: checkpoint '0.0' | command '1'
+11-12 18:19:25 1.8a's end against its command: DIFF    checkpoint AIM3_SIZE_A: checkpoint '0.39' | command '1'
+11-12 18:19:25 1.8a's end against its command: DIFF    checkpoint AIM3_SIZE_B: checkpoint '0.355' | command '0'
+11-12 18:19:25 1.8a's end against its command: DIFF    checkpoint AIM3_W: checkpoint '1.0' | command '0'
+11-12 18:19:25 1.8a's end against its command: DIFF    checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-12 18:19:25 1.8a's end against its command: DIFF    checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-12 18:19:25 1.8a's end against its command: DIFF    checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-12 18:19:25 1.8a's end against its command: settings check: 8 difference(s) not allowed: FAIL
+11-12 18:20:15 backup: copied 815 files 5.71 GB to T:\BobbyBones_backup
+11-12 18:20:17 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\keep\u190_list21.pt: list 21 (852 inputs; the brain the first 691, the hands the first 844, the tail 8); 48 new columns at zero weights with design statistics; the token 'instr' last, its first layer zero, shut; moved: the rule fade's 4; the head's obs_cols (4 at or past 796)
+11-12 18:20:19 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\keep\u190_list21_ins.pt: the head's input 958 -> 1049 columns (91 of the part 'ins', at zero); the scorer over 41 rows of 67 numbers and 9 weapons INSIDE the head (86,283 weights head2.ins_*, its last layers at zero, share 0, the row 'none' 30); the appraisals made new (1134 -> 6, last layer at zero)
+11-12 18:20:21 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1052 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + wv 1 + obs 89 + hands 512 + ins 91), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 788,836 weights
+11-12 18:20:21 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\policy.pt: the head's inp 958 -> 1052 columns (fight 2, wv 1, at zero); the fight odds readout new (last layer at zero; horizon 200 frames); the shadow win value as the file has it (768 -> 128 -> 1)
+11-12 18:20:27 same: 400 real rows x 8 seats, the new columns random: largest |memory a - memory b| = 5.32e-05; actions that differ: 0 of 44800
+11-12 18:20:27 ALL PASSED
+11-12 18:20:34 same: 400 real rows x 8 seats: actions that differ: 0 of 44800
+11-12 18:20:34 ALL PASSED
+11-12 18:20:35 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\snapshots\anchor_b12d.pt: list 21 (852 inputs; the brain the first 691, the hands the first 844, the tail 8); 48 new columns at zero weights with design statistics; the token 'instr' last, its first layer zero, shut; moved: the rule fade's 4
+11-12 18:20:37 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\snapshots\anchor_b11.pt: list 21 (852 inputs; the brain the first 691, the hands the first 844, the tail 8); 48 new columns at zero weights with design statistics; the token 'instr' last, its first layer zero, shut; moved: the rule fade's 4
+11-12 18:20:39 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\snapshots\anchor_v060_end.pt: list 21 (852 inputs; the brain the first 691, the hands the first 844, the tail 8); 48 new columns at zero weights with design statistics; the token 'instr' last, its first layer zero, shut; moved: the rule fade's 4
+11-12 18:20:40 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\keep\anchor_18a_end_ins.pt: the head's input widened by 91 columns at zero; the scorer's layers of the learner's shapes (86,283 weights, the last layers at zero, share 0: a league seat is under no instruction)
+11-12 18:20:42 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\snapshots\anchor_18a_end.pt: the head's inp widened (fight 2, wv 1 at zero; no readout here: they read zeros)
+11-12 18:20:44 live.json: 1.9a's start: as update 190 played (45 names); set {"H2_PG": 0.0, "INTENT_TEACH_W": 0.0, "SPEED_PAY": 0.0, "RAIL_FAR_PAY": 0.1}; its own {"INS_GATE": -30.0, "INS_G": 0.0, "H2_INS_PG": 0.0, "INS_COPY": 1.0, "FOLLOW_PAY": 0.0, "INTENT_SWITCH": 0.0, "WEAPON_OWN": 1.0, "DRILL_INS_P": 0.0, "DRILL_INS_RATE": 0.0, "BRANCH_P": 0.0, "BRANCH_WPN_P": 0.0, "APPRAISE_W": 0.0, "INS_TEACH": 0.0, "INS_TEMP": 0.05, "INS_ENT": 0.0}
+11-12 18:20:44 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\live.json
+11-12 18:20:44 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_8a\keep\policy_end_18a.pt on the input list 21 (852 inputs: the hands 844, the brain 691), the head's choice of an instruction, the fight odds and the win value added at zero effect, with 1.8a's end's optimizer; anchors b1.2d's end, b1.1, v0.6.0's end and the start itself; the judge C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\judge\judge_v060_wpn.npz; the items' judge C:\Users\dacla\Documents\gh\BobbyBones\docs\runs\1.9\1.9a\items_19a.json
+11-12 18:20:45 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_9a\live.json: accepted
+11-12 18:20:45 the ramp ramp_19a.py: 110 files (clocks 0 to 109), all accepted
+11-12 18:20:45 LIVE ACCEPT: PASS
+11-12 18:20:45 trainer started: cmd 26360, 820 minutes
+11-12 18:21:00 live.json applied by the trainer before its first rollout (2026-11-12 18:20:57)
+11-12 18:21:05 started now (- = it was running): watcher 28928 | ramp 8112 (its dials: ramp_19a.py; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 30164 | all on 0x3C3C; the checks under AIM3's end values, both seats | no guard (owner: never stop the run)
+11-12 18:21:15 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1052 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + wv 1 + obs 89 + hands 512 + ins 91), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 788,836 weights
+11-12 18:21:15 trainer: optimizer: the small tokens' first layer starts fresh
+11-12 18:21:15 trainer: optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+11-12 18:21:15 trainer: optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+11-12 18:21:15 trainer: optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1052)
+11-12 18:21:15 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 100 step counts moved to the host)
+11-12 18:21:15 trainer: the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+11-12 18:21:15 trainer: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 3859103 weights, device cuda, 820.0 min
+11-12 18:21:15 trainer: the instruction's token (2.1a): gate -30.00 now (live INS_GATE opens it, never lowered; --gate-open leaves it)
