@@ -1,15 +1,15 @@
 """1.9a's dials (owner, 2026-11-12; docs/runs/1.9/1.9a/CARD.md), on the clock of updates done, straight lines, each held after its end.
-From 1.8a's end (its save of update 190). 200 updates; most of it concurrent (owner: "it can probably go most concurrently"):
-     INS_GATE      -12  -> 0     updates 0 to 20     the instruction's attention token in the hands (shut at -30 before)
-     RAIL_FAR_PAY  0.25 -> 0     updates 0 to 40     the hand-built far-rail pay out
-     INS_COPY      1             updates 0 to 60     the copy lesson: the head's scorer taught toward his old head's target and the weapon in his hand
-                   1    -> 0     updates 60 to 100   ... and faded once the head is paid on its own choices
-     INS_G         0    -> 1     updates 20 to 80    the seat's coin: on = the head's instruction every 0.2 s (no lock), never "none", the weapon bound
-     FOLLOW_PAY    0    -> 0.01  updates 20 to 60    the hands' pay a second for carrying an instruction out (its state "doing")
-                   0.01 -> 0     updates 150 to 180  ... out
-     H2_INS_PG     0    -> 1     updates 40 to 100   the pay on the head's own choices: the judge's change in win chance with the items' race
-     SFADE         0    -> 1     updates 100 to 140  the strategy inputs out of the hands
-Set at the start and never moved (start_live.py): the old head's target credit H2_PG 0, the item rule's lesson 0, the speed pay 0, the switch
+From 1.8a's end (its save of update 190). 120 updates in one night; most of it concurrent (owner: "it can probably go most concurrently").
+The restart of 11-12 19:35 (owner: no copy lesson: "we do not train things to copy a rule that we do not want to replicate. We let them train
+silently first and then blend them in"):
+     INS_GATE      -12  -> 0     updates 0 to 12     the instruction's attention token in the hands (shut at -30 before)
+     INS_G         0    -> 1     updates 12 to 72    the head's share of his seats: on = its instruction every 0.2 s (no lock), never "none", the weapon bound
+     H2_INS_PG     0    -> 1     updates 12 to 48    the pay on the head's own choices (from its first played one): the judge's win-chance change with the items
+     FOLLOW_PAY    0    -> 0.01  updates 12 to 36    the hands' pay a second for carrying an instruction out (its state "doing")
+                   0.01 -> 0     updates 90 to 108   ... out
+     SFADE         0    -> 1     updates 60 to 84    the strategy inputs out of the hands
+     the head learns silently from update 0: its value of the win-chance stream (on every seat), its inputs (the fight odds, the win value)
+Set at the start and never moved (start_live.py): INS_COPY 0 (no copy lesson), RAIL_FAR_PAY 0.1 (owner), the old head's target credit H2_PG 0, the item rule's lesson 0, the speed pay 0, the switch
 cost 0, a held weapon choosable, the keep choice 0 (the 8-second lock acts on no seat under the head's instruction: it goes with INS_G), no
 drills, no frozen moments, AIM3 at its end values, DMG_REWARD 0.005 zero-sum, WIN_ADD 0.33 (the hands' win part: the judge without the items).
 The clock is the number of lines in metrics.jsonl. Written to live.json (read between rollouts) after each new update. The clock never holds or
@@ -35,11 +35,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 DROOT = os.environ.get("QLBOT_ROOT") or ROOT                 # (the repo that has data/)
 DIALS = (("INS_GATE", 0, 12, -12.0, 0.0, -30.0),          # (name, from update, to update, its value there, at the end, before)
-         ("INS_COPY", 36, 60, 1.0, 0.0, 1.0),
-         ("INS_G", 12, 48, 0.0, 1.0, 0.0),
+         ("INS_G", 12, 72, 0.0, 1.0, 0.0),                 # (owner, 11-12: no copy lesson; the head learns its value silently and fades in)
+         ("H2_INS_PG", 12, 48, 0.0, 1.0, 0.0),             # (paid on its own choices from its first played one)
          ("FOLLOW_PAY", 12, 36, 0.0, 0.01, 0.0),
          ("FOLLOW_PAY", 90, 108, 0.01, 0.0, 0.0),            # (a second segment of a name: from its start it is the one in force)
-         ("H2_INS_PG", 24, 60, 0.0, 1.0, 0.0),
          ("SFADE", 60, 84, 0.0, 1.0, 0.0))
 END = max(d[2] for d in DIALS)
 MARKS = tuple(range(10, 121, 10))                           # (every save: a morning stop at any save of the night, 44 MB each)

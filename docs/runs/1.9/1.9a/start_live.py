@@ -7,7 +7,7 @@ import json
 import sys
 
 # 1.9a's own names at the start (the ramp's "before" values)
-NEW = dict(INS_GATE=-30.0, INS_G=0.0, H2_INS_PG=0.0, INS_COPY=1.0, FOLLOW_PAY=0.0, INTENT_SWITCH=0.0, WEAPON_OWN=1.0,
+NEW = dict(INS_GATE=-30.0, INS_G=0.0, H2_INS_PG=0.0, INS_COPY=0.0, FOLLOW_PAY=0.0, INTENT_SWITCH=0.0, WEAPON_OWN=1.0,
            DRILL_INS_P=0.0, DRILL_INS_RATE=0.0, BRANCH_P=0.0, BRANCH_WPN_P=0.0, APPRAISE_W=0.0, INS_TEACH=0.0, INS_TEMP=0.05, INS_ENT=0.0)
 # set at the start (decided here, the card): the old head's target credit closed (the instruction's rows do its job); 1.8a's last fades at their ends
 SET = dict(H2_PG=0.0, INTENT_TEACH_W=0.0, SPEED_PAY=0.0, RAIL_FAR_PAY=0.1)    # (owner, 11-12: the far-rail pay stays, at 0.1 from the start)

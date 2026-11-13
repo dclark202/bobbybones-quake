@@ -15,8 +15,8 @@ r"""1.9a's train.cmd (owner, 2026-11-12: the head in charge from 1.8a's end, 2.1
   set FIN_RATE=...         his own damage a second by weapon and distance, measured on the start (tools/run/fin_rate.py; --fin <its json>)
   --appraise 1 --branch 1 --branch-p 0 --branch-ins 1    the trainer's --ins needs both; no frozen moment is ever played (BRANCH_P 0 all
                            run), so the appraisals never warm and nothing is taught toward them
-  --ins 1 --ins-g 0 --ins-teach 0 --ins-copy 1 --ins-pg 0 --ins-quiet 0 --ins-ms 0 --ins-pay-win 1 --ins-bind 1
-                           the head's choice of an instruction: its share 0 at the start (live INS_G), the copy lesson on (live INS_COPY),
+  --ins 1 --ins-g 0 --ins-teach 0 --ins-copy 0 --ins-pg 0 --ins-quiet 0 --ins-ms 0 --ins-pay-win 1 --ins-bind 1
+                           the head's choice of an instruction: its share 0 at the start (live INS_G), no copy lesson (owner, 11-12: the head learns silently and fades in; INS_COPY stays 0),
                            the game's pay on its choice 0 (live H2_INS_PG), its side paid by the win chance alone; no quiet, no map sense
 Unchanged and worth saying: --head2-pg 1 with live H2_PG set to 0 at the start (the old head's target credit closed: the instruction's rows
 do that job), --head2-pay all (the old head's own value; it gets no credit), --keep-g 0 (the lock does not act on a seat under the head's
@@ -35,7 +35,7 @@ RUN = "duel_gru_1_9a"
 NEW_SETS = ["INSTR=1", "INS_NO_NONE=1", "INS_WAY=1", "INS_BIND=1", "HEAD_PAY_TRUTH=1", "FOLLOW_PAY=0", "DRILL_INS_P=0", "FIGHT_TRUTH=1"]
 ARGS = (("--env", "duel_env_ffa18", "duel_env_ffa21"),)
 NEW_ARGS = ("--fight-odds 1 --fight-warm 0 --appraise 1 --branch 1 --branch-p 0 --branch-ins 1 "
-            "--ins 1 --ins-g 0 --ins-teach 0 --ins-copy 1 --ins-pg 0 --ins-quiet 0 --ins-ms 0 --ins-pay-win 1 --ins-bind 1")
+            "--ins 1 --ins-g 0 --ins-teach 0 --ins-copy 0 --ins-pg 0 --ins-quiet 0 --ins-ms 0 --ins-pay-win 1 --ins-bind 1")
 # (tools/run/check_settings.py --allow: what may differ from 1.8a's current command, and nothing else)
 ALLOW = ("--run,--minutes,--env,FIGHT_TRUTH,--fight-odds,--fight-warm,INSTR,INS_NO_NONE,INS_WAY,INS_BIND,HEAD_PAY_TRUTH,JUDGE_ITEMS,FOLLOW_PAY,DRILL_INS_P,FIN_RATE,"
          "--appraise,--branch,--branch-p,--branch-ins,--ins,--ins-g,--ins-teach,--ins-copy,--ins-pg,--ins-quiet,--ins-ms,--ins-pay-win,--ins-bind")

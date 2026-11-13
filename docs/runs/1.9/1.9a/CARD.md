@@ -7,7 +7,7 @@ so, ALL of the hard coded bullshit has to come out and it can probably go most c
 decisions"; "Judge with items. As long as the head understands the value of items, we're good"; "the judge just pays the head"; "This is 1.9"
 (2.1 is its own tree). Built on branch `b19`, made from `b21` (2.1's build, committed as it was) with 1.8a's last docs merged in.*
 
-**RUNNING since 2026-11-12 18:20 (820 minutes, until 08:00; [RUNS.md](../../../RUNS.md) #48).** The owner's go (11-12): "you can start the run when it's ready and run it until 8am"; "Start around 6pm"; "just give me the
+**RUNNING since 2026-11-12 19:40 (until 08:00; [RUNS.md](../../../RUNS.md) #49), restarted without the copy lesson (owner, 19:35: "we do not train things to copy a rule that we do not want to replicate. We let them train silently first and then blend them in"; CLAUDE.md rule 13). The first start (#48, 18:20, the copy lesson on) was stopped at update 9, before the head played; its folder is `duel_gru_1_9a_falsestart1`.** The owner's go (11-12): "you can start the run when it's ready and run it until 8am"; "Start around 6pm"; "just give me the
 final schedule to review, ideally we get through everything" -> one night, 120 updates (below), the measurements from 18:00, the run until 08:00.**
 Owner, 11-12, on the lock: "I don't want to ever see the lock again after we get it out"; on the far-rail pay: "Far rail pay should stay in,
 0.1 just set it to there from the beginning".
@@ -48,17 +48,17 @@ Owner, 11-12, on the lock: "I don't want to ever see the lock again after we get
 
 | Updates | Dial | From -> to | What |
 |---|---|---|---|
-| 0 (set at the start) | `H2_PG`, `INTENT_TEACH_W`, `SPEED_PAY`, `RAIL_FAR_PAY` | 1, ~0, ~0, 0.25 -> 0, 0, 0, **0.1** | the old head's credit closed; 1.8a's last two fades at their ends; the far-rail pay at 0.1 for the run (owner) |
+| 0 (set at the start) | `H2_PG`, `INTENT_TEACH_W`, `SPEED_PAY`, `RAIL_FAR_PAY`, `INS_COPY` | 1, ~0, ~0, 0.25, - -> 0, 0, 0, **0.1**, **0** | the old head's credit closed; 1.8a's last two fades at their ends; the far-rail pay at 0.1 for the run (owner); **no copy lesson** (rule 13) |
+| 0 on | | | **the head learns silently**: its value of the win-chance stream on every seat, its new inputs (the fight odds learn from update 0; the win value as 1.8a left it) |
 | 0 to 12 | `INS_GATE` | -12 -> 0 | the instruction's token in the hands opens (the flat path learns from update 0) |
-| 0 to 36, then 36 to 60 | `INS_COPY` | 1, then 1 -> 0 | the copy lesson: the scorer learns what he does now before it is played; faded once the head is paid on its own choices |
-| 12 to 48 | `INS_G` | 0 -> 1 | the head's share of his seats: on = its instruction every 0.2 s, the weapon bound, **no lock**; from 48 none of his seats has the lock |
+| 12 to 72 | `INS_G` | 0 -> 1 | **the head fades in**: its share of his seats; on = its instruction every 0.2 s, the weapon bound, **no lock**; from 72 none of his seats has the lock |
+| 12 to 48 | `H2_INS_PG` | 0 -> 1 | the pay on the head's own choices, from its first played one: the items' judge's change in win chance |
 | 12 to 36, 90 to 108 | `FOLLOW_PAY` | 0 -> 0.01 -> 0 | the hands' pay a second for carrying an instruction out |
-| 24 to 60 | `H2_INS_PG` | 0 -> 1 | the pay on the head's own choices: the items' judge's change in win chance |
 | 60 to 84 | `SFADE` | 0 -> 1 | the strategy inputs out of the hands |
 | 108 to 120 | | held | the end at 120 |
 
 The lock (`INTENT_HOLD` 8) stays in the settings only for the seats not under the head (a falling share to 48) and for his opponents in the
-league and the checks (trained with it); none of his own seats has it after 48, and no later design brings it back (owner, 11-12).
+league and the checks (trained with it); none of his own seats has it after 72, and no later design brings it back (owner, 11-12).
 
 Every save is kept with its optimizer (every 10 updates), so a night's run stops at any save in the morning. Checks every 20 updates, 200 games;
 the extra one at update 10. Both seats under AIM3's end values.

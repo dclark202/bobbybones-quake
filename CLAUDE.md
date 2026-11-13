@@ -52,6 +52,13 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    proposal never says "bring him to the pros' X%". Aim: each parameter is set from the pros' own measured value of that
    parameter (default = the average pro, better = p90, max = all off); what hit rate comes out is not tuned. Do not suggest
    otherwise again.
+13. **A new part is never trained to copy a rule we do not want to keep; it learns silently, then is blended in** (owner,
+   2026-11-12: "we do not train things to copy a rule that we do not want to replicate. We let them train silently first and then
+   blend them in"). No copy lesson, teacher or imitation target that points a new head, choice or network at an old rule's or an old
+   network's behaviour (b1.3a's copy lesson failed; 1.9a's first start had one and was restarted without it). "Silently" = it learns
+   from its own lessons (its value, its readouts, its pay on its own played choices) while it plays nothing or a small share, and its
+   share or gate then opens slowly. **Once a hand-built rule is out it never comes back** (the 8-second lock: "I don't want to ever see the
+   lock again").
 
 ## Where things are
 
