@@ -74,6 +74,11 @@ the extra one at update 10. Both seats under AIM3's end values.
 
 ## Decided here (for the owner's review)
 
+- **The race, as fitted on the night (11-12, 100 games of 1.8a's end, 118,787 race rows; `fit_items_v3.log`, `items_19a.json`)**:
+  P(he takes it first) = 0.16 + 0.68 x sigmoid((the enemy's route seconds - his) / (1.04 + 0.57 x seconds until it is back)). Two fits were
+  refused first and are kept (`items_19a_v1.json`, `_v2.json`): max(walk, back) made the long waits a coin (they went 34 / 60%); without
+  the floor the curve could not be calibrated (far behind he still takes it a fifth of the time). Accepted: every bin within 0.07, the
+  judge with the items better on held-out games (log loss -0.0014, 95% -0.0025 .. -0.0005), horizon 6 s, no axiom failure.
 - **K = 1 for both items** in the head's judge: an item is worth to each player exactly the stack the judge itself says it brings, weighted by
   the race. Only tau (who gets there first) and the horizon are fitted. Fitting K to how games ended was too noisy (the smoke test's folds chose
   2.0 and 1.5 for the mega, 0 for the red armor); a free K is still fitted beside it as a readout.

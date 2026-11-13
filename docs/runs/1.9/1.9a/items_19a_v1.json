@@ -1,0 +1,313 @@
+{
+ "version": 1,
+ "tau": 21.887439276544658,
+ "horizon": 3.0,
+ "k": [
+  1.0,
+  1.0
+ ],
+ "dead_walk": 8.0,
+ "far": 60.0,
+ "judge": "C:\\Users\\dacla\\Documents\\gh\\BobbyBones\\data\\sim_runs\\judge\\judge_v060_wpn.npz",
+ "accepted": false,
+ "race": {
+  "rows": 67724,
+  "nll": 0.672,
+  "nll_half": 0.6931,
+  "bins": [
+   {
+    "p": 0.079,
+    "took": 0.239,
+    "rows": 943
+   },
+   {
+    "p": 0.137,
+    "took": 0.238,
+    "rows": 600
+   },
+   {
+    "p": 0.248,
+    "took": 0.209,
+    "rows": 316
+   },
+   {
+    "p": 0.355,
+    "took": 0.233,
+    "rows": 313
+   },
+   {
+    "p": 0.476,
+    "took": 0.339,
+    "rows": 15463
+   },
+   {
+    "p": 0.509,
+    "took": 0.602,
+    "rows": 47632
+   },
+   {
+    "p": 0.638,
+    "took": 0.831,
+    "rows": 314
+   },
+   {
+    "p": 0.752,
+    "took": 0.798,
+    "rows": 372
+   },
+   {
+    "p": 0.865,
+    "took": 0.791,
+    "rows": 702
+   },
+   {
+    "p": 0.92,
+    "took": 0.798,
+    "rows": 1069
+   }
+  ]
+ },
+ "heldout": {
+  "games": 100,
+  "rows": 50400,
+  "judge": 0.316821,
+  "with_items": 0.315943,
+  "diff": -0.000878,
+  "diff_95": [
+   -0.001418,
+   -0.000442
+  ],
+  "folds_chose": [
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0
+  ]
+ },
+ "free_k": {
+  "heldout": 0.315649,
+  "folds_chose": [
+   [
+    0.0,
+    1.5,
+    10.0
+   ],
+   [
+    0.0,
+    1.75,
+    15.0
+   ],
+   [
+    0.0,
+    1.75,
+    15.0
+   ],
+   [
+    0.0,
+    1.75,
+    10.0
+   ],
+   [
+    0.0,
+    2.0,
+    15.0
+   ]
+  ],
+  "all_games": [
+   [
+    0.0,
+    1.75
+   ],
+   15.0
+  ]
+ },
+ "enough_data": true,
+ "examples": [
+  {
+   "me": [
+    100,
+    0
+   ],
+   "him": [
+    100,
+    0
+   ],
+   "mega_up_me_s": 2.0,
+   "him_s": 6.0,
+   "chance": 0.5092,
+   "without": 0.5,
+   "worth": 0.0092
+  },
+  {
+   "me": [
+    100,
+    0
+   ],
+   "him": [
+    100,
+    0
+   ],
+   "mega_up_me_s": 6.0,
+   "him_s": 2.0,
+   "chance": 0.4908,
+   "without": 0.5,
+   "worth": -0.0092
+  },
+  {
+   "me": [
+    100,
+    0
+   ],
+   "him": [
+    100,
+    0
+   ],
+   "mega_up_me_s": 4.0,
+   "him_s": 4.0,
+   "chance": 0.5,
+   "without": 0.5,
+   "worth": 0.0
+  },
+  {
+   "me": [
+    125,
+    50
+   ],
+   "him": [
+    125,
+    50
+   ],
+   "mega_up_me_s": 2.0,
+   "him_s": 6.0,
+   "chance": 0.5087,
+   "without": 0.5,
+   "worth": 0.0087
+  },
+  {
+   "me": [
+    125,
+    50
+   ],
+   "him": [
+    125,
+    50
+   ],
+   "mega_up_me_s": 6.0,
+   "him_s": 2.0,
+   "chance": 0.4913,
+   "without": 0.5,
+   "worth": -0.0087
+  },
+  {
+   "me": [
+    125,
+    50
+   ],
+   "him": [
+    125,
+    50
+   ],
+   "mega_up_me_s": 4.0,
+   "him_s": 4.0,
+   "chance": 0.5,
+   "without": 0.5,
+   "worth": 0.0
+  },
+  {
+   "me": [
+    50,
+    0
+   ],
+   "him": [
+    150,
+    100
+   ],
+   "mega_up_me_s": 2.0,
+   "him_s": 6.0,
+   "chance": 0.3014,
+   "without": 0.2864,
+   "worth": 0.015
+  },
+  {
+   "me": [
+    50,
+    0
+   ],
+   "him": [
+    150,
+    100
+   ],
+   "mega_up_me_s": 6.0,
+   "him_s": 2.0,
+   "chance": 0.2904,
+   "without": 0.2864,
+   "worth": 0.004
+  },
+  {
+   "me": [
+    50,
+    0
+   ],
+   "him": [
+    150,
+    100
+   ],
+   "mega_up_me_s": 4.0,
+   "him_s": 4.0,
+   "chance": 0.2959,
+   "without": 0.2864,
+   "worth": 0.0095
+  },
+  {
+   "me": [
+    150,
+    100
+   ],
+   "him": [
+    50,
+    0
+   ],
+   "mega_up_me_s": 2.0,
+   "him_s": 6.0,
+   "chance": 0.7096,
+   "without": 0.7136,
+   "worth": -0.004
+  },
+  {
+   "me": [
+    150,
+    100
+   ],
+   "him": [
+    50,
+    0
+   ],
+   "mega_up_me_s": 6.0,
+   "him_s": 2.0,
+   "chance": 0.6986,
+   "without": 0.7136,
+   "worth": -0.015
+  },
+  {
+   "me": [
+    150,
+    100
+   ],
+   "him": [
+    50,
+    0
+   ],
+   "mega_up_me_s": 4.0,
+   "him_s": 4.0,
+   "chance": 0.7041,
+   "without": 0.7136,
+   "worth": -0.0095
+  }
+ ],
+ "axiom_failures": 0,
+ "calibrated": false,
+ "folders": [
+  "C:\\Users\\dacla\\Documents\\gh\\BobbyBones\\data\\sim_runs\\duel_gru_1_8a\\selfplay\\items19_u190_1112"
+ ]
+}

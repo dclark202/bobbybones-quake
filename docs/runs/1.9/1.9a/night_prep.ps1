@@ -13,8 +13,9 @@
 #      to 45 minutes to finish, then the watcher, the ramp and the self-play logger are stopped (each matched by its own command line and the
 #      run's name; their children by parent): the day is quiet (owner, 11-12). The next night's -Resume starts them again.
 # Every process hidden. Its log: night_prep.log.
-#   wscript.exe docs\runs\1.9\1.9a\night_prep.vbs [start|resume]       (no window at all)
-param([switch]$Start, [switch]$Resume, [string]$Until = "08:00")
+#   -StartOnly: the measurements made already; start.ps1 -Minutes <until -Until>, then the morning.
+#   wscript.exe docs\runs\1.9\1.9a\night_prep.vbs [start|resume|startonly]       (no window at all)
+param([switch]$Start, [switch]$Resume, [switch]$StartOnly, [string]$Until = "08:00")
 $ErrorActionPreference = "Stop"
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT = (Resolve-Path (Join-Path $HERE "..\..\..\..")).Path
@@ -56,6 +57,13 @@ if ($Resume) {
     $min = Minutes
     Log ("resuming 1.9a for " + $min + " minutes (until " + $Until + ")")
     & powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File (Join-Path $HERE "start.ps1") -Minutes $min -Resume | ForEach-Object { Log ("start: " + $_) }
+    Morning
+    exit 0
+}
+if ($StartOnly) {                                                  # (the measurements made already: fin_rate_u190.json and an ACCEPTED items_19a.json)
+    $min = Minutes
+    Log ("starting 1.9a for " + $min + " minutes (until " + $Until + "), the measurements made before")
+    & powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File (Join-Path $HERE "start.ps1") -Minutes $min | ForEach-Object { Log ("start: " + $_) }
     Morning
     exit 0
 }

@@ -1,0 +1,48 @@
+11-12 17:46:48 night_prep: measure, then start 1.9a if accepted (until 08:00)
+11-12 17:46:49 settings check: 123 settings in the games, 1 differ from the run's command / live / save
+11-12 17:46:49 started: FIN_RATE games (pid 2032) and the items' race games (pid 6668)
+11-12 18:12:36 games done: FIN_RATE exit , the items' race exit 
+11-12 18:12:37 fin_rate: his own damage a second of trigger held (20 games, 120 seats; a cell under 20.0 s of trigger keeps the placeholder, marked *)
+11-12 18:12:37 fin_rate:                             under 400              400 to 768                over 768
+11-12 18:12:37 fin_rate:   rockets         39.2  (   1556 s fired)      9.8  (    858 s fired)      1.6  (    510 s fired)
+11-12 18:12:37 fin_rate:   rail            20.3  (    201 s fired)     17.1  (     80 s fired)      0.8  (    104 s fired)
+11-12 18:12:37 fin_rate:   lightning       51.8  (   3284 s fired)     29.7  (   2252 s fired)      2.0  (    307 s fired)
+11-12 18:12:37 fin_rate:   machine gun     20.1  (    177 s fired)      8.4  (     66 s fired)     12.0* (     18 s fired)
+11-12 18:12:37 fin_rate:   shotgun         40.0* (      8 s fired)     15.0* (      8 s fired)      0.4  (     27 s fired)
+11-12 18:12:37 fin_rate:   grenades        25.0* (      3 s fired)     12.0* (      2 s fired)      4.0* (     14 s fired)
+11-12 18:12:37 fin_rate:   plasma          46.0  (    387 s fired)     16.8  (    228 s fired)      4.3  (     62 s fired)
+11-12 18:12:37 fin_rate:   hmg             35.0* (      0 s fired)     28.0* (      0 s fired)     20.0* (      0 s fired)
+11-12 18:12:37 fin_rate:   gauntlet        40.0* (      0 s fired)      0.0* (      0 s fired)      0.0* (      0 s fired)
+11-12 18:12:37 fin_rate: for the run's command (or a live.json value, without the name):
+11-12 18:12:37 fin_rate:   FIN_RATE=39.21,9.81,1.57;20.30,17.11,0.77;51.83,29.68,1.98;20.09,8.36,12.00;40.00,15.00,0.37;25.00,12.00,4.00;46.02,16.80,4.32;35.00,28.00,20.00;40.00,0.00,0.00
+11-12 18:12:37 fin_rate: wrote C:\Users\dacla\Documents\gh\BobbyBones\docs\runs\1.9\1.9a\fin_rate_u190.json
+11-12 18:12:43 fit_items: the race: tau 21.887 s on 67724 rows (log loss 0.672 against a coin's 0.6931)
+11-12 18:12:43 fit_items:    p 0.079  took 0.239  (943 rows)
+11-12 18:12:43 fit_items:    p 0.137  took 0.238  (600 rows)
+11-12 18:12:43 fit_items:    p 0.248  took 0.209  (316 rows)
+11-12 18:12:43 fit_items:    p 0.355  took 0.233  (313 rows)
+11-12 18:12:43 fit_items:    p 0.476  took 0.339  (15463 rows)
+11-12 18:12:43 fit_items:    p 0.509  took 0.602  (47632 rows)
+11-12 18:12:43 fit_items:    p 0.638  took 0.831  (314 rows)
+11-12 18:12:43 fit_items:    p 0.752  took 0.798  (372 rows)
+11-12 18:12:43 fit_items:    p 0.865  took 0.791  (702 rows)
+11-12 18:12:43 fit_items:    p 0.920  took 0.798  (1069 rows)
+11-12 18:12:43 fit_items: held out by game (100 games, 50400 rows): log loss judge 0.31682, with the items (K 1) 0.31594, difference -0.00088 (95% -0.00142 .. -0.00044); the folds chose the horizons [3.0, 3.0, 3.0, 3.0, 3.0]
+11-12 18:12:43 fit_items: readout only: K free on a grid 0.31565 held out (the folds chose [[0.0, 1.5, 10.0], [0.0, 1.75, 15.0], [0.0, 1.75, 15.0], [0.0, 1.75, 10.0], [0.0, 2.0, 15.0]]; on all games K (np.float64(0.0), np.float64(1.75)) horizon 15.0)
+11-12 18:12:43 fit_items: on all games: K mega 1, K red 1, horizon 3.0 s
+11-12 18:12:43 fit_items:    me 100/0 him 100/0, the mega up, me 2 s him 6 s: chance 0.5092 (without the items 0.5000: +0.0092)
+11-12 18:12:43 fit_items:    me 100/0 him 100/0, the mega up, me 6 s him 2 s: chance 0.4908 (without the items 0.5000: -0.0092)
+11-12 18:12:43 fit_items:    me 100/0 him 100/0, the mega up, me 4 s him 4 s: chance 0.5000 (without the items 0.5000: +0.0000)
+11-12 18:12:43 fit_items:    me 125/50 him 125/50, the mega up, me 2 s him 6 s: chance 0.5087 (without the items 0.5000: +0.0087)
+11-12 18:12:43 fit_items:    me 125/50 him 125/50, the mega up, me 6 s him 2 s: chance 0.4913 (without the items 0.5000: -0.0087)
+11-12 18:12:43 fit_items:    me 125/50 him 125/50, the mega up, me 4 s him 4 s: chance 0.5000 (without the items 0.5000: +0.0000)
+11-12 18:12:43 fit_items:    me 50/0 him 150/100, the mega up, me 2 s him 6 s: chance 0.3014 (without the items 0.2864: +0.0150)
+11-12 18:12:43 fit_items:    me 50/0 him 150/100, the mega up, me 6 s him 2 s: chance 0.2904 (without the items 0.2864: +0.0040)
+11-12 18:12:43 fit_items:    me 50/0 him 150/100, the mega up, me 4 s him 4 s: chance 0.2959 (without the items 0.2864: +0.0095)
+11-12 18:12:43 fit_items:    me 150/100 him 50/0, the mega up, me 2 s him 6 s: chance 0.7096 (without the items 0.7136: -0.0040)
+11-12 18:12:43 fit_items:    me 150/100 him 50/0, the mega up, me 6 s him 2 s: chance 0.6986 (without the items 0.7136: -0.0150)
+11-12 18:12:43 fit_items:    me 150/100 him 50/0, the mega up, me 4 s him 4 s: chance 0.7041 (without the items 0.7136: -0.0095)
+11-12 18:12:43 fit_items: NOT ACCEPTED (enough data True (100 games of 80, 67724 race rows of 2000), calibrated False, held-out difference's interval reaches 0 or below True, axiom failures 0)
+11-12 18:12:43 fit_items: written: C:\Users\dacla\Documents\gh\BobbyBones\docs\runs\1.9\1.9a\items_19a.json
+11-12 18:12:43 FIN_RATE made; the items' judge NOT ACCEPTED
+11-12 18:12:43 not started: a measurement is missing or not accepted (the owner decides)

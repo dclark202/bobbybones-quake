@@ -1,9 +1,9 @@
-17:24:50 PASS K 0: the items' judge is the judge to the bit (4000 states)
-17:24:50 PASS an item a second nearer to him never lowers his chance (0 of 4000 lower)
-17:24:50 PASS no item on the map: the judge to the bit
-17:24:50 PASS an item neither can reach: the judge to the bit
-17:26:41 PASS the simulator: the hands' win part and pay with the items' judge (K 0 and the test file) = without it, to the bit (18878 game seat-frames)
-17:26:41 PASS the simulator: the head's stream with K 0 = the hands' win part, to the bit
-17:26:41 PASS the simulator: with the test file the head's stream differs from the hands' win part (|difference| summed 234.8; its sum over each game seat is zero-sum: 0)
-17:26:41 PASS FOLLOW_PAY on with no instruction given: the pay to the bit
-17:26:41 ALL PASSED (8 checks)
+18:16:59 PASS K 0: the items' judge is the judge to the bit (4000 states)
+18:16:59 PASS an item a second nearer to him never lowers his chance (0 of 4000 lower)
+18:16:59 PASS no item on the map: the judge to the bit
+18:16:59 PASS an item neither can reach: the judge to the bit
+18:18:53 PASS the simulator: the hands' win part and pay with the items' judge (K 0 and the test file) = without it, to the bit (18878 game seat-frames)
+18:18:53 PASS the simulator: the head's stream with K 0 = the hands' win part, to the bit
+18:18:53 PASS the simulator: with the test file the head's stream differs from the hands' win part (|difference| summed 235.1; its sum over each game seat is zero-sum: 0)
+18:18:53 PASS FOLLOW_PAY on with no instruction given: the pay to the bit
+18:18:53 ALL PASSED (8 checks)

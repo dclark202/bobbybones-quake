@@ -30,7 +30,8 @@ import win_judge as WJ                                       # noqa: E402
 import fit_b as FB                                           # noqa: E402
 
 FAR, DEAD_WALK, RACE_TSP = 60.0, 8.0, 15.0
-MIN_GAMES, MIN_RACE = 80, 2000                               # (the acceptance's least data: whole games, rows of a race with a known winner)
+MIN_GAMES, MIN_RACE = 80, 2000
+RACE_EPS = [0.0]                                             # (version 3: the race's floor, fitted with tau0 and tau1)                               # (the acceptance's least data: whole games, rows of a race with a known winner)
 KS = np.round(np.arange(0.0, 2.01, 0.25), 3)
 HS = (3.0, 6.0, 10.0, 15.0, 25.0, 40.0)
 
@@ -42,7 +43,7 @@ def race(R, j, tau=None):
     pres = R[it + "_present"] > 0.5
     tsp = R[it + "_tsp"]
     wm, wo = np.minimum(R[it + "_my_walk"], FAR), np.minimum(R[it + "_op_walk"], FAR)
-    Tm, To = np.maximum(wm, tsp), np.maximum(wo, tsp)
+    Tm, To = wm, wo                                          # (version 2: the walks themselves; the wait scales the race in race_p)
     y = np.full(len(tsp), np.nan)
     g = R["g"]
     km, ko = R[it + "_my_took"], R[it + "_op_took"]
@@ -68,28 +69,34 @@ def race(R, j, tau=None):
 
 
 def fit_tau(R):
-    xs, ys = [], []
+    """(version 2) tau0, tau1 of the race by maximum likelihood on who really took it next (every row with a later take, any wait)"""
+    ws, os_, ts, ys = [], [], [], []
     for j in range(2):
         Tm, To, tsp, ok, y = race(R, j)
-        m = ok & np.isfinite(y) & (tsp <= RACE_TSP)
-        xs.append((To - Tm)[m])
+        m = ok & np.isfinite(y)
+        ws.append(Tm[m])
+        os_.append(To[m])
+        ts.append(tsp[m])
         ys.append(y[m])
-    x, y = np.concatenate(xs), np.concatenate(ys)
+    wm, wo, tsp, y = (np.concatenate(x) for x in (ws, os_, ts, ys))
     best = None
-    for tau in np.exp(np.linspace(np.log(0.1), np.log(30.0), 200)):
-        p = np.clip(1.0 / (1.0 + np.exp(-np.clip(x / tau, -40, 40))), 1e-9, 1 - 1e-9)
-        nll = -float(np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
-        if best is None or nll < best[1]:
-            best = (float(tau), nll)
-    tau = best[0]
-    p = 1.0 / (1.0 + np.exp(-np.clip(x / tau, -40, 40)))
+    for e in np.arange(0.0, 0.41, 0.02):
+        for t0 in np.exp(np.linspace(np.log(0.1), np.log(30.0), 40)):
+            for t1 in np.concatenate([[0.0], np.exp(np.linspace(np.log(0.01), np.log(3.0), 25))]):
+                p = np.clip(WJ.race_p(wm, wo, tsp, dict(version=3, tau0=t0, tau1=t1, eps=e), FAR), 1e-9, 1 - 1e-9)
+                nll = -float(np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
+                if best is None or nll < best[2]:
+                    best = (float(t0), float(t1), nll, float(e))
+    t0, t1 = best[0], best[1]
+    RACE_EPS[0] = best[3]
+    p = WJ.race_p(wm, wo, tsp, dict(version=3, tau0=t0, tau1=t1, eps=best[3]), FAR)
     bins = []
     for lo in np.arange(0.0, 1.0, 0.1):
         m = (p >= lo) & (p < lo + 0.1 + (1e-9 if lo >= 0.9 else 0))
         if m.sum():
             bins.append(dict(p=round(float(p[m].mean()), 3), took=round(float(y[m].mean()), 3), rows=int(m.sum())))
     base = -float(np.mean(y * np.log(0.5) + (1 - y) * np.log(0.5)))
-    return tau, dict(rows=int(len(y)), nll=round(best[1], 4), nll_half=round(base, 4), bins=bins)
+    return (t0, t1), dict(rows=int(len(y)), nll=round(best[2], 4), nll_half=round(base, 4), bins=bins)
 
 
 def parts(R):
@@ -108,7 +115,7 @@ def terms(P, X, R, tau):
     out = []
     for j in range(2):
         Tm, To, tsp, ok, _ = race(R, j)
-        p = 1.0 / (1.0 + np.exp(-np.clip((To - Tm) / tau, -40, 40)))
+        p = WJ.race_p(Tm, To, tsp, dict(version=3, tau0=tau[0], tau1=tau[1], eps=RACE_EPS[0]), FAR)
         ga = np.maximum(WJ.value(P, WJ._with_item(X["hpa"], X["ara"], X["da"], j), X["wa"], t) - ha, 0.0)
         gb = np.maximum(WJ.value(P, WJ._with_item(X["hpb"], X["arb"], X["db"], j), X["wb"], t) - hb, 0.0)
         out.append((p, ga, gb, tsp, ok & (tsp < X["left"])))
@@ -144,7 +151,8 @@ def main():
     use = np.where(R["ot_game"] > 0.5, ~reg, reg)
     y = np.where(R["final_my"] > R["final_op"], 1.0, np.where(R["final_my"] < R["final_op"], 0.0, 0.5))
     tau, rrep = fit_tau(R)
-    print("the race: tau {:.3f} s on {} rows (log loss {} against a coin's {})".format(tau, rrep["rows"], rrep["nll"], rrep["nll_half"]))
+    print("the race: tau0 {:.3f} s, tau1 {:.3f} a second of wait, floor {:.2f}, on {} rows (log loss {} against a coin's {})".format(
+        tau[0], tau[1], RACE_EPS[0], rrep["rows"], rrep["nll"], rrep["nll_half"]))
     for b in rrep["bins"]:
         print("   p {:.3f}  took {:.3f}  ({} rows)".format(b["p"], b["took"], b["rows"]))
     X = parts(R)
@@ -200,12 +208,12 @@ def main():
     print("readout only: K free on a grid {:.5f} held out (the folds chose {}; on all games K {} horizon {})".format(lf, chosen_f, kf_, Hf_))
     print("on all games: K mega 1, K red 1, horizon {} s".format(H))
     # the items' worth in a few states (a's chance with less without), 300 s left, level score
-    IP = dict(version=1, tau=tau, horizon=H, k=[float(k1), float(k2)], dead_walk=DEAD_WALK, far=FAR)
+    IP = dict(version=3, tau0=tau[0], tau1=tau[1], eps=RACE_EPS[0], horizon=H, k=[float(k1), float(k2)], dead_walk=DEAD_WALK, far=FAR)
     ex = []
     for (hp_a, ar_a, hp_b, ar_b) in ((100, 0, 100, 0), (125, 50, 125, 50), (50, 0, 150, 100), (150, 100, 50, 0)):
         for (wa_, wb_) in ((2.0, 6.0), (6.0, 2.0), (4.0, 4.0)):
             z = lambda v: np.array([float(v)])            # noqa: E731
-            ra = dict(present=np.array([[True, False]]), tsp=np.zeros((1, 2)), walk=np.array([[wa_, FAR]]))
+            ra = dict(present=np.array([[True, False]]), tsp=np.zeros((1, 2)), walk=np.array([[wa_, FAR]]))   # (the mega up now)
             rb = dict(present=np.array([[True, False]]), tsp=np.zeros((1, 2)), walk=np.array([[wb_, FAR]]))
             w0 = np.array([[1.0, 1.0, 0.0]])
             c1 = float(WJ.chance_items(P, IP, z(0), z(300), z(hp_a), z(ar_a), np.array([False]), w0, z(hp_b), z(ar_b), np.array([False]), w0, ra, rb)[0])
@@ -218,7 +226,7 @@ def main():
     for j in range(2):
         Tn = [list(x) for x in T]
         Tm, To, _, _, _ = race(R, j)
-        Tn[j][0] = 1.0 / (1.0 + np.exp(-np.clip((To - (Tm - 1.0)) / tau, -40, 40)))     # (him a second nearer)
+        Tn[j][0] = WJ.race_p(np.maximum(Tm - 1.0, 0.0), To, Tn[j][3], dict(version=3, tau0=tau[0], tau1=tau[1], eps=RACE_EPS[0]), FAR)     # (him a second nearer)
         bad += int((chance(mu, s, d, Tn, (k1, k2), H) < chance(mu, s, d, T, (k1, k2), H) - 1e-12).sum())
     cal_ok = all(abs(b["p"] - b["took"]) <= 0.07 for b in rrep["bins"] if b["rows"] >= 200)
     enough = len(games) >= MIN_GAMES and rrep["rows"] >= MIN_RACE
