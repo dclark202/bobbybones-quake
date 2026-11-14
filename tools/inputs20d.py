@@ -51,12 +51,15 @@ def convert(a):
     import attn as A_
     import head2 as head2_
     import input_list as IL
+    global VERSION, OLD_W
+    VERSION = a.list                                         # (2.0e: list 20e, a network of the first 980 columns: 1.6a's line)
     L = IL.load(VERSION)
     src, nb, nh, n = [int(c) for c in L["src"]], int(L["n_brain"]), int(L["n_hands"]), int(L["n"])
     new_of = {o: j for j, o in enumerate(src)}
     ck = torch.load(a.inp, weights_only=False, map_location="cpu")
     sd_ = ck["model"]
     W0 = int(ck["obs_dim"])
+    OLD_W = W0 if VERSION != "20d" else OLD_W
     assert W0 == OLD_W == int(sd_["enc.0.weight"].shape[1]) and not ck.get("inputs"), "not a network of the simulator's first {} columns".format(OLD_W)
     names_full = [(r["group"], r["input"]) for r in IL.full_rows()]
     # ---- the list's columns the network does not have: the dodge group at the hands' end, the timers in the tail
@@ -382,14 +385,17 @@ def same1(a, half):
     import btoken as btoken_
     import test_suite as T
     import input_list as IL
+    global VERSION, OLD_W
+    VERSION = a.list
     cls = [c for c in vars(btoken_).values() if isinstance(c, type) and hasattr(c, "frame") and hasattr(c, "readouts")][0]
     if not hasattr(cls, "_init0"):
         cls._init0 = cls.__init__
     cls.__init__ = (lambda self, B, n, half=True: cls._init0(self, B, n, True)) if half else (lambda self, B, n, half=True: cls._init0(self, B, n, False))
     L = IL.load(VERSION)
     src = np.asarray(L["src"], np.int64)
-    newc = np.where(src >= OLD_W)[0]
     pa, pb = T.Policy(a.a, seed=7), T.Policy(a.b, seed=7)
+    OLD_W = len(pa.mean) if VERSION != "20d" else OLD_W
+    newc = np.where(src >= OLD_W)[0]
     assert len(pa.mean) == OLD_W and len(pb.mean) == L["n"], (len(pa.mean), len(pb.mean))
     for p in (pa, pb):
         if getattr(p, "h2", None) is not None and (float(p.h2W["gate"]) > 0 or float(p.h2W.get("add", 0.0)) > 0):
@@ -439,12 +445,14 @@ def main():
     p.add_argument("--opt", nargs=2)
     p.add_argument("--report", default="")
     p.add_argument("--league", action="store_true", help="a league file (an anchor): its brain may lack the fade entry")
+    p.add_argument("--list", default="20d", help="the list to bring it to: 20d (1.7a's 990 columns) or 20e (2.0e: any older width, no order inputs)")
     p = sp.add_parser("same")
     p.add_argument("a")
     p.add_argument("b")
     p.add_argument("--sample", required=True)
     p.add_argument("--rows", type=int, default=3200)
     p.add_argument("--seats", type=int, default=8)
+    p.add_argument("--list", default="20d")
     a = ap.parse_args()
     sys.exit(int((convert(a) if a.cmd == "convert" else same(a)) or 0))
 
