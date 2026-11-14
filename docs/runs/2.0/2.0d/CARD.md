@@ -3,7 +3,7 @@
 **Started from:** 1.7a's update 90 (`data/sim_runs/duel_gru_1_7a/keep/policy_u90_17a.pt` + `opt_u90_17a.pt`; byte-identical to
 `policy_end_17a.pt` / `opt_end_17a.pt`, checked 2026-11-13 by SHA-256).
 
-**Built 2026-11-13, not started** (the state of each part: "Before the go" below). The owner, on the first draft: "starting from 1.7a u90; a
+**STOPPED 2026-11-13 19:24 at update 57 by the owner** (RUNS.md #50: 44.0 / 45.0 / 44.5% against 1.7a u90 at updates 10 / 30 / 50; `keep/policy_u50_20d.pt` kept). Folded into [2.1a](../../2.1/2.1a/CARD.md), the blend, with the head's decisions frozen. The owner, on the first draft: "starting from 1.7a u90; a
 short run with aim3 mechanics and *something* to help him understand how to dodge better ... three purposes: get him onto aim3, add
 inputs for helping to dodge, remove dead inputs"; then "Dodging inputs are good"; then "Focus on the easy stuff first, aim3 config,
 remove dead inputs, changes to pay amounts. The flow of strategy inputs out of the hands to the head can be saved for 2.1. I would like

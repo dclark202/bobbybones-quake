@@ -6,6 +6,9 @@ full plan for 2.1". Read with: [1.7a's card](../1.7/1.7a/CARD.md) and [postmorte
 [DESIGN.md](DESIGN.md), [RUNDOWN.md](RUNDOWN.md) and its built, never-started card [2.1a/CARD.md](2.1a/CARD.md);
 [1.9a's postmortem](../1.9/1.9a/POSTMORTEM.md).
 
+> **2026-11-13 evening: 2.1 is now the silent stage alone** (owner: 2.n's goal is understanding control, in small steps). The
+> current card is [2.1a/CARD.md](2.1a/CARD.md): stage I below is 2.1; stages II to IV are the later rounds 2.2 to 2.6 listed there.
+
 ## Status 2026-11-13: step 1 is 2.0d; what 2.1 picks up
 
 **Step 1 became 2.0d** ([../2.0/2.0d/CARD.md](../2.0/2.0d/CARD.md); built and tested 11-13, a 90-update overnight run from 1.7a's

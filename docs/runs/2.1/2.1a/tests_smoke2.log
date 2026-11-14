@@ -1,31 +1,29 @@
-14:37:54 after update 1: live.json {'DRILL_INS_P': 0.25, 'DRILL_INS_RATE': 0.02, 'BRANCH_P': 0.3, 'INS_GATE': -6.0, 'SPEED_PAY': 0.06}
-14:38:21 after update 2: live.json {'INS_GATE': 0.0, 'BRANCH_P': 0.5, 'SPEED_PAY': 0.0}
-14:38:48 after update 3: live.json {'INS_G': 0.5, 'BRANCH_WPN_P': 0.3, 'BRANCH_LONG_P': 0.2, 'INS_LONG_W': 0.25}
-14:39:21 after update 4: live.json {'INS_G': 1.0, 'INS_LONG_W': 0.5}
-14:39:48 after update 5: live.json {'H2_INS_PG': 0.5}
-14:40:18 after update 6: live.json {'H2_INS_PG': 1.0}
-14:40:48 after update 7: live.json {'SFADE': 0.5}
-14:41:18 after update 8: live.json {'SFADE': 1.0}
-14:43:40 PASS ov: fourteen updates ran (14 in metrics)
-14:43:40 PASS ov: no NaN in his step (kl by update [0.0173, 0.0086, 0.0108, 0.0143, 0.0134, 0.0162, 0.0135, 0.0143, 0.0142, 0.0157, 0.018, 0.0132, 0.0114, 0.0144])
-14:43:40 PASS ov: no REFUSED live file; ignored: ['BRAIN_FADE'] (BRAIN_FADE alone: the command has --brain-fade 0)
-14:43:40    update 14 ins: {"g": 1.0, "teach": 1.0, "pg": 1.0, "temp": 0.05, "warm": true, "rows": 2304, "own": 1936, "taught": 1936, "entropy": 3.2747, "offered": 25.35, "kl_to_appraisals": 0.0, "best_row_agrees": 0.0145, "verbs": [0.0, 0.2252, 0.1064, 0.3084, 0.0816, 0.046, 0.0, 0.1235, 0.109], "weapons": [0.061, 0.1271, 0.0506, 0.2841, 0.0832, 0.1023, 0.0232, 0.0, 0.2686], "picks": 1936, "row_blocks": {"go": 0.2252, "contest": 0.1064, "hold": 0.3084, "spam": 0.0816, "push": 0.046, "cut": 0.0, "out": 0.1235, "none": 0.0, "spare": 0.0, "check": 0.109, "spush": 0.0, "sspam": 0.0}, "quiet": 0.0067, "quiet_by_verb": [0.0, 0.0069, 0.0097, 0.005, 0.0063, 0.0112, 0.0, 0.0042, 0.0095], "changes_a_second": 4.2014, "forecast_
-14:43:40    update 14 ins_bind: {"bound": 0.7044, "not_his_pick": 0.5626, "weapon_changes_min": 134.04}
-14:43:40    update 14 drill_ins: {"seat_secs": 58.8, "doing": 0.2214, "done": 0.0807, "failed": 0.0}
-14:43:40    update 14 branch: {"p": 0.5, "moments": 2, "branches": 6, "held": 6, "rows": 14, "cut": 0.0, "wpn": {"branches": 0, "after_hit": 0, "fight_start": 0, "by_weapon": {}}, "spam": 1, "long_spam": 1, "long": 2, "best_by_win_vs_full": {"moments": 2, "differ": 0, "share": 0.0}, "net_forced": -11.83, "net_free": 0.0, "dv_forced": 0.0776, "dv_free": 0.0662, "secs": 0.014, "long_p": 0.2, "long_reading": 9, "long_learnt": 7, "long_seen": 30}
-14:43:40    update 14 appraise: {"w": 1.0, "rows": 14, "dealt": {"n": 14, "mean": 4.2857, "r2": -0.8876}, "taken": {"n": 14, "mean": 14.4286, "r2": -0.7631}, "he_dies": {"n": 14, "mean": 0.0, "brier": 0.0264, "brier_const": 0.0, "skill": null}, "i_die": {"n": 14, "mean": 0.0, "brier": 0.027, "brier_const": 0.0, "skill": null}, "item": {"n": 14, "mean": 0.0, "brier": 0.0265, "brier_const": 0.0, "skill": null}, "dv": {"n": 14, "mean": 0.076, "r2": 0.0176}, "secs": 0.007}
-14:43:40    update 14 pay_of: {"hands": "the pay table + the win part as today", "head_old": "his whole pay (the table + the win part)", "head_ins": "win chance only", "win_gain": 1.0, "win_abs": 0.002963, "full_abs": 0.00293, "v_win": -0.2536, "v_win_loss": 0.11687}
-14:43:40 PASS ov: the instruction's records are there at the end (ins, ins_bind, branch, appraise, pay_of)
-14:43:40 PASS ov: the lesson toward the appraisals' order was taught ([0, 0, 0, 0, 0, 0, 0, 2016, 1956, 1876, 1921, 2047, 1893, 1936] readings by update)
-14:43:40 PASS ov: the instruction's choice: KL played-to-before small on every update that has it ([0.0, 0.0, 0.0, 0.0, 0.0, 0.000226, 0.000689, 0.000253, -0.000122, 7.5e-05, 0.00135, -0.000568, 0.001409, 0.00118]; the rollouts run one update behind)
-14:43:40    update 14 the tick readouts: {"played": {"ticks": 1936, "changes_a_second": 4.812, "best_changes_a_second": 2.793, "cont": 0.0377, "stands_secs": 0.208, "entropy": 3.2716, "under_none": 0.0, "best_agrees": 0.0021}, "shadow": {"ticks": 0, "changes_a_second": 0.0, "best_changes_a_second": 0.0, "cont": 0.0, "stands_secs": 0.2, "entropy": 0.0, "under_none": 0.0, "best_agrees": null}}
-14:43:40    update 14 ins_norow: {"readings": 5934, "no_real_row": 0.0, "n": 0, "on_a_map_without_tables": 0, "no_none": true}
-14:43:40 PASS ov: the head's share at 1, 'none' not offered: played seats' ticks under none 0.0 (only where no real row was valid: 0 of 5934 readings)
-14:43:40 PASS ov: the head re-decides at every tick: the played seats' orders stand 0.208 s on average, continue 0.0377
-14:43:40 PASS ov: the last dials were applied (SFADE 1.0, SPEED_PAY 0.0, INS_G 1.0, H2_INS_PG 1.0; the lock 8.0, the switch cost 0.02 as update 50)
-14:43:40    the target-switch cost a player-minute by update: [-0.3047, -0.3281, -0.3086, -0.2617, -0.1992, -0.1211, -0.0313, -0.0234, -0.0273, -0.0195, -0.0469, -0.0391, -0.0234, -0.0781]
-14:44:50 scratch_21a_smoke_ov_h: done in 1.2 min; the log ends: exit 0
-14:44:50 PASS ov: the resume from the save ran 2 more updates (14 -> 16), the optimizer's group 'ins' loaded by name
-14:44:50    optimizer: its state loaded from opt.pt (--learn-nosync: 0 step counts moved to the host)
-14:44:50    optimizer: its state loaded from opt.pt (--learn-nosync: 0 step counts moved to the host)
-14:44:50 ALL PASSED (10 checks)
+19:44:01 scratch_21a_smoke_c: done in 3.8 min; the log ends: exit 0
+19:44:01 PASS the trainer exited 0
+19:44:01 PASS the optimizer's state loaded, no REFUSED
+19:44:01 PASS 8 or more updates (10)
+19:44:01 update 1: dmg 1.6211 / -1.2354 frag 0.3906 | frags a match-minute 0.781 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 40.6, "doing": 0.1312, "done": 0.1995, "failed": 0.298}
+19:44:01 update 2: dmg 2.209 / -1.1797 frag 1.1719 | frags a match-minute 2.344 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 34.3, "doing": 0.2019, "done": 0.0, "failed": 0.1203}
+19:44:01 update 3: dmg 0.9941 / -1.4534 frag 0.3906 | frags a match-minute 1.172 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 23.7, "doing": 0.3899, "done": 0.0, "failed": 0.1665}
+19:44:01 update 4: dmg 2.1309 / -1.8848 frag 2.7344 | frags a match-minute 3.516 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 37.2, "doing": 0.5195, "done": 0.0484, "failed": 0.0}
+19:44:01 update 5: dmg 2.2676 / -2.3945 frag 1.9531 | frags a match-minute 3.125 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 25.8, "doing": 0.4617, "done": 0.0, "failed": 0.0}
+19:44:01 update 6: dmg 1.1934 / -1.5273 frag 0.3906 | frags a match-minute 0.391 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 60.9, "doing": 0.2394, "done": 0.3138, "failed": 0.0164}
+19:44:01 update 7: dmg 0.5254 / -0.5449 frag 0.3906 | frags a match-minute 1.172 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 35.4, "doing": 0.3804, "done": 0.103, "failed": 0.0452}
+19:44:01 update 8: dmg 2.2266 / -1.9209 frag 1.9531 | frags a match-minute 3.516 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 38.7, "doing": 0.1595, "done": 0.1556, "failed": 0.1039}
+19:44:01 update 9: dmg 1.5352 / -1.3027 frag 1.1719 | frags a match-minute 3.125 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 51.6, "doing": 0.0121, "done": 0.3398, "failed": 0.0504}
+19:44:01 update 10: dmg 3.5937 / -2.6523 frag 1.9531 | frags a match-minute 3.125 | dodge {'cols': 1.0, 'token': 0.0} | branch {"p": 0.15, "moments": 0, "branches": 0, "long_p": 0.0, "long_reading": 0, "long_learnt": 0, "long_seen": 0} | drill {"seat_secs": 33.2, "doing": 0.006, "done": 0.7517, "failed": 0.0376}
+19:44:01 PASS damage taken weighs as dealt (zero-sum): within 15% over the run
+19:44:01 PASS the dodge gate open and the frozen record on every update
+19:44:01 PASS the frozen record never moves
+19:44:01 PASS the instruction's records: ins, branch, drill_ins there
+19:44:01 PASS no NaN in the trainer's kl and entropy
+19:44:03 PASS (after 10 updates) the frozen decisions' weights the same to the bit (10 tensors; moved: [])
+19:44:03 PASS the rest learns: the hands' encoder, his memory and the head's memory moved (['enc.0.weight', 'gru.weight_hh', 'head2.gru.weight_hh'])
+19:44:43 scratch_21a_smoke_c: done in 0.7 min; the log ends: exit 0
+19:44:43 PASS a restart from the save with its optimizer: loaded, no cold start, one more update (10 -> 11)
+19:45:45 check: exit 0;  memory never start over) | opponent the whole game (clock, score and memory never start over)
+    he        bare 13% | first weapon 5.5 s | 150+ 46% | weapons 2.25/min | mega 58%, red 21% of spawns | yellow 2.0/min | in view 19% | firing 15% (68% of the time in view) | speed 332, standing 2% (over 3 s: 0%) | lives 2.5/min, own deaths 0.0 a game
+    opponent  bare 5% | first weapon 2.7 s | 150+ 43% | weapons 1.5/min | mega 58%, red 73% of spawns | yellow 1.75/min | in view 20% | firing 13% (56% of the time in view) | speed 329, standing 2% (over 3 s: 0%) | lives 1.5/min, own deaths 0.0 a game
+
+19:45:45 PASS a one-map check of the save against S0 finished (1-1)
+19:45:45 ALL PASSED

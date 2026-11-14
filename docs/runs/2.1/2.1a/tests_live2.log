@@ -1,0 +1,9 @@
+19:40:13 PASS the start's live.json carries 2.1a's start ({'DMG_REWARD': 0.005, 'DMG_TAKEN_W': 1.0, 'RAIL_FAR_PAY': 0.1, 'KEEP_G': 1.0, 'HABIT_P': 0.0, 'WIN_ADD': 0.33, 'AIM3_W': 0.0, 'AIM3_SIZE_A': 1.0, 'AIM3_SIZE_B': 0.0, 'AIM3_LEAD': 0.0, 'AIM3_RELOAD': 1.0, 'DODGE_G': 0.0, 'BRANCH_P': 0.0, 'DRILL_INS_P': 0.0, 'DRILL_INS_RATE': 0.0, 'INS_GATE': -30.0, 'INS_G': 0.0, 'BRANCH_WPN_P': 0.0, 'H2_INS_PG': 0.0})
+19:40:58 after update 1: live.json {'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18, 'AIM3_LEAD': 0.5, 'AIM3_RELOAD': 0.5, 'DODGE_G': 0.5, 'BRANCH_P': 0.075, 'DRILL_INS_P': 0.125, 'DRILL_INS_RATE': 0.01, 'INS_GATE': -6.0, 'BRANCH_WPN_P': 0.15}
+19:42:33 PASS no refusal in the log
+19:42:33 PASS live_status.json says applied ({'update': 3, 'status': 'applied', 'reason': None, 'time': '2026-11-13 19:41:00'})
+19:42:33 PASS 3 updates or more (5)
+19:42:33 PASS live_applied.json carries the mid values by the end ({'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18, 'AIM3_LEAD': 0.5, 'AIM3_RELOAD': 0.5, 'DODGE_G': 0.5, 'BRANCH_P': 0.075, 'DRILL_INS_P': 0.125, 'DRILL_INS_RATE': 0.01, 'INS_GATE': -6.0, 'BRANCH_WPN_P': 0.15}, from update 3)
+19:42:33 PASS the save's record carries the mid values ({'AIM3_W': '0.5', 'AIM3_SIZE_A': '0.7', 'AIM3_SIZE_B': '0.18', 'AIM3_LEAD': '0.5', 'AIM3_RELOAD': '0.5', 'DODGE_G': '0.5', 'BRANCH_P': 0.075, 'DRILL_INS_P': '0.125', 'DRILL_INS_RATE': '0.01', 'INS_GATE': -6.0, 'BRANCH_WPN_P': 0.15})
+19:42:33 PASS the last update's dodge gate: columns 0.5, token log(0.5) ({'cols': 0.5, 'token': -0.693})
+19:42:33 ALL PASSED

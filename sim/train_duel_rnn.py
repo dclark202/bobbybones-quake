@@ -1232,6 +1232,11 @@ def main():
     ap.add_argument("--wrule-imit", type=float, default=0.0, help="(--wrule) the weapon key copies the table's choice: a cross-entropy on the frames the key "
                                                                  "was read under the rule, his seats, from the shared layers detached (the key's own layer "
                                                                  "learns it alone); standing, never faded")
+    ap.add_argument("--freeze-choice", type=int, default=0, help="(2.1a, owner 11-13: 'freeze decisions') 1: the head's decisions play as the "
+                    "start file has them and learn nothing: his target (the hands' rows and the head's scores), the weapon key (the hands' rows and "
+                    "the head's weapon scores) and the keep choice (implies --keep-freeze). Their log-probabilities are out of every policy term "
+                    "and the exploration bonus (no gradient into the trunk or the head's memory from them), the head's own policy term is off "
+                    "(its value still learns), and their weights are put back after every step (Adam's moments would move them otherwise)")
     ap.add_argument("--keep-freeze", type=int, default=0, help="(1.7c) 1: the keep choice plays at its share but learns nothing (its log-probability "
                                                                "out of the policy term: it drifted into flicker in 1.7a and 1.7b)")
     ap.add_argument("--hand-teach", type=float, default=0.0,
@@ -1844,6 +1849,8 @@ def main():
         """(1.7) his logits with f [..., 2] added to the fire key's"""
         return torch.cat([lg[..., :FIRE_O], lg[..., FIRE_O:FIRE_O + 2] + f, lg[..., FIRE_O + 2:]], -1)
 
+    FRZ_ = [bool(a.freeze_choice)]                           # (2.1a, --freeze-choice: read by head_masks)
+
     def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False, lt=None, wl=None, wd=None):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
         intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his).
@@ -1875,6 +1882,8 @@ def main():
                 m = lo * dc if KA_COLS[j - KA_HEAD] in KEY_HEADS else lo
             if j == TA_HEAD:                                     # (LEGS_TURN_ADD) his correction: only where it was added to his legs' turn
                 m = lo
+            if FRZ_[0] and j in (I_HEAD, HAND_HEAD):             # (2.1a, --freeze-choice) his target and the weapon key learn nothing
+                m = lo * 0.0
             out.append(m)
         return out
 
@@ -3524,6 +3533,21 @@ def main():
                            for d_ in dirs_], mx_)
         print(BH.describe() + "; share {} of the brain's lesson (live BRAIN_HUMAN_W), opening over {} min".format(a.brain_human_w, a.brain_human_open), flush=True)
     H2_SKIP = [0]                                            # (--head2-sole) pieces of an update left out: their loss was not finite
+    FRZ_HOLD = None                                          # (2.1a, --freeze-choice) (parameter, its value, its rows or None) held
+    if a.freeze_choice:
+        assert H2, "--freeze-choice: a network with the strategy head"
+        sl_t_, sl_w_ = slice(HD_I0, HD_I0 + ACTION_DIMS[I_HEAD]), slice(HAND_O, HAND_O + HAND_D)
+        FRZ_HOLD = [(pol.pi.weight, pol.pi.weight[sl_t_].detach().clone(), sl_t_), (pol.pi.bias, pol.pi.bias[sl_t_].detach().clone(), sl_t_),
+                    (pol.pi.weight, pol.pi.weight[sl_w_].detach().clone(), sl_w_), (pol.pi.bias, pol.pi.bias[sl_w_].detach().clone(), sl_w_)]
+        nm_frz_ = []
+        for n_, p_ in pol.head2.named_parameters():
+            if n_.split(".")[0] in ("target", "wsc", "keep", "add", "wadd", "bias"):
+                FRZ_HOLD.append((p_, p_.detach().clone(), None))
+                nm_frz_.append(n_)
+        print("--freeze-choice (2.1a): his target and the weapon key play as the start has them and learn nothing (out of every policy "
+              "term and the exploration bonus; the head's policy term off, its value learning); held after every step: pi rows {}..{} "
+              "(target) and {}..{} (weapon key), head2 {}; the keep choice frozen (--keep-freeze)".format(
+                  sl_t_.start, sl_t_.stop - 1, sl_w_.start, sl_w_.stop - 1, nm_frz_), flush=True)
     H2_ROWS = None                                           # (--head2-sole) the hands' target rows of pi
     if H2 and a.head2_sole:
         with torch.no_grad():
@@ -3737,7 +3761,8 @@ def main():
         print("the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's "
               "policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)", flush=True)
     WR_P = [min(1.0, max(0.0, float(a.wrule)))]                        # (live WRULE_P) the share of lives under it
-    KEEP_FREEZE = bool(a.keep_freeze)
+    FRZ = bool(a.freeze_choice)                                          # (2.1a, --freeze-choice) the head's decisions held
+    KEEP_FREEZE = bool(a.keep_freeze) or FRZ
     if WR_ON:
         import csv as csv_w
         import weapon_dial as WDIAL_
@@ -6396,7 +6421,7 @@ def main():
                     c_ = min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2]))
                     lt_ = ds[I_HEAD].log_prob(A[..., I_HEAD]) * (1.0 if hm[I_HEAD] is None else hm[I_HEAD])
                     lp = lp - c_ * (lt_ - lt_.detach())
-                cw_ = min(1.0, max(0.0, H2_WPG[0])) if WCR else 0.0
+                cw_ = min(1.0, max(0.0, H2_WPG[0])) if (WCR and not FRZ) else 0.0      # (2.1a, --freeze-choice: off)
                 if WCR and cw_ > 0:                                      # (1.5a, B) the weapon key's share of this term's gradient: 1 - cw (its value as it is)
                     lw_ = ds[HAND_HEAD].log_prob(A[..., HAND_HEAD]) * (1.0 if hm[HAND_HEAD] is None else hm[HAND_HEAD])
                     lp = lp - cw_ * (lw_ - lw_.detach())
@@ -6683,7 +6708,7 @@ def main():
                             WP_ACC[11] += ((ds[HAND_HEAD].probs.argmax(-1) == A[..., HAND_HEAD]).float() * mk2_).sum().double()
                     vh_ = head2_.value(pol.head2, ho2_["s_held"], hs_all.detach())
                     vl2_ = (0.5 * (vh_ - RET_H[:, chunk]).pow(2) * wgt).sum() / wsum
-                    loss = loss + (min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2])) if H2ADD else H2_PG_[0] * H2_PG_[2]) * pg2_ + a.head2_v * vl2_
+                    loss = loss + (0.0 if FRZ else (min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2])) if H2ADD else H2_PG_[0] * H2_PG_[2])) * pg2_ + a.head2_v * vl2_   # (2.1a, --freeze-choice: the policy term off)
                     if RET_W is not None:                                # (2.1, --ins-pay-win) the head's value of the win-chance pay: its own
                         vw_ = head2_.value_w(pol.head2, ho2_["s_held"], hs_all.detach())     # layer on the same state, the same weight
                         vlw_ = (0.5 * (vw_ - RET_W[:, chunk]).pow(2) * wgt).sum() / wsum
@@ -7235,6 +7260,13 @@ def main():
                             pol.pi.weight[HD_W0:HD_W0 + 3] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
                         if not H2ADD:
                             pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
+                if FRZ_HOLD is not None:                                 # (2.1a, --freeze-choice) the decisions' weights put back, every step
+                    with torch.no_grad():
+                        for p_, v_, sl_ in FRZ_HOLD:
+                            if sl_ is None:
+                                p_.copy_(v_)
+                            else:
+                                p_[sl_].copy_(v_)
                 if H2_ROWS is not None:                                  # (--head2-sole) held as they were (Adam's moments move them otherwise)
                     with torch.no_grad():
                         pol.pi.weight[HD_I0:HD_I0 + int(H2L["n_target"])] = H2_ROWS[0]
@@ -7730,6 +7762,9 @@ def main():
                 plan_in_w=round(float(pin_), 6), target_w=round(float(pol.head2.target.weight.norm()), 6),
                 pay=a.head2_pay, pay_abs=[round(x_, 6) for x_ in H2_PAYS], v=round(float(B_VH[:T].mean()), 4), ret=round(float(RET_H.mean()), 4), adv_sd=round(float(ADV_H.std()), 4),
                 lr=opt.param_groups[-1]["lr"], opp_open=bool(snaps and opp.h2_open))
+            if FRZ_HOLD is not None:                                     # (2.1a, --freeze-choice) the held weights' sizes (the ramp: they must not move)
+                rec["frozen_choice"] = {"p{}".format(i_): round(float((p_[sl_] if sl_ is not None else p_).detach().double().abs().sum()), 6)
+                                        for i_, (p_, v_, sl_) in enumerate(FRZ_HOLD)}
             if DGT_M is not None:                                        # (2.0d) the dodge inputs' gate: the columns' (live DODGE_G) and the token's
                 rec["dodge_gate"] = dict(cols=float(E_.DODGE_G), token=round(float(pol.attn.gate[DGT_M].max()), 3))
             if CMB or FIRE:                                              # (1.7) the combat order: its share, readings asked, p(an order), drawn and

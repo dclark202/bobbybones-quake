@@ -118,8 +118,8 @@ def same(a):
     assert not getattr(pb, "ins_due", False) and float(getattr(pb, "ins_g", 0.0)) == 0.0, "b's share is above 0"
     names = getattr(pa, "names", None)
     assert names, "a network of a cleaned list (its names in the file)"
-    lst = [L for L in (IL.load(21), IL.load(18)) if [tuple(x) for x in L["names"]] == [tuple(x) for x in names]]
-    assert lst, "the network's list is not 18 or 21"
+    lst = [L for L in (IL.load(21), IL.load(18), IL.load("21d"), IL.load("20d")) if [tuple(x) for x in L["names"]] == [tuple(x) for x in names]]
+    assert lst, "the network's list is not 18, 21, 20d or 21d"
     src = np.asarray(lst[0]["src"], np.int64)
     for p in (pa, pb):
         if getattr(p, "h2", None) is not None and (float(p.h2W["gate"]) > 0 or float(p.h2W.get("add", 0.0)) > 0):

@@ -27,6 +27,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 OLD, NEW, GROUP, TOKEN = 18, 21, "b21 instruction", "instr"
+# (2.1a, the blend, 2026-11-13) the lists by name: --old 20d --new 21d brings a network of list 20d (2.0d's, with the dodge group) to list 21d
+# the same way; the defaults are 2.1's first build (18 -> 21)
 FLAG, NUM = (0.1, 0.09), (0.0, 0.1)                           # (mean, variance) by design: a 0-or-1 column, a number within about -1 .. 1
 # (third pass, the finish time: columns within 0 .. 2, by design until `stats` measures them) a finish time (seconds / 5: a stack of 150
 # at 40 a second is 0.75, a weapon he cannot use 2); seconds of fire (/ 10); "he has a belief" (nearly always)
@@ -56,7 +58,7 @@ def convert(a):
     Lo, Ln = lists()
     ck = torch.load(a.inp, weights_only=False, map_location="cpu")
     I = ck.get("inputs") or {}
-    assert int(I.get("list", -1)) == OLD and [tuple(x) for x in ck["input_names"]] == [tuple(x) for x in Lo["names"]], "not a network of list {}".format(OLD)
+    assert str(I.get("list", -1)) == str(OLD) and [tuple(x) for x in ck["input_names"]] == [tuple(x) for x in Lo["names"]], "not a network of list {}".format(OLD)
     sd = ck["model"]
     nh, n0 = int(Lo["n_hands"]), int(Lo["n"])
     cols = new_cols(Ln)
@@ -116,7 +118,7 @@ def convert(a):
                                                                and all(isinstance(x_, (int, np.integer)) for x_ in np.asarray(v2, object).ravel()))
                 if (k2.endswith("cols") or k2.endswith("_col")) and nums_:      # (a list of the truth labels' NAMES, as track["cols"], is no column list)
                     raise SystemExit("{}['{}'] holds column numbers this converter does not move: add it".format(key, k2))
-    ck["inputs"] = dict(list=NEW, n=n0 + K, n_brain=int(Ln["n_brain"]), n_hands=nh + K, full=int(Ln["full"]), design_stats=[nh, nh + K])
+    ck["inputs"] = dict(I, list=NEW, n=n0 + K, n_brain=int(Ln["n_brain"]), n_hands=nh + K, full=int(Ln["full"]), design_stats=[nh, nh + K])
     ck["input_names"] = [list(x) for x in Ln["names"]]
     ck["env_module"] = "duel_env_ffa{}".format(NEW)
     torch.save(ck, a.out)
@@ -129,7 +131,7 @@ def stats(a):
     import torch
     _, Ln = lists()
     ck = torch.load(a.inp, weights_only=False, map_location="cpu")
-    assert int((ck.get("inputs") or {}).get("list", -1)) == NEW, "not a network of list {}".format(NEW)
+    assert str((ck.get("inputs") or {}).get("list", -1)) == str(NEW), "not a network of list {}".format(NEW)
     cols = new_cols(Ln)
     sd = ck["model"]
     ki = [i for i, k in enumerate(ck["attn"]["kinds"]) if k["name"] == TOKEN][0]
@@ -211,7 +213,11 @@ def main():
     p.add_argument("--sample", required=True)
     p.add_argument("--rows", type=int, default=3200)
     p.add_argument("--seats", type=int, default=8)
+    ap.add_argument("--old", default="18", help="(2.1a, the blend) the list a network comes from: 18, or 20d")
+    ap.add_argument("--new", default="21", help="... and the list it goes to: 21, or 21d")
     a = ap.parse_args()
+    global OLD, NEW
+    OLD, NEW = (int(a.old) if a.old.isdigit() else a.old), (int(a.new) if a.new.isdigit() else a.new)
     sys.exit(int({"convert": convert, "stats": stats, "same": same}[a.cmd](a) or 0))
 
 

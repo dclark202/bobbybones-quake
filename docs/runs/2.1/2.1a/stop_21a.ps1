@@ -1,51 +1,53 @@
-# 2.1a: stops the TRAINER (and only the trainer, with its simulators) right after a kept save, on the owner's word (the run has no planned
-# restart: the switch cost and "a held weapon is choosable" are live). Nothing is deleted. The watcher, the ramp and the self-play logger are
-# left running unless -All (the run's end). Every process is matched by its own command line (Windows reuses process IDs): the trainer by
-# "train_duel_rnn.py" and the run's name; its simulators by "multiprocessing.spawn" AND "parent_pid=<the trainer's id>". No variable shares a
-# name with a parameter (1.8a's $all beside -All: one name in PowerShell, the stop found "0 trainers").
-#   stop_21a.ps1 -Update 220 -All      the end: also the ramp and the logger (the watcher finishes its check); the end kept as policy_end_21a.pt
-#   stop_21a.ps1 -Update <n>           the trainer alone, right after the kept save of update n (refuses unless the run's policy.pt IS that save)
-# ON THE OWNER'S WORD ONLY.
-param([Parameter(Mandatory = $true)][int]$Update, [switch]$All)
+# 2.1a's length (the owner's number at the go; docs/runs/2.1/2.1a/CARD.md): stops the TRAINER and the
+# self-play logger once the ramp has kept the save of update -At (a mark of ramp_21a.py: 90, 120 or 150) (keep\policy_u${At}_21a.pt with its optimizer). Nothing is deleted. The watcher is
+# left to finish the check of update $At; the ramp is left until that check is logged (it writes the check's lines), then -Ramp stops it.
+# Every process is matched by its own command line (Windows reuses process IDs): the trainer by "train_duel_rnn.py" and the run's name; its
+# simulators by "multiprocessing.spawn" AND "parent_pid=<the trainer's id>" in their own command line.
+# Usage: powershell -ExecutionPolicy Bypass -File docs\runs\2.0\2.1a\stop_21a.ps1 [-Ramp]
+param([int]$At = 0, [switch]$Ramp)
 $RUN = "duel_gru_2_1a"
 $ROOT = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path
-$DR = if ($env:QLBOT_ROOT) { $env:QLBOT_ROOT } else { $ROOT }      # (the repo that has data\)
-$D = Join-Path $DR "data\sim_runs\$RUN"
+$D = Join-Path $ROOT "data\sim_runs\$RUN"
 $K = Join-Path $D "keep"
 $LOG = Join-Path $PSScriptRoot "stop.log"
 function Log($s) { $l = (Get-Date -Format "MM-dd HH:mm:ss") + " " + $s; Write-Output $l; Add-Content -Path $LOG -Value $l -Encoding utf8 }
 function Short($c) { $c.Substring(0, [Math]::Min(130, $c.Length)) }
 
-$PU = Join-Path $K ("policy_u" + $Update + "_21a.pt"); $OU = Join-Path $K ("opt_u" + $Update + "_21a.pt")
-if (-not (Test-Path $PU) -or -not (Test-Path $OU)) { Log ("keep\policy_u" + $Update + "_21a.pt or its optimizer is not there yet: nothing stopped"); exit 1 }
-$last = @(Get-Content (Join-Path $D "metrics.jsonl") | Where-Object { $_.Trim() }).Count      # (the run's updates: the lines; the trainer's own number restarts at 1)
-if ((Get-FileHash (Join-Path $D "policy.pt")).Hash -ne (Get-FileHash $PU).Hash) { Log ("the run's policy.pt is no longer the save of update " + $Update + " (the last finished update is " + $last + "): nothing stopped"); exit 1 }
-Log ("update " + $Update + "'s save is kept (" + (Get-Item $PU).LastWriteTime.ToString("HH:mm:ss") + ") and is the run's policy.pt; the last finished update is " + $last)
+$all = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine }
+if ($Ramp) {
+    $r = $all | Where-Object { $_.CommandLine -like "*ramp_21a.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" }
+    $r | ForEach-Object { Log ("stopping the ramp " + $_.ProcessId + " " + (Short $_.CommandLine)); Stop-Process -Id $_.ProcessId -Force -Confirm:$false }
+    if (($r | Measure-Object).Count -eq 0) { Log "no ramp running" }
+    exit 0
+}
+if ($At -le 0) { Log "give -At <update> (a kept mark): nothing stopped"; exit 1 }
+$PU = Join-Path $K ("policy_u" + $At + "_21a.pt"); $OU = Join-Path $K ("opt_u" + $At + "_21a.pt")
+if (-not (Test-Path $PU) -or -not (Test-Path $OU)) { Log "keep\policy_u${At}_21a.pt or its optimizer is not there yet: nothing stopped"; exit 1 }
+$last = (Get-Content (Join-Path $D "metrics.jsonl") -Tail 1 | ConvertFrom-Json).update
+Log ("update $At's save is kept (" + (Get-Item $PU).LastWriteTime.ToString("HH:mm:ss") + "); the last finished update is " + $last)
 
-$procs = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine }
-$tr = @($procs | Where-Object { $_.CommandLine -like "*train_duel_rnn.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
+$tr = @($all | Where-Object { $_.CommandLine -like "*train_duel_rnn.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
 if ($tr.Count -ne 1) { Log ("expected one trainer, found " + $tr.Count + ": nothing stopped"); exit 1 }
 $tid = $tr[0].ProcessId
-$kids = @($procs | Where-Object { $_.ParentProcessId -eq $tid -and $_.CommandLine -like "*multiprocessing.spawn*" -and $_.CommandLine -like "*parent_pid=$tid,*" })
-$more = @()
-if ($All) {
-    $more += @($procs | Where-Object { $_.CommandLine -like "*ramp_21a.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
-    $sp = @($procs | Where-Object { ($_.CommandLine -like "*selfplay_loop.py*" -or $_.CommandLine -like "*selfplay_log.py*") -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
-    $spIds = @($sp | ForEach-Object { $_.ProcessId })
-    $more += $sp
-    $more += @($procs | Where-Object { $spIds -contains $_.ParentProcessId -and $_.CommandLine -like "*ws_eval.py*" -and $_.CommandLine -like "*$RUN*" })
-}
-Log ("the trainer " + $tid + " with " + $kids.Count + " simulators" + $(if ($All) { "; the ramp and the self-play logger: " + $more.Count + " processes" } else { "; the watcher, the ramp and the logger are left running" }))
-foreach ($p in @($tr) + $kids + $more) {
-    if ($p.CommandLine -notlike "*multiprocessing.spawn*") { Log ("stopping " + $p.ProcessId + " " + (Short $p.CommandLine)) }
+$kids = @($all | Where-Object { $_.ParentProcessId -eq $tid -and $_.CommandLine -like "*multiprocessing.spawn*" -and $_.CommandLine -like "*parent_pid=$tid,*" })
+$sp = @($all | Where-Object { $_.CommandLine -like "*selfplay_loop.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
+$sl = @($all | Where-Object { $_.CommandLine -like "*selfplay_log.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
+$slIds = @($sl | ForEach-Object { $_.ProcessId })
+$sw = @($all | Where-Object { $slIds -contains $_.ParentProcessId -and $_.CommandLine -like "*ws_eval.py*" -and $_.CommandLine -like "*$RUN*" })
+Log ("the trainer " + $tid + " with " + $kids.Count + " simulators; the self-play logger: " + ($sp.Count + $sl.Count + $sw.Count) + " processes")
+foreach ($p in @($tr) + $kids + $sp + $sl + $sw) {
+    Log ("stopping " + $p.ProcessId + " " + (Short $p.CommandLine))
     Stop-Process -Id $p.ProcessId -Force -Confirm:$false -ErrorAction SilentlyContinue
 }
 Start-Sleep -Seconds 5
-$left = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and (($_.CommandLine -like "*train_duel_rnn.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*") -or $_.CommandLine -like "*parent_pid=$tid,*") })
+$left = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and (($_.CommandLine -like "*train_duel_rnn.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*") -or $_.CommandLine -like "*parent_pid=$tid,*" -or ($_.CommandLine -like "*selfplay_lo*.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*")) })
 if ($left.Count -gt 0) { $left | ForEach-Object { Log ("STILL RUNNING " + $_.ProcessId + " " + (Short $_.CommandLine)) }; exit 1 }
-Log "the trainer and its simulators are stopped"
-if ($All) {
-    $PE = Join-Path $K "policy_end_21a.pt"; $OE = Join-Path $K "opt_end_21a.pt"
-    if ((Test-Path $PE) -or (Test-Path $OE)) { Log "keep\policy_end_21a.pt or its optimizer exists already: not written over" }
-    else { Copy-Item $PU $PE; Copy-Item $OU $OE; Log ("the end kept: keep\policy_end_21a.pt (the save of update " + $Update + ") with opt_end_21a.pt") }
+Log "the trainer, its simulators and the self-play logger are stopped"
+$PE = Join-Path $K "policy_end_21a.pt"; $OE = Join-Path $K "opt_end_21a.pt"
+if ((Test-Path $PE) -or (Test-Path $OE)) { Log "keep\policy_end_21a.pt or its optimizer exists already: not written over" }
+else {
+    Copy-Item $PU $PE; Copy-Item $OU $OE
+    Log ("the end kept: keep\policy_end_21a.pt (" + (Get-FileHash $PE -Algorithm SHA256).Hash.Substring(0, 16) + ", the same as policy_u${At}_21a.pt " + (Get-FileHash $PU -Algorithm SHA256).Hash.Substring(0, 16) + ") with opt_end_21a.pt")
 }
+$w = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*watch.py*" -and $_.CommandLine -like "*$RUN*" })
+Log ("the watcher is left running (" + $w.Count + " process): it finishes the check of update $At")

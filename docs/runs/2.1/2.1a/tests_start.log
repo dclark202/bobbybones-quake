@@ -1,11 +1,59 @@
-14:45:34    same: 400 real rows x 8 seats, the new columns random: largest |memory a - memory b| = 4.77e-05; actions that differ: 0 of 44800
-14:45:34 PASS list 21 answers as list 18 on real rows, the new columns random (0 actions differ)
-14:45:39    same: 400 real rows x 8 seats: actions that differ: 0 of 44800
-14:45:39 PASS the start (the head's instruction part added) answers as before it (0 actions differ)
-14:45:39 PASS the list: 852 inputs, the brain 691, the hands 844 (list 21)
-14:45:39 PASS the token 'instr' is the last kind and shut (gate -30)
-14:45:39 PASS every weight of update 50 is in the start: 119 tensors equal, 4 widened (attn.mark, attn.gate, enc.0.weight, head2.inp.weight), 0 missing
-14:45:39 PASS the hands' encoder: its 796 old columns unchanged, the 48 new at zero
-14:45:39 PASS the scorer inside the head (19 tensors), its share 0
-14:45:39 PASS the save's play variables as update 50's (WEAPON_OWN 0, INTENT_HOLD 8)
-14:45:39 ALL PASSED (8 checks)
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 8.53e-14, the brain's input layer 1.28e-13, the head's 1.24e-14, the weapon part's 2.22e-15, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\a20.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 79 columns (2 cut), the weapon part's 45; the dodge columns at zero, the token 'dodge' last, shut
+the optimizer's moments converted C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7a\keep\opt_u90_17a.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\a20_opt.pt: enc.0.weight, belief.inp.weight, head2.inp.weight, head2.winp.weight, 21 token kinds' first layers (the dodge columns, token and mark row: --opt-small-items)
+
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\a21.pt: list 21d (869 inputs; the brain the first 691, the hands the first 861, the tail 8); 48 new columns at zero weights with design statistics; the token 'instr' last, its first layer zero, shut; moved: the rule fade's 4; the head's obs_cols (0 at or past 813); the head's wobs_cols (0 at or past 813)
+
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\s1.pt: the head's input 948 -> 1050 columns (102 of the part 'ins', at zero); the scorer over 41 rows of 67 numbers and 9 weapons INSIDE the head (88,460 weights head2.ins_*, its last layers at zero, share 0, the row 'none' 30); the appraisals made new (1143 -> 6, last layer at zero)
+
+same (as played: the brain's inputs at half precision): 400 real rows x 8 seats, each network through its own columns, the new ones random: largest |h a - h b| = 0.365; actions that differ: 19 of 44800
+same (the brain's rounding off): 400 real rows x 8 seats, each network through its own columns, the new ones random: largest |h a - h b| = 0.000383; actions that differ: 1 of 44800
+ALL PASSED
+
+19:36:58 PASS inputs20d same: list 20d answers as 1.7a's update 90
+same: 400 real rows x 8 seats, the new columns random: largest |memory a - memory b| = 0.000164; actions that differ: 0 of 44800
+ALL PASSED
+
+19:37:04 PASS inputs21 same: list 21d answers as list 20d
+same: 400 real rows x 8 seats: actions that differ: 0 of 48000
+ALL PASSED
+
+19:37:10 PASS head21_init same: the head's instruction part at zero effect
+19:37:10 PASS the shut tokens: the order, the dodge, the instruction, at -30 ({'order': -30.0, 'dodge': -30.0, 'instr': -30.0})
+19:37:10 PASS list 21d: 869 inputs, the hands 861, the brain 691; the dodge columns kept ([806, 813])
+19:37:10 PASS the instruction's 48 columns and the dodge's 7 at zero in the encoder
+19:37:10 PASS the head's part 'ins' at zero, its share 0
+19:37:10 PASS the env module duel_env_ffa21d
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 7.82e-14, the brain's input layer 1.42e-13, the head's 8.88e-15, the weapon part's 2.22e-15, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\w_anchor_16a.pt.20d.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 79 columns (2 cut), the weapon part's 45; the dodge columns at zero, the token 'dodge' last, shut
+
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\w_anchor_16a.pt.21d.pt: list 21d (869 inputs; the brain the first 691, the hands the first 861, the tail 8); 48 new columns at zero weights with design statistics; the token 'instr' last, its first layer zero, shut; moved: the rule fade's 4; the head's obs_cols (0 at or past 813); the head's wobs_cols (0 at or past 813)
+
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\w_anchor_16a.pt: the head's input widened by 102 columns at zero; the scorer's layers of the learner's shapes (88,460 weights, the last layers at zero, share 0: a league seat is under no instruction)
+
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 7.82e-14, the brain's input layer 1.42e-13, the head's 0.00e+00, the weapon part's 0.00e+00, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\w_anchor_b12d.pt.20d.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 0 columns (0 cut), the weapon part's 0; the dodge columns at zero, the token 'dodge' last, shut
+
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\w_anchor_b12d.pt.21d.pt: list 21d (869 inputs; the brain the first 691, the hands the first 861, the tail 8); 48 new columns at zero weights with design statistics; the token 'instr' last, its first layer zero, shut; moved: the rule fade's 4
+
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 8.53e-14, the brain's input layer 1.28e-13, the head's 1.24e-14, the weapon part's 2.22e-15, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\w_snap_0001.pt.20d.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 79 columns (2 cut), the weapon part's 45; the dodge columns at zero, the token 'dodge' last, shut
+
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\w_snap_0001.pt.21d.pt: list 21d (869 inputs; the brain the first 691, the hands the first 861, the tail 8); 48 new columns at zero weights with design statistics; the token 'instr' last, its first layer zero, shut; moved: the rule fade's 4; the head's obs_cols (0 at or past 813); the head's wobs_cols (0 at or past 813)
+
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21a_t\w_snap_0001.pt: the head's input widened by 102 columns at zero; the scorer's layers of the learner's shapes (88,460 weights, the last layers at zero, share 0: a league seat is under no instruction)
+
+19:37:56 PASS three league files converted (two anchors and 1.7a's update 90)
+19:37:56 ALL PASSED

@@ -1,37 +1,26 @@
-"""2.1a's dials (the owner's schedule of 2026-11-12; docs/runs/2.1/2.1a/CARD.md), on the clock of updates done, straight lines, each held
-after its end. From 1.8a's save of update 50. 220 updates in three parts:
-  PART I, updates 0 to 60 (the stem; the mark of 60 kept with its optimizer)
-     DRILL_INS_P     0    -> 0.25   updates 0 to 30      a drill after a game's start (every verb, each with a weapon)
-     DRILL_INS_RATE  0    -> 0.02   updates 0 to 30      drills begun in the middle of a game, a second a seat (about 14% of a seat's time)
-     BRANCH_P        0    -> 0.15   updates 0 to 30      the frozen-moment rounds' share of the self-play matches
-     INS_GATE        -12  -> 0      updates 0 to 30      the instruction's attention token (shut at -30 before)
-     SPEED_PAY       0.125 -> 0     updates 0 to 40      the speed pay in games out
-     the lessons nothing plays from on from update 0; the head taught IN SHADOW on every seat (INS_G 0: the tick readouts of every update)
-  PART II, updates 60 to 160 (marks at 110 and 160)
-     INS_G           0    -> 1      updates 60 to 110    the seat's coin: on = the head's order every 0.2 s, never "none", the weapon named and bound
-     BRANCH_WPN_P    0    -> 0.3    updates 60 to 110    the share of frozen moments at the pattern (weapon-only branches)
-     BRANCH_LONG_P   0    -> 0.2    updates 60 to 110    the share of branches read over 30 s (a spam branch is always read over it)
-     INS_LONG_W      0    -> 0.5    updates 60 to 110    the long window's share of the lesson's target
-     H2_INS_PG       0    -> 1      updates 110 to 160   the game's pay on his own choices, by the win chance alone
-  PART III, updates 160 to 220 (the mark of 220 = the end)
-     SFADE           0    -> 1      updates 160 to 200   the strategy inputs out of the hands; held 200 to 220
-No dial of their own, as update 50 played them for the whole run: the 8-second lock (INTENT_HOLD 8: listed as a dial that does not move, the
-owner sets its schedule), the switch cost (INTENT_SWITCH 0.02), the item rule's lesson (INTENT_TEACH_W 1), "a held weapon is choosable"
-(WEAPON_OWN 0): none of them acts on a seat whose coin is on (the card's audit). Also fixed: H2_PG 0, KEEP_G 0, AIM3 at its end values,
-DMG_REWARD 0.005 and DMG_TAKEN_W 1.0, WIN_ADD 0.33, the item table, COST_FIRE_W 0, the lessons MAP_SENSE_W, APPRAISE_W, KNOWN_W, SPAWN_W, INS_TEACH at 1.
+"""2.1a's dials (the blend, owner 2026-11-13: "freeze decisions; blend 2.0 and 2.1 into one"; docs/runs/2.1/2.1a/CARD.md), on the clock of
+updates done, straight lines, each held after its end. From 1.7a's update 90 on the input list 21d; the head's decisions (his target, the weapon
+key, the keep choice) frozen the whole run (--freeze-choice 1).
+  updates 0 to 30    AIM3_W 0 -> 1, AIM3_SIZE_A 1 -> 0.39, AIM3_SIZE_B 0 -> 0.355, AIM3_LEAD 0 -> 1, AIM3_RELOAD 1 -> 0   AIM3 in (2.0d's)
+                     the lessons nothing plays from on from update 0 (the appraisals, the map sense, the brain's two questions)
+  updates 30 to 75   DODGE_G 0 -> 1                                     the dodge inputs (2.0d's)
+                     BRANCH_P 0 -> 0.15, DRILL_INS_P 0 -> 0.25, DRILL_INS_RATE 0 -> 0.02, INS_GATE -12 -> 0 (-30 before)
+                                                                         the frozen moments, the drills, the instruction's token in the hands
+  updates 75 to 115  BRANCH_WPN_P 0 -> 0.3                              the weapon-only moments (the instruction's weapon scorer)
+  after 115          held to the end (owner, 11-13: "run until noon tomorrow"; the trainer's --minutes)
+INS_G stays 0 the whole run: the head's choice of an instruction is taught in shadow on every seat and plays none (2.2 gives it seats).
+Fixed from the start in live.json (start_live.py): DMG_REWARD 0.005, DMG_TAKEN_W 1.0, RAIL_FAR_PAY 0.1, WIN_ADD 0.33, KEEP_G 1, the order shut
+(CMB_G, PADD, FADD 0, ORD_GATE -30), HABIT_P 0, H2_INS_PG 0, the lessons MAP_SENSE_W, APPRAISE_W, KNOWN_W, SPAWN_W, INS_TEACH at 1, no firing cost.
 The clock is the number of lines in metrics.jsonl. Written to live.json (read between rollouts) after each new update. The clock never holds or
 steps back (owner, 2026-11-04; CLAUDE.md rule 6): every check is logged with its win rate, one under 40% as a MAJOR PROBLEM, and the owner decides.
-Kept with their optimizers: the first saves at or past the marks (keep/policy_u<update>_21a.pt): 60, 110, 160, 220 and every 20 updates between.
-Reported, never held on: at 60 the shadow readouts (settled or not); at 160 the head blanked against not (200 games); megas and reds against
-the control throughout.
-Logged in watch.log each update: the ledger, frags a match-minute, the instruction's records (ins, the tick readouts of played and shadow
-seats, ins_bind, drill_ins, ins_norow, branch, appraise, pay_of), the old head's parts, speed, big weapons owned, his weapon in hand, the
-firing cost, the target-switch cost (its own line: not a firing cost).
-Flagged: the trainer refusing live.json (MAJOR); the dials in live_applied.json not what was written (MAJOR); a check under 40% (MAJOR); any
-firing cost above zero (MAJOR); the old head's credit above 0 (MAJOR); the played seats changing order over 2.5 times a second; a played
-seat's ticks under none above 0; frags a match-minute under 1.5; weapon changes a player-minute over 20; one block of rows over 80% of the
-head's picks; a part of his target scores over 40 (rule 11); the lightning in his hand over half of his time in games (reported, nothing
-acted on). Nothing here stops the run.
+Kept with their optimizers: the first saves at or past the marks 10, 30, 50, 75, 95, 115, 130, 145, 160 (keep/policy_u<update>_21a.pt).
+Logged in watch.log each update: the ledger, frags a match-minute, the dodge gate, the frozen choices' record, the instruction's records
+(ins, the tick readouts of the shadow seats, ins_bind, drill_ins, ins_norow, branch, appraise, pay_of), the keep choice's record, speed, big
+weapons owned, his weapon in hand, the firing cost. Flagged: the trainer refusing live.json (MAJOR); the dials applied not what was written
+(MAJOR); a check under 40% (MAJOR); any firing cost above zero (MAJOR); the dodge token's gate not log(DODGE_G) (MAJOR); the frozen choices
+not frozen (their weights' size moving: MAJOR); frags a match-minute under 1.5; quiet re-decisions over 0.075 for three updates in a row;
+weapon changes a player-minute over 20 (drill seats); one block of rows over 80% of the head's shadow picks; a part of his target scores
+over 40 (rule 11); the lightning in his hand over half of his time in games (reported). Nothing here stops the run.
     python docs/runs/2.1/2.1a/ramp_21a.py <run> [--poll S] [--settle S] [--dir D] [--resume]"""
 import argparse
 import json
@@ -45,26 +34,25 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 DROOT = os.environ.get("QLBOT_ROOT") or ROOT                 # (the repo that has data/)
-DIALS = (("INTENT_HOLD", 0, 1, 8.0, 8.0, 8.0),             # (name, from update, to update, its value there, at the end, before) the lock: a dial
-         #                                                    that does not move until the owner sets its schedule (it acts on no coin-on seat)
-         ("DRILL_INS_P", 0, 30, 0.0, 0.25, 0.0),           # PART I
-         ("DRILL_INS_RATE", 0, 30, 0.0, 0.02, 0.0),
-         ("BRANCH_P", 0, 30, 0.0, 0.15, 0.0),
-         ("INS_GATE", 0, 30, -12.0, 0.0, -30.0),
-         ("SPEED_PAY", 0, 40, 0.125, 0.0, 0.125),
-         ("INS_G", 60, 110, 0.0, 1.0, 0.0),                # PART II
-         ("BRANCH_WPN_P", 60, 110, 0.0, 0.3, 0.0),
-         ("BRANCH_LONG_P", 60, 110, 0.0, 0.2, 0.0),
-         ("INS_LONG_W", 60, 110, 0.0, 0.5, 0.0),
-         ("H2_INS_PG", 110, 160, 0.0, 1.0, 0.0),
-         ("SFADE", 160, 200, 0.0, 1.0, 0.0))               # PART III
-TRIAL = ("DRILL_INS_P", "DRILL_INS_RATE", "BRANCH_P", "BRANCH_WPN_P", "BRANCH_LONG_P", "INS_LONG_W")   # (my proposals; the run's first ten updates are their trial)
+DIALS = (("AIM3_W", 0, 30, 0.0, 1.0, 0.0),                  # (name, from update, to update, its value there, at the end, before) AIM3 (2.0d's)
+         ("AIM3_SIZE_A", 0, 30, 1.0, 0.39, 1.0),
+         ("AIM3_SIZE_B", 0, 30, 0.0, 0.355, 0.0),
+         ("AIM3_LEAD", 0, 30, 0.0, 1.0, 0.0),
+         ("AIM3_RELOAD", 0, 30, 1.0, 0.0, 1.0),
+         ("DODGE_G", 30, 75, 0.0, 1.0, 0.0),               # the dodge inputs (2.0d's)
+         ("BRANCH_P", 30, 75, 0.0, 0.15, 0.0),             # the instruction, silent
+         ("DRILL_INS_P", 30, 75, 0.0, 0.25, 0.0),
+         ("DRILL_INS_RATE", 30, 75, 0.0, 0.02, 0.0),
+         ("INS_GATE", 30, 75, -12.0, 0.0, -30.0),
+         ("BRANCH_WPN_P", 75, 115, 0.0, 0.3, 0.0))         # (owner, 11-13: "run until noon tomorrow ... let an individual segment go longer": 30-75, 75-115)
+TRIAL = ("DRILL_INS_P", "DRILL_INS_RATE", "BRANCH_P", "BRANCH_WPN_P")   # (the run's first updates after 30 are their trial)
 END = max(d[2] for d in DIALS)
-MARKS = (10, 20, 40, 60, 80, 100, 110, 120, 140, 160, 180, 200, 220)
+MARKS = (10, 30, 50, 75, 95, 115, 130, 145, 160)
 SIZE_FLAG = 40.0
 MAJOR = 0.40
 FRAGS_MIN = 1.5
-QUIET_MAX = 0.08
+QUIET_MAX = 0.075                                             # (2.1a: the keep choice's flicker alarm, three updates in a row)
+QUIET_RUN = [0]
 LG_SHARE = 0.5                                               # the lightning in his hand, of his time in games: reported over this (1.8a's update 50: 0.55)
 CHG_MAX = 2.5                                                # changes of order a second on the played seats: reported over this (half of all ticks)
 WPN_CHG = 20.0                                               # weapon changes a player-minute: reported over this (the binding weapon's flicker)
@@ -111,11 +99,12 @@ def main():
 
     def flags():
         seen = {"checks_prev.jsonl": 0, "checks_ref.jsonl": 0}
-        names = {"checks_prev.jsonl": "the start (1.8a's update 50)", "checks_ref.jsonl": "1.8a's end (update 190: the head in 1.3b's form)"}
+        names = {"checks_prev.jsonl": "the control (1.7a's update 90)", "checks_ref.jsonl": "1.8a's end (the long-term control)"}
         if a.resume:
             seen = {f_: len(jl(os.path.join(WD, f_))) for f_ in seen}
         seen_m, base = [len(jl(MET)) if a.resume else 0], []
         seen_st, seen_ap = [None], [None]
+        FZ0 = [None]
         while True:
             for f_, n_ in seen.items():
                 R = jl(os.path.join(WD, f_))
@@ -166,6 +155,24 @@ def main():
                             pt_.get("total_per_player_min")))
                     if (ss_.get("win_part") or 0) > 0.6:
                         log("FLAG update {}: the win part is {} of the pay's size (over 0.6): the judge's noise".format(u_, ss_.get("win_part")))
+                dg_ = m_.get("dodge_gate") or {}                    # (2.0d) the dodge inputs' gate: the columns' and the token's
+                if dg_:
+                    import math as math_
+                    tkg_ = max(-30.0, math_.log(dg_["cols"])) if (dg_.get("cols") or 0) > 0 else -30.0
+                    log("update {}: dodge gate: columns {} token {}".format(u_, dg_.get("cols"), dg_.get("token")))
+                    if abs(float(dg_.get("token", 0.0)) - tkg_) > 1e-3:
+                        log("MAJOR PROBLEM update {}: the dodge token's gate {} is not log(DODGE_G {}) = {:.3f}".format(u_, dg_.get("token"), dg_.get("cols"), tkg_))
+                else:
+                    log("MAJOR PROBLEM update {}: no dodge gate in the metrics (the network has no dodge token?)".format(u_))
+                fz_ = m_.get("frozen_choice")                        # (2.1a, --freeze-choice) the held weights' sizes: they must not move
+                if fz_:
+                    if FZ0[0] is None:
+                        FZ0[0] = dict(fz_)
+                    mv_ = {k2_: (FZ0[0].get(k2_), v2_) for k2_, v2_ in fz_.items() if FZ0[0].get(k2_) is None or abs(float(v2_) - float(FZ0[0][k2_])) > 1e-6}
+                    if mv_:
+                        log("MAJOR PROBLEM update {}: the frozen choices moved: {}".format(u_, mv_))
+                else:
+                    log("MAJOR PROBLEM update {}: no frozen_choice record in the metrics (--freeze-choice off?)".format(u_))
                 fm_ = m_.get("frags_per_match_min")
                 if fm_ is not None:
                     log("update {}: frags a match-minute {}{}".format(u_, fm_, " FLAG: under {} (passivity, the card's alarm)".format(FRAGS_MIN) if fm_ < FRAGS_MIN else ""))
@@ -187,8 +194,10 @@ def main():
                         u_, k_.get("g"), s2_.get("seconds"), s2_.get("readings_a_second"), s2_.get("decided"), s2_.get("redecide"),
                         s2_.get("redecide_contact"), s2_.get("redecide_heard"), s2_.get("redecide_quiet"), s2_.get("redecide_arrived"),
                         pl_.get("s"), pl_.get("hands"), pl_.get("own"), k_.get("kl"), ar_.get("share"), ar_.get("p")))
-                if (s2_.get("redecide_quiet") or 0) > QUIET_MAX:
-                    log("FLAG update {}: the keep choice's quiet re-decisions {} a reading (over {}: 1.7a's slide began there)".format(u_, s2_.get("redecide_quiet"), QUIET_MAX))
+                QUIET_RUN[0] = QUIET_RUN[0] + 1 if (s2_.get("redecide_quiet") or 0) > QUIET_MAX else 0
+                if QUIET_RUN[0] >= 3:
+                    log("FLAG update {}: the keep choice's quiet re-decisions {} a reading, over {} for {} updates in a row (frozen: its inputs moved)".format(
+                        u_, s2_.get("redecide_quiet"), QUIET_MAX, QUIET_RUN[0]))
                 if (k_.get("kl") or 0) > 0.05:
                     log("FLAG update {}: the keep choice's step on the head's term {} (over 0.05)".format(u_, k_.get("kl")))
                 ih_ = (m_.get("v15") or {}).get("in_hand_games") or {}
@@ -227,8 +236,6 @@ def main():
                 if big4_:
                     log("FLAG update {}: one block of rows takes over {} of the head's picks: {}".format(u_, BLOCK_MAX, big4_))
                 h2_ = m_.get("head2") or {}
-                if (h2_.get("credit") or 0) > 0:
-                    log("MAJOR PROBLEM update {}: the old head's target credit is {} (H2_PG stays 0 in 2.1a)".format(u_, h2_.get("credit")))
                 big2_ = {k2_: h2_.get(k2_) for k2_ in ("hands", "raw") if (h2_.get(k2_) or 0) > SIZE_FLAG}
                 if big2_:
                     log("FLAG update {}: a part of his target scores over {}: {}".format(u_, SIZE_FLAG, big2_))
@@ -259,7 +266,7 @@ def main():
         except FileNotFoundError:
             return 0.0
 
-    SAMPLE = os.path.join(DROOT, "data", "sim_runs", "inputs21", "sample_obs.npy")   # (raw rows of list 21's simulator; not there: no health report)
+    SAMPLE = os.path.join(DROOT, "data", "sim_runs", "inputs20d", "sample_obs.npy")  # (the simulator's full rows of 1.7a's update 90: a list-21d network reads its own by name)
 
     def health(name):
         """(CLAUDE.md "Inputs") the input health report of a kept save (tools/run/input_health.py on the standing sample of real play): its
