@@ -1,5 +1,7 @@
 # 2.1a: the clean-up and the head's silent instruction in one run, the head's decisions frozen (the blend)
 
+**STOPPED 2026-11-14 07:21 at update 86 by the owner** (RUNS.md #51: 36.5 / 32.5 / 34.5% against 1.7a u90 at updates 10 / 30 / 50; the instruction never reached its first lesson). `keep/policy_end_21a.pt` (= u80) kept.
+
 **Started from:** 1.7a's update 90 (`data/sim_runs/duel_gru_1_7a/keep/policy_u90_17a.pt` + `opt_u90_17a.pt`).
 
 *Owner, 2026-11-13, after 2.0d was stopped at update 57 (RUNS.md #50; 44 / 45 / 43% against 1.7a u90 at updates 10 / 30 / 50, the keep
