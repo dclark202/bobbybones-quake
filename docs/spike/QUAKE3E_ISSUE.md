@@ -31,7 +31,7 @@ process can drive a bot client slot per-frame on a TDM server, end to end.
 
 ## What the patch does
 
-Branch `botctl-spike` (single commit, off `dwc` tip `8fa5549e`), 7 files:
+Branch `botctl-spike` (single commit, off `dwc` tip `8fa5549e`), 6 files:
 
 - `code/server/botctl.c` (new, ~1000 lines): a listener thread on the Unix
   socket `/tmp/q3e-botctl-<port>.sock` speaking a small binary protocol

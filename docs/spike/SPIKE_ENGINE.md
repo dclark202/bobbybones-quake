@@ -16,7 +16,7 @@ per-frame external driving doesn't work, the port needs a different architecture
 ## Design
 
 - **Engine patch** (Quake3e branch `botctl-spike`, off `dwc` tip `8fa5549e`;
-  7 files, `botctl_enable 0` = stock no-op):
+  6 files, `botctl_enable 0` = stock no-op):
   - `code/server/botctl.c` — UDS listener thread on
     `/tmp/q3e-botctl-<port>.sock`, binary protocol (PING/ADD/REMOVE/TEXT/CMD/
     SNAP/LIST), per-client staged usercmd queue, snapshot serializer.
