@@ -160,7 +160,11 @@ if ck.get("head2") is not None:                              # (its value is the
     assert "head2.plan_in.weight" in head2 and "head2.gate" in head2, "the checkpoint names a strategy head and has no weights for it"
 else:
     assert a.head2_gate < 0, "--head2-gate: this network has no strategy head"
-if head2 and ck.get("passodds") is not None and "passr.l1.weight" in sd:      # (1.7) the brain's pass readout: the order's candidates' odds
+if head2 and (ck.get("head2") or {}).get("keepq") and "head2.keepq.weight" in sd and ck.get("stay") is not None:   # (2.1, sim/stay.py) the stay
+    head2["stay"] = np.array(json.dumps(ck["stay"]["layout"]))     # value the keep choice's quiet layer reads: its layout as text, its weights
+    head2.update({"stay." + k_: np.asarray(v_.detach().cpu().numpy() if hasattr(v_, "detach") else v_, np.float32)   # (the scale among them) under
+                  for k_, v_ in ck["stay"]["model"].items()})                                                         # "stay.<name>"; its Adam stays
+if head2 and ck.get("passodds") is not None and "passr.l1.weight" in sd:     # (1.7) the brain's pass readout: the order's candidates' odds
     head2["passodds"] = np.array(json.dumps(ck["passodds"]))
     head2.update({k: v for k, v in sd.items() if k.startswith("passr.")})
 insx = {}                                                    # (2.1) the head's choice of an instruction: the scorer (inside the head: head2.ins_* of

@@ -313,6 +313,11 @@ LIVE_RANGE["SPAWN_W"] = (0.0, 100.0)
 LIVE_TRAINER = LIVE_TRAINER + ("BRANCH_LONG_P", "INS_LONG_W")       # (2.1, --branch-long) the share of a rollout's branches read over the long
 LIVE_RANGE["BRANCH_LONG_P"] = (0.0, 1.0)                     # window; the long window's share of the lesson's target
 LIVE_RANGE["INS_LONG_W"] = (0.0, 1.0)
+LIVE_TRAINER = LIVE_TRAINER + ("KEEPQ_G", "KEEP_TEACH", "STAY_W", "BRANCH_ZONE_P")   # (2.1, owner 11-14: the lock's replacement) the share of
+LIVE_RANGE["KEEPQ_G"] = (0.0, 1.0)                           # his quiet seconds the keep choice's quiet layer decides (with KEEP_ZONE=1; the
+LIVE_RANGE["KEEP_TEACH"] = (0.0, 100.0)                      # rest: the lock rule); the weight of the keep choice's lesson toward the stay
+LIVE_RANGE["STAY_W"] = (0.0, 100.0)                          # value's sign (both layers, all run); a factor on the stay value's own lesson
+LIVE_RANGE["BRANCH_ZONE_P"] = (0.0, 1.0)                     # (0 stops it); the share of the keep forks' moments taken in contact or arrived
 LIVE_TRAINER = LIVE_TRAINER + ("BRANCH_WPN_P",)              # (2.1, --branch-wpn-p; the owner's pattern: rockets or the rail to break him down, the
 LIVE_RANGE["BRANCH_WPN_P"] = (0.0, 1.0)                      # lightning gun to finish) the share of a rollout's frozen moments taken just after a chunk
 #   hit or a pain sound, or at a fight's start with both stacks high, whose branches keep one row and differ only in the weapon
@@ -1151,6 +1156,25 @@ def main():
     ap.add_argument("--keep-g", type=float, default=-1.0, help="(1.4c, a network with the keep choice: sim/head2.py, tools/keep_init.py) the share of his "
                                                                "readings it decides at the start (live KEEP_G; -1: the file's own); the rest the lock rule. "
                                                                "Each league network plays at the share in its own file (none: 0)")
+    ap.add_argument("--keepq-g", type=float, default=-1.0, help="(2.1, a network with the keep choice's quiet layer: tools/keep_init.py add --quiet 1) "
+                                                                 "the share of his quiet seconds (KEEP_ZONE=1: neither in contact nor arrived) its quiet layer "
+                                                                 "decides, of the keep choice's (live KEEPQ_G; -1: the file's own); the rest the lock rule")
+    ap.add_argument("--stay", type=float, default=0.0, help="(2.1, sim/stay.py) the stay value: keeping his target beats a new draw by this much, taught "
+                                                            "from the keep forks (--branch-keep); its rate's factor (live STAY_W; 0 stops the lesson). "
+                                                            "0 = off (a checkpoint that has one keeps it, unread)")
+    ap.add_argument("--stay-lr", type=float, default=5e-4, help="... its own Adam's rate at weight 1")
+    ap.add_argument("--stay-hid", type=int, default=128, help="... its hidden layers")
+    ap.add_argument("--keep-teach", type=float, default=0.0, help="(2.1) the keep choice's lesson toward the stay value's sign: at every keep reading of "
+                    "his seats (whoever decided it), both layers (the zone layer in contact and arrived, the quiet layer in quiet) are taught "
+                    "p(re-decide) = sigmoid(-stay value / its scale), a cross-entropy on its own layers only (the head's state, the hands' memory "
+                    "and the stay value detached). Its weight (live KEEP_TEACH). All run: what holds the choice against the drift. 0 = off")
+    ap.add_argument("--branch-keep", type=int, default=0, help="(2.1, build 3) 1: the frozen moments are KEEP AGAINST A NEW DRAW (sim/branch.py "
+                    "start_keep): two branches a moment, his held target forced in one, a target drawn from his own scores in the other; the "
+                    "stay value's lesson (--stay) and <run>/stay_forks.jsonl (M1's data). 0: the branches as before")
+    ap.add_argument("--branch-keep-long", default="quiet", help="... the kinds of moment read over the long window (comma: quiet, contact, "
+                    "arrived; with --branch-long 1); the others over --branch-win")
+    ap.add_argument("--branch-zone-p", type=float, default=0.5, help="... the share of the keep forks' moments taken among the seats in contact or "
+                    "arrived (live BRANCH_ZONE_P); quiet moments are read over the long window (--branch-long-secs), the others over --branch-win")
     ap.add_argument("--head2-wpg", type=float, default=-1.0, help="(1.5a, part B; --head2) the share of the weapon key's credit moved from the hands' "
                                                                   "advantage to the head's own (its own clipped term, the head's advantage, on the frames "
                                                                   "his hand read the key): the main term keeps 1 - c of the key's gradient, the head's term "
@@ -1983,6 +2007,7 @@ def main():
     H2_CK = None                                             # (--head2, v0.4.3) the strategy head's layout: comes with the network
     WV_CK = None                                             # (--win-value, v0.4.3) the shadow win value: its layout and weights
     MS_CK = APR_CK = None                                    # (2.1, --map-sense, --appraise) top-level entries too, never in "model"
+    STAY_CK = None                                           # (2.1, --stay) the same
     INS_CK = KN_CK = SPW_CK = None
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
@@ -2010,6 +2035,7 @@ def main():
         H2_CK = ck0_.get("head2") if any(k_.startswith("head2.") for k_ in ck0_["model"]) else None
         WV_CK = ck0_.get("win_value")                        # (--win-value) a top-level entry, never in "model"
         MS_CK, APR_CK = ck0_.get("map_sense"), ck0_.get("appraise")    # (2.1) the same
+        STAY_CK = ck0_.get("stay")                           # (2.1, --stay) the stay value: the same
         INS_CK = ck0_.get("ins")                             # (2.1, --ins) the instruction's scorer: the same
         KN_CK, SPW_CK = ck0_.get("known"), ck0_.get("spawn")  # (2.1, --known-odds, --spawn-odds) the brain's two new readouts: the same
         del ck0_
@@ -2942,7 +2968,7 @@ def main():
         """(--head2) the strategy head in a group of its own after all the others: an optimizer saved without it loads into the
         groups before it"""
         if H2 and not H2_GROUP[0]:
-            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "winp.", "wsc.", "ok_", "op_", "fsc.", "ins_"))],
+            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "keepq.", "winp.", "wsc.", "ok_", "op_", "fsc.", "ins_"))],
                                  "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})     # (1.4c: the keep choice in its own; 1.5a: the weapon part too)
             GROUP_NAMES.append("h2")
             H2_GROUP[0] = True
@@ -2956,6 +2982,16 @@ def main():
             opt.add_param_group({"params": list(pol.head2.keep.parameters()), "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
             GROUP_NAMES.append("keep")
             KEEP_GROUP[0] = True
+    KQ = KEEP and head2_.has_keepq(pol.head2)               # (2.1) the keep choice's quiet layer (tools/keep_init.py add --quiet 1)
+    KQ_GROUP = [False]
+    assert not KQ or (bool(getattr(E_, "KEEP_ZONE", False)) and bool(getattr(E_, "KEEP_SIG", False))),         "the keep choice's quiet layer: with the simulator's KEEP_ZONE=1 and KEEP_SIG=1 (it decides in quiet only, on the change signals)"
+
+    def keepq_group():
+        """(2.1) the quiet layer in a group of its own after every other, at the head's rate"""
+        if KQ and not KQ_GROUP[0]:
+            opt.add_param_group({"params": list(pol.head2.keepq.parameters()), "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})
+            GROUP_NAMES.append("keepq")
+            KQ_GROUP[0] = True
     CMB = H2 and head2_.has_cmb(pol.head2)                   # (1.7) the combat order (a file from tools/cmb_init.py)
     FIRE = H2 and head2_.has_fire(pol.head2)                 # (1.7) the fire push
     assert not CMB or (KEEP and bool(getattr(E_, "COMBAT", False))), "the combat order: with the keep choice and COMBAT=1 (its column rides on the keep's)"
@@ -3026,6 +3062,7 @@ def main():
                                wpn=wpn_group, cmb=cmb_group)
                     fn_["pass"] = pass_group
                     fn_["ins"] = ins_group
+                    fn_["keepq"] = keepq_group
                     for nm_ in names_:
                         fn_[nm_]()
                     assert GROUP_NAMES == list(names_), "the optimizer's groups {} are not the save's {}".format(GROUP_NAMES, list(names_))
@@ -3203,6 +3240,7 @@ def main():
     WV_ST = [None]                                           # (the per-seat stream, made at the first rollout)
     import mapsense as mapsense_                             # (2.1) the map sense (sim/mapsense.py), the appraisals (sim/appraise.py), the
     import appraise as appraise_                             # frozen-moment rounds (sim/branch.py): none of them a part of `pol`
+    import stay as stay_                                     # (2.1, --stay) the stay value (sim/stay.py): not a part of `pol` either
     import branch as branch_
     MS_ON, APR_ON = a.map_sense > 0, a.appraise > 0
     BR_ON = a.branch > 0 or a.branch_p > 0
@@ -3257,6 +3295,33 @@ def main():
                   "from the checkpoint" if APR_CK is not None else "new (its last layer at zero)", a.appraise, a.appraise_lr,
                   "" if BR_ON else " (--branch is off: it gets none)"), flush=True)
     APR_GEN = torch.Generator().manual_seed(4064)
+    STAY = STAY_OPT = STAY_L = None                          # (2.1, --stay) the stay value (sim/stay.py): its own module and Adam
+    STAY_ON = a.stay > 0
+    if STAY_ON:
+        assert BEL and H2 and KEEP and BR_ON and a.branch_keep, "--stay: with --belief, --head2, the keep choice and --branch-keep (its lesson: the keep forks)"
+        STAY_L = STAY_CK["layout"] if STAY_CK is not None else stay_.layout(bel=int(BEL_L["hid"]), mem=H, head=int(H2L["size"]), kx=head2_.KEEP_F,
+                                                                        ksig=head2_.KSIG, hid=a.stay_hid)
+        assert int(STAY_L["bel"]) == int(BEL_L["hid"]) and int(STAY_L["mem"]) == H and int(STAY_L["head"]) == int(H2L["size"]), "--stay: its widths do not fit the network"
+        assert bool(getattr(E_, "KEEP_SIG", False)), "--stay reads the target's change signals: the simulator's KEEP_SIG=1"
+        STAY = stay_.make_module(STAY_L).to(dev)
+        if STAY_CK is not None:
+            STAY.load_state_dict(STAY_CK["model"])
+        STAY_OPT = torch.optim.Adam(STAY.parameters(), lr=a.stay_lr)
+        if STAY_CK is not None and STAY_CK.get("opt") is not None:
+            STAY_OPT.load_state_dict(STAY_CK["opt"])
+        print("stay value (2.1): {} + {} + {} numbers -> {} -> {} -> 1 (keeping beats a new draw by, the head's units; scale {:.4g}, {} labels seen); {}; "
+              "lesson {} (rate {} x weight; live STAY_W) from the keep forks".format(
+                  STAY_L["sit"], STAY_L["kx"], STAY_L["ksig"], STAY_L["hid"], STAY_L["hid"], float(STAY.scale), int(float(STAY.seen)),
+                  "from the checkpoint" if STAY_CK is not None else "new (its last layer at zero)", a.stay, a.stay_lr), flush=True)
+    STAY_GEN = torch.Generator().manual_seed(4072)
+    STAY_ACT = [None]                                        # (the rollout's own copy of the stay value)
+    KT_ON = a.keep_teach > 0 or STAY_ON                      # (2.1) the keep choice's lesson toward the stay value's sign (live KEEP_TEACH)
+    STAY_LIVE = [1.0]                                        # (live STAY_W)
+    KT_LIVE = [max(0.0, float(a.keep_teach))]                # (live KEEP_TEACH)
+    BR_ZP = [min(1.0, max(0.0, float(a.branch_zone_p)))]     # (live BRANCH_ZONE_P)
+    STAY_LONG, STAY_SEEN = [], [0]                           # (the keep forks read over the long window: across rollouts)
+    BR_KEEP = bool(a.branch_keep) and BR_ON
+    assert not BR_KEEP or (KEEP and H2), "--branch-keep: a network with the keep choice"
     APR_LIVE = [1.0]                                         # (live APPRAISE_W)
     BR_P = [min(1.0, max(0.0, float(a.branch_p)))]           # (live BRANCH_P)
     BR_RNG = np.random.default_rng(4065)                     # (the frozen moments' own stream: which matches, which candidates)
@@ -3422,6 +3487,7 @@ def main():
     cmb_group()                                              # (1.7) ... then the combat order's and the fire push's
     pass_group()                                             # (1.7) ... then the brain's pass readout's
     ins_group()                                              # (2.1) ... then the instruction's scorer's (inside the head)
+    keepq_group()                                            # (2.1) ... then the keep choice's quiet layer's
     if WPN:
         print("weapon part (1.5a): the head's scores (wsc on its state, {} choices) added x wadd {:g} to the weapon key's; its {} inputs by winp; "
               "|wsc| {:.4g} |winp| {:.4g}".format(HAND_D, float(pol.head2.wadd), int(H2L["widths"].get("wobs", 0)),
@@ -3682,6 +3748,8 @@ def main():
                            else ({"map_sense": MS_CK} if MS_CK is not None else {})),         # (2.1, --map-sense: never in "model")
                         **({"appraise": dict(layout=APR_L, model={k_: v_.detach().cpu() for k_, v_ in APR.state_dict().items()})} if APR is not None
                            else ({"appraise": APR_CK} if APR_CK is not None else {})),        # (2.1, --appraise: never in "model")
+                        **({"stay": dict(layout=STAY_L, model={k_: v_.detach().cpu() for k_, v_ in STAY.state_dict().items()}, opt=STAY_OPT.state_dict())}
+                           if STAY is not None else ({"stay": STAY_CK} if STAY_CK is not None else {})),   # (2.1, --stay: never in "model"; its Adam with it)
                         **({"ins": dict(INS_CK or {}, seen=int(INS_SEEN[0]), warm=int(a.ins_warm), none_row=int(INS_NONE), fill=dict(INS_FILL))}
                            if INS else ({"ins": INS_CK} if INS_CK is not None else {})),   # (2.1, --ins: what is not a weight: the branches
                         #                                      seen, the warm-up, the row "none", the filled columns; the scorer is in "model": head2.ins_*)
@@ -3877,6 +3945,7 @@ def main():
     H2_G, H2_LAST, H2_T0 = [0.0], [None], 0.0
     H2_M, H2_CW, SEEK_W = [0.0], [1.0], [1.0]                # (b1.4a) the mix, a factor on the copy lesson, a factor on the way pay (all live)
     KEEP_GV = [0.0]                                          # (1.4c) the keep choice's share (live KEEP_G)
+    KEEPQ_GV = [0.0]                                         # (2.1) its quiet layer's share of his quiet seconds (live KEEPQ_G)
     CMB_GV, FADD_V = [0.0], [0.0]                            # (1.7) the combat order's share (live CMB_G), the fire push's add (live FADD)
     PADD_V = [0.0]                                           # (1.7) the pointer's adds on the targets and the way (live PADD)
     HB_ACC = [None]                                          # (1.5a, part C) the last rollout's habit counts: [kind, league frames / his frags / its frags]
@@ -3899,6 +3968,14 @@ def main():
                     pol.head2.keep_g.fill_(min(1.0, float(a.keep_g)))
             KEEP_GV[0] = float(pol.head2.keep_g)
             print("keep choice: share {:.4f} of his readings not forced (the rest: the lock rule, INTENT_HOLD)".format(KEEP_GV[0]), flush=True)
+        if KQ:                                               # (2.1) the quiet layer's share: the file's own unless set; live KEEPQ_G
+            with torch.no_grad():
+                if a.keepq_g >= 0:
+                    pol.head2.keepq_g.fill_(min(1.0, float(a.keepq_g)))
+            KEEPQ_GV[0] = float(pol.head2.keepq_g)
+            print("keep choice (2.1, KEEP_ZONE): the zone layer in contact and arrived; in quiet its quiet layer at share {:.4f} of the keep "
+                  "choice's seconds (the rest: the lock rule); its weights {} bias {:.3f}".format(
+                      KEEPQ_GV[0], [round(float(x_), 3) for x_ in pol.head2.keepq.weight[0]], float(pol.head2.keepq.bias)), flush=True)
         if CMB:                                              # (1.7) the combat order's share: the file's own unless set; live CMB_G
             with torch.no_grad():
                 if a.cmb_g >= 0:
@@ -4262,6 +4339,9 @@ def main():
                     MS_LIVE[0] = max(0.0, float(lt_.get("MAP_SENSE_W", MS_LIVE[0])))   # (2.1, --map-sense: a factor on its lesson; 0 stops it)
                     MS_LIVE[1] = max(0.0, float(lt_.get("MAP_SENSE_PULL", MS_LIVE[1])))  # ... the corrections' pull toward zero
                     APR_LIVE[0] = max(0.0, float(lt_.get("APPRAISE_W", APR_LIVE[0])))  # (2.1, --appraise: a factor on its lesson; 0 stops it)
+                    STAY_LIVE[0] = max(0.0, float(lt_.get("STAY_W", STAY_LIVE[0])))    # (2.1, --stay: a factor on its lesson; 0 stops it)
+                    KT_LIVE[0] = max(0.0, float(lt_.get("KEEP_TEACH", KT_LIVE[0])))    # (2.1, --keep-teach: the keep choice's lesson's weight)
+                    BR_ZP[0] = min(1.0, max(0.0, float(lt_.get("BRANCH_ZONE_P", BR_ZP[0]))))   # (2.1, --branch-keep: the zone moments' share)
                     KN_LIVE[0] = max(0.0, float(lt_.get("KNOWN_W", KN_LIVE[0])))       # (2.1, --known-odds: a factor on its lesson; 0 stops it)
                     SPW_LIVE[0] = max(0.0, float(lt_.get("SPAWN_W", SPW_LIVE[0])))     # (2.1, --spawn-odds: the same)
                     BR_P[0] = min(1.0, max(0.0, float(lt_.get("BRANCH_P", BR_P[0]))))  # (2.1, --branch: the share of destinations; 0: none)
@@ -4314,6 +4394,11 @@ def main():
                         CMB_GV[0] = min(1.0, max(0.0, float(lt_["CMB_G"])))
                     if "FADD" in lt_ and FIRE:                                         # (1.7) the fire push's add, from the next rollout
                         FADD_V[0] = max(0.0, float(lt_["FADD"]))
+                    if "KEEPQ_G" in lt_:                                               # (2.1) the quiet layer's share, from the next rollout
+                        if KQ:
+                            KEEPQ_GV[0] = min(1.0, max(0.0, float(lt_["KEEPQ_G"])))
+                        else:
+                            print("live: KEEPQ_G ignored (the network has no quiet layer)", flush=True)
                     if "KEEP_G" in lt_:                                                # (1.4c) the keep choice's share, from the next rollout
                         if KEEP:
                             KEEP_GV[0] = min(1.0, max(0.0, float(lt_["KEEP_G"])))
@@ -4365,6 +4450,10 @@ def main():
                                   **({"SPACE_W": SPR_LIVE[0]} if SPR_ON else {}),
                                   **({"MAP_SENSE_W": MS_LIVE[0], "MAP_SENSE_PULL": MS_LIVE[1]} if MS_ON else {}),
                                   **({"APPRAISE_W": APR_LIVE[0]} if APR_ON else {}),
+                                  **({"STAY_W": STAY_LIVE[0]} if STAY_ON else {}),
+                                  **({"KEEP_TEACH": KT_LIVE[0]} if KEEP else {}),
+                                  **({"BRANCH_ZONE_P": BR_ZP[0]} if BR_KEEP else {}),
+                                  **({"KEEPQ_G": KEEPQ_GV[0]} if KQ else {}),
                                   **({"KNOWN_W": KN_LIVE[0]} if KN_ON else {}),
                                   **({"SPAWN_W": SPW_LIVE[0]} if SPW_ON else {}),
                                   **({"BRANCH_P": BR_P[0], "BRANCH_WPN_P": BR_WP[0]} if BR_ON else {}),
@@ -4412,6 +4501,8 @@ def main():
                 pol.head2.mix.fill_(H2_M[0])                             # (b1.4a) the mix of this rollout: played and learnt at it
                 if KEEP:
                     pol.head2.keep_g.fill_(KEEP_GV[0])                   # (1.4c) the keep choice's share of this rollout (the file's too)
+                if KQ:
+                    pol.head2.keepq_g.fill_(KEEPQ_GV[0])                 # (2.1) the quiet layer's share of this rollout (the file's too)
                 if INS:
                     pol.head2.ins_g.fill_(INS_LIVE["g"])                 # (2.1) the instruction's share of this rollout (the file's too)
                 if CMB:
@@ -4528,6 +4619,9 @@ def main():
         if INS:                                                          # (2.1, --ins) the rollout's own copies: it plays while these learn
             import copy as copy_
             INS_ACT[1] = copy_.deepcopy(APR).eval()
+        if STAY is not None:                                             # (2.1, --stay) the rollout's own copy of the stay value: it plays while
+            import copy as copy_s                                        # the stay value learns (--overlap)
+            STAY_ACT[0] = copy_s.deepcopy(STAY).eval()
         if BR_ON:                                                        # (2.1, sim/branch.py) this rollout's frozen moments: the simulators copy
             BR_META.pop(upd - 2, None)                                   # them, the trainer's rows of the same seats follow (the memories too)
             if BR_P[0] > 0:
@@ -4562,11 +4656,38 @@ def main():
                 if wb_ is not None and BR_WP[0] > 0 and len(CARRY["ix"]) > 12:   # (the pattern's moments: one row, each weapon)
                     wpk_ = dict(wpn_p=BR_WP[0], pat=np.asarray(CARRY["ix"][12]), wok=np.asarray(CARRY["ix"][2], bool),
                                 cur=np.asarray(CARRY["ix"][5], np.int64), none_row=INS_NONE)
-                bm_ = branch_.start(BR_RNG, pipes[:a.workers], w_off, [(w_n[w_] // 2) // w_group[w_] for w_ in range(a.workers)], 2, BR_P[0],
-                                    a.branch_top, a.branch_rand, a.branch_hold, sc_, el_, ok_, wbest=wb_, long_p=BR_LP[0], quiet_p=(a.branch_quiet_p if (INS_Q and wb_ is not None) else None),
-                                    busy=branch_.long_busy(BR_LONG, list(BR_META.values()), N) if BR_LG else None,
-                                    long_rows=(np.nonzero(np.asarray(E_.INS_ROW_VERB) == int(E_.INS_SPAM))[0] if (BR_LG and a.branch_long_spam > 0 and wb_ is not None) else None),
-                                    **wpk_)
+                if BR_KEEP:                                              # (2.1, build 3) keep against a new draw: his held target, a target drawn
+                    kfc_ = CARRY.get("kf")                               # from his own scores of the moment over the targets his map has
+                    kfn_ = kfc_.float().cpu().numpy() if kfc_ is not None else np.zeros((N, head2_.KEEP_FEAT), np.float32)
+                    cur_k = kfn_[:, 2].astype(np.int64)
+                    kind_k = np.where(kfn_[:, 1] > 0.5, 1, np.where(kfn_[:, 3] > 0.5, 2, 0))
+                    okk_ = ok_.copy()
+                    okk_[:, 0] = False                                   # (never "none")
+                    z_ = np.where(okk_, sc_, -np.inf)
+                    z_ = z_ - z_.max(1, keepdims=True)
+                    pr_k = np.where(okk_, np.exp(z_), 0.0)
+                    pr_k = pr_k / np.maximum(pr_k.sum(1, keepdims=True), 1e-12)
+                    cc_ = np.clip(cur_k, 0, nt_ - 1)
+                    elk_ = el_ & (cur_k > 0) & (cur_k < nt_) & okk_[np.arange(N), cc_]
+                    bm_ = branch_.start_keep(BR_RNG, pipes[:a.workers], w_off, [(w_n[w_] // 2) // w_group[w_] for w_ in range(a.workers)], 2, BR_P[0],
+                                             a.branch_hold, cur_k, pr_k, elk_, kind_k, zone_p=BR_ZP[0],
+                                             busy=branch_.long_busy(BR_LONG + STAY_LONG, list(BR_META.values()), N),
+                                             long_kinds=tuple(("quiet", "contact", "arrived").index(k_) for k_ in a.branch_keep_long.split(",") if k_) if BR_LG else ())
+                    if bm_ is not None:                                  # what the stay value reads at each moment (its situation, the keep
+                        i_ = torch.as_tensor(bm_["src"], device=dev)     # choice's own numbers, the change signals)
+                        with torch.no_grad():
+                            lph_k = torch.log_softmax(torch.from_numpy(np.where(ok_, sc_, -1e9)).float(), -1)[torch.from_numpy(bm_["src"]), torch.from_numpy(cc_[bm_["src"]])]
+                            kfi_ = kfc_[i_].float()
+                            bm_["SX"] = stay_.x_of(CARRY["bs"].s[i_], CARRY["h"][i_, :H], H2S.s[i_], head2_.keep_x(kfi_, lph_k.to(dev)),
+                                                   kfi_[:, head2_.KEEP_FEAT:head2_.KEEP_FEAT + head2_.KSIG]).cpu() if STAY is not None else None
+                        bm_["age"] = kfn_[bm_["src"], 0]
+                        bm_["p_same"] = pr_k[bm_["src"], cc_[bm_["src"]]]
+                else:
+                    bm_ = branch_.start(BR_RNG, pipes[:a.workers], w_off, [(w_n[w_] // 2) // w_group[w_] for w_ in range(a.workers)], 2, BR_P[0],
+                                        a.branch_top, a.branch_rand, a.branch_hold, sc_, el_, ok_, wbest=wb_, long_p=BR_LP[0], quiet_p=(a.branch_quiet_p if (INS_Q and wb_ is not None) else None),
+                                        busy=branch_.long_busy(BR_LONG, list(BR_META.values()), N) if BR_LG else None,
+                                        long_rows=(np.nonzero(np.asarray(E_.INS_ROW_VERB) == int(E_.INS_SPAM))[0] if (BR_LG and a.branch_long_spam > 0 and wb_ is not None) else None),
+                                        **wpk_)
                 if bm_ is not None:
                     if bm_.get("ins"):                                   # each forced row's numbers; each source's own instruction, if the head's
                         sr_ = torch.as_tensor(bm_["src"], device=dev)
@@ -4949,6 +5070,8 @@ def main():
                 H2O.refresh(onet.head2)
             h2s0 = H2S.snap()
         b_kd = b_kx = b_kl = b_lpk = None
+        b_kqd = b_kqx = b_kql = b_lpq = b_sv = b_km = SV_ = None         # (2.1) the quiet layer as played; the stay value; the keep readings
+        KQG_PLAY = 0.0
         b_ok = b_oc = b_ol = b_oon = b_lpo = b_x = b_c = b_p = b_xm = OX_ = None
         b_wl = torch.zeros(T, N, device=dev) if (CMB and W_ON) else None    # (1.7, WAYS) the readings his way counted at (the simulators')
         b_lpwy = torch.zeros(T, N, device=dev) if (CMB and W_ON) else None  # ... and its log-probability as played
@@ -4959,8 +5082,17 @@ def main():
             b_lpk = torch.zeros(T, N, device=dev)
             KF_ = C.get("kf")
             if KF_ is None:
-                KF_ = torch.zeros(N, head2_.KEEP_FEAT, device=dev)
+                KF_ = torch.zeros(N, head2_.KEEP_FEAT + (head2_.KSIG if getattr(E_, "KEEP_SIG", False) else 0), device=dev)
             KG_PLAY = float(net.head2.keep_g)                            # (each network's share, read once a rollout)
+            if STAY is not None or KQ or KT_ON:                          # (2.1) the stay value at each keep reading (held between), what the
+                b_sv = torch.zeros(T, N, device=dev)                     # keep choice's lesson reads; the keep readings of his seats with a
+                b_km = torch.zeros(T, N, device=dev)                     # target (whoever decided them: the lesson is silent)
+            if KQ:                                                       # (2.1) the quiet layer: drawn (1 re-decide), what it read, the readings
+                b_kqd = torch.zeros(T, N, device=dev)                    # it decided (keep_live 2, his seats), its log-probability as played
+                b_kqx = torch.zeros(T, N, head2_.KEEPQ_F, device=dev)
+                b_kql = torch.zeros(T, N, device=dev)
+                b_lpq = torch.zeros(T, N, device=dev)
+                KQG_PLAY = float(net.head2.keepq_g)
             if CMB:                                                      # (1.7) the combat order: its kind and candidate drawn, where it was asked
                 JK_ = T // BK                                            # and counted (his seats), where a new kind took the target's place, its
                 b_ok = torch.zeros(T, N, dtype=torch.long, device=dev)   # log-probability as played; the candidates of each keep reading (on the
@@ -5152,6 +5284,20 @@ def main():
                             oq_ = (torch.rand(N, generator=KGEN, device=dev) < CG_PLAY) & ov_
                         b_ok[t], b_oc[t] = ko_, co_
                         kcol_ = kcol_ + (8 * ko_ + 32 * co_ + 256) * oq_.long()
+                    if b_sv is not None:                                 # (2.1) the stay value, made at each keep reading (the head's tick's state)
+                        if t % BK == 0 or SV_ is None:
+                            SV_ = (stay_.value(STAY_ACT[0], stay_.x_of(BS_.s, h[:, :H], s_keep_, kx_, KF_[:, head2_.KEEP_FEAT:head2_.KEEP_FEAT + head2_.KSIG]))
+                                   if STAY_ACT[0] is not None else torch.zeros(N, device=dev))
+                        b_sv[t] = SV_
+                        b_km[t] = float(t % BK == 0) * (KF_[:, 2] > 0).float() * ((~snap_players).float() if has_snaps else 1.0)
+                    if KQ:                                               # (2.1) the quiet layer's draw and its coin: + 512 d + 1024 c (the simulator
+                        kqx_ = head2_.keepq_x(KF_, SV_)                  # takes the coin at his lock readings, the draw at a quiet keep reading)
+                        kqz_ = head2_.keepq_logit(net.head2, kqx_)
+                        kqd_ = (torch.rand(N, generator=KGEN, device=dev) < torch.sigmoid(kqz_)).float()
+                        kqc_ = torch.rand(N, generator=KGEN, device=dev) < KQG_PLAY
+                        kcol_ = kcol_ + 512 * kqd_.long() + 1024 * kqc_.long()
+                        b_kqd[t], b_kqx[t] = kqd_, kqx_
+                        b_lpq[t] = torch.nn.functional.logsigmoid(torch.where(kqd_ > 0, kqz_, -kqz_))
                     b_kd[t], b_kx[t] = kd_, kx_
                     b_lpk[t] = torch.nn.functional.logsigmoid(torch.where(kd_ > 0, kz_, -kz_))
                     if has_snaps:
@@ -5382,9 +5528,15 @@ def main():
             b_live[t] = live
             if KEEP:                                                     # (1.4c) the readings his keep choice decided (his seats), the numbers
                 kl_ = torch.from_numpy(np.concatenate([r[22] if r[22] is not None else np.zeros(len(r[2]), bool) for r in res]).astype(np.float32)).to(dev)
+                kl2_ = (kl_ > 1.5).float()                               # (2.1, KEEP_ZONE) 2: the quiet layer decided; 1: the zone layer (1.7a's)
+                kl_ = (kl_ > 0.5).float() - kl2_
                 b_kl[t] = kl_ * (~snap_players).float() if has_snaps else kl_    # it reads on the next frame
+                if KQ:
+                    b_kql[t] = kl2_ * (~snap_players).float() if has_snaps else kl2_
                 if KEEP_FREEZE:                                          # (1.7c, --keep-freeze) the keep choice plays, learns nothing
                     b_kl[t] = b_kl[t] * 0.0
+                    if KQ:
+                        b_kql[t] = b_kql[t] * 0.0
                 KF_ = torch.from_numpy(np.concatenate([r[23] for r in res]).astype(np.float32)).to(dev)
                 if CMB:                                                  # (1.7) the readings the combat order counted at (his seats), where a new
                     oc_ = torch.from_numpy(np.concatenate([r[24] if r[24] is not None else np.zeros(len(r[2]), np.int8) for r in res]).astype(np.float32)).to(dev)
@@ -5422,6 +5574,8 @@ def main():
                 wd=b_wd[t] if b_wd is not None else None)))
             if KEEP:                                                     # (1.4c) the keep choice joins what he did, where it decided
                 b_logp[t] = b_logp[t] + b_lpk[t] * b_kl[t]
+                if KQ:                                                   # (2.1) the quiet layer too, where it decided
+                    b_logp[t] = b_logp[t] + b_lpq[t] * b_kql[t]
             if CMB:                                                      # (1.7) the combat order too, where it was asked and counted
                 b_logp[t] = b_logp[t] + b_lpo[t] * b_ol[t]
                 if b_wl is not None:                                     # (WAYS) and the way's log-probability as played, for the head's term
@@ -5547,6 +5701,7 @@ def main():
                     SL_RS0=SL_RS0, SL_PEND=SL_PEND, SL_S0=SL_S0, sl_secs=sl_secs, RP=RP_, trk=trk_stats_end(TS_, TK_), bs0=bs0,
                     b_btok=b_btok, btg=btg_, rfg=rfg_, sfg=float(C.get("sfg", 0.0)), bfg=bfg_, b_u2=b_u2, b_vh=b_vh, b_lpi=b_lpi, h2s0=h2s0, b_lpw=b_lpw, b_lpf=b_lpf, hb_acc=hb_acc,
                     b_kd=b_kd, b_kx=b_kx, b_kl=b_kl, b_lpk=b_lpk, kg=KG_PLAY if KEEP else 0.0,
+                    b_kqd=b_kqd, b_kqx=b_kqx, b_kql=b_kql, b_lpq=b_lpq, b_sv=b_sv, b_km=b_km, kqg=KQG_PLAY,
                     b_ok=b_ok, b_oc=b_oc, b_ol=b_ol, b_oon=b_oon, b_lpo=b_lpo, b_x=b_x, b_c=b_c, b_p=b_p, b_xm=b_xm, b_wl=b_wl, b_lpwy=b_lpwy,
                     cg=CG_PLAY if CMB else 0.0,
                     h2g=float(net.head2.gate) if H2 else 0.0, h2m=float(net.head2.mix) if H2 else 0.0, wv=WV_ST[0].take() if WV_ON else None,
@@ -5655,6 +5810,8 @@ def main():
         FOD_B = R.pop("fod_b", None)                                     # (--fight-odds) this rollout's labelled states
         SPR_B = R.pop("spr_b", None)                                     # (--space-read) this rollout's states and their truth
         MS_B = BR_O = None
+        STAY_B, BR_REC_K = [], None                                      # (2.1, --branch-keep) this update's keep forks' labels, their record
+        KT_ACC = None                                                    # (2.1) the keep lesson's sums (made in the head's learning)
         if MS_ON and R.get("ms_bel") is not None and R.get("b_aux") is not None:    # (2.1, --map-sense) this rollout's samples: the seeds
             MS_B = mapsense_.batch(MS_L, MS_TAB, SEAT_MAP, R["b_aux"], R["b_done"], R.pop("ms_bel"), BR_IX)   # at the belief, the truth's next 5 s
         KN_B = SPW_B = None
@@ -5676,12 +5833,51 @@ def main():
                 BR_O = (bm_, branch_.outcomes(bm_["dst"], **kw_), branch_.outcomes(bm_["src"], **kw_))
                 if HW_INS and R.get("b_vw") is not None:
                     bm_["rank"] = branch_.rank_differs(bm_["dst_src"], BR_O[1]["dv"], od_f["dv"])
+                if bm_.get("keep"):                                      # (2.1) keep against a new draw: the labels of the moments read over the
+                    od_k = BR_O[1]                                       # short window now (in contact, arrived); the quiet ones begin their
+                    S_k, a_k, ds_k = len(bm_["src"]), bm_["arm"], bm_["dst_src"]    # long window below
+                    held_k = np.zeros((S_k, 2), bool)
+                    held_k[ds_k, a_k] = od_k["got"] == bm_["tg"]         # (the forced target his at the hold's end: the simulator may refuse one)
+                    lm_k = np.zeros(S_k, bool)
+                    lm_k[ds_k[np.asarray(bm_["long"], bool)]] = True
+                    bm_["held"], bm_["lm"] = held_k, lm_k
+                    lab_k, dk_k, dr_k = branch_.keep_labels(bm_, od_k["dv"])
+                    rw_k = ~lm_k & held_k.all(1) & np.isfinite(lab_k)
+                    STAY_B.append(dict(X=(bm_["SX"][torch.from_numpy(np.nonzero(rw_k)[0])] if bm_.get("SX") is not None else None), y=lab_k[rw_k],
+                                       kind=bm_["kind"][rw_k], age=bm_["age"][rw_k], same=(bm_["keep_tg"] == bm_["new_tg"])[rw_k],
+                                       p_same=bm_["p_same"][rw_k], win=int(a.branch_win)))
+                    if a.branch_log:
+                        branch_.log_keep(os.path.join(out, "stay_forks.jsonl"), update, bm_, dk_k, dr_k, a.branch_win, rw_k, SEAT_MAP, bm_["age"], held_k)
+                    BR_REC_K = branch_.record(bm_, od_k, BR_O[2], int(rw_k.sum()), bm_.get("secs", 0.0), BR_P[0])
+                    BR_REC_K.update(keep=dict(moments=int(S_k), held_both=int(held_k.all(1).sum()), short=int(rw_k.sum()), long_begun=int(lm_k.sum()),
+                                              by_kind={k_: int((bm_["kind"] == j_).sum()) for j_, k_ in enumerate(("quiet", "contact", "arrived"))},
+                                              same_draw=round(float(np.mean(bm_["keep_tg"] == bm_["new_tg"])), 4)))
+                    BR_O = None
             if BR_LG and R.get("b_vh") is not None:                      # (2.1) the long window: this rollout's frames added to the branches
                 hr_l = R.get("b_hr") if R.get("b_hr") is not None else R["b_rew"]     # being read; this rollout's own long branches begin
                 vh_l = R["b_vh"]
                 if HW_INS and R.get("b_vw") is not None:                 # (--ins-pay-win) the long window from the win chance alone
                     hr_l, vh_l = R["b_hw"], R["b_vw"]
-                if bm_ is not None and bm_.get("long") is not None and bool(bm_["long"].any()) and APR_ON and bm_.get("S") is not None:
+                if bm_ is not None and bm_.get("keep") and bool(np.asarray(bm_["long"]).any()) and bm_.get("held") is not None:
+                    lg_k = np.asarray(bm_["long"], bool)                 # (2.1) the keep forks' quiet moments: both arms read over the long window
+                    r_k = branch_.long_new(bm_["dst"][lg_k], None, None, vh_l)
+                    r_k["keep"] = dict(update=int(update), ds=bm_["dst_src"][lg_k], arm=bm_["arm"][lg_k], S=len(bm_["src"]),
+                                       SX=bm_.get("SX"), kind=bm_["kind"], age=bm_["age"], held=bm_["held"], lm=bm_["lm"],
+                                       meta=dict(src=bm_["src"], kind=bm_["kind"], keep_tg=bm_["keep_tg"], new_tg=bm_["new_tg"]),
+                                       same=(bm_["keep_tg"] == bm_["new_tg"]), p_same=bm_["p_same"])
+                    STAY_LONG.append(r_k)
+                if STAY_LONG:                                            # (2.1) the keep forks' long window: this rollout's frames added; the
+                    STAY_LONG[:], fin_k = branch_.long_step(STAY_LONG, hr_l, R["b_done"], vh_l, float(H2L["gamma"]), BR_LWIN, T)   # finished ones
+                    for r_k in fin_k:                                    # paired into labels (keep less redraw)
+                        K_ = r_k["keep"]
+                        mk_ = dict(K_["meta"], arm=K_["arm"], dst_src=K_["ds"])
+                        lab_k, dk_k, dr_k = branch_.keep_labels(mk_, r_k["dv"])
+                        rw_k = K_["lm"] & K_["held"].all(1) & np.isfinite(lab_k)
+                        STAY_B.append(dict(X=(K_["SX"][torch.from_numpy(np.nonzero(rw_k)[0])] if K_["SX"] is not None else None), y=lab_k[rw_k],
+                                           kind=K_["kind"][rw_k], age=K_["age"][rw_k], same=K_["same"][rw_k], p_same=K_["p_same"][rw_k], win=int(BR_LWIN)))
+                        if a.branch_log:
+                            branch_.log_keep(os.path.join(out, "stay_forks.jsonl"), K_["update"], mk_, dk_k, dr_k, BR_LWIN, rw_k, SEAT_MAP, K_["age"], K_["held"])
+                if bm_ is not None and not bm_.get("keep") and bm_.get("long") is not None and bool(bm_["long"].any()) and APR_ON and bm_.get("S") is not None:
                     lg_ = bm_["long"]
                     if bm_.get("ins"):                                   # (its rows as the appraisals learn them: with the weapon, with none
                         hs_l = bm_["src_long"] & np.asarray(bm_["src_has"], bool)       # named, and a source under the head's own instruction)
@@ -5706,6 +5902,8 @@ def main():
             H2M_R = float(R.get("h2m") or 0.0)                           # (b1.4a) ... and the mix
         B_KD, B_KX, B_KL, B_LPK = (R.get(k_) for k_ in ("b_kd", "b_kx", "b_kl", "b_lpk"))      # (1.4c) the keep choice as played
         KG_R = float(R.get("kg") or 0.0)                                 # ... at the share it was played at
+        B_KQD, B_KQX, B_KQL, B_LPQ, B_SV, B_KM = (R.get(k_) for k_ in ("b_kqd", "b_kqx", "b_kql", "b_lpq", "b_sv", "b_km"))   # (2.1) the quiet
+        KQG_R = float(R.get("kqg") or 0.0)                               # layer as played, the stay value, the keep readings; its share
         B_LPW = R.get("b_lpw")                                           # (1.5a, B) the weapon key as played
         B_LPF = R.get("b_lpf")                                           # (1.7, S6) the fire key as played
         HB_ACC[0] = R.get("hb_acc")                                      # (1.5a, C) the habits' counts
@@ -5715,6 +5913,8 @@ def main():
         B_LT = b_live * (1.0 - B_OON) if CMB else b_live                # (1.7) the target's readings: not where a new kind took its place
         if KEEP:                                                         # ... his target's and its log-probability together, where each
             B_LPI = B_LPI * B_LT + B_LPK * B_KL                          # counted: the head's term's reference (the target where it was
+            if KQ:                                                       # (2.1) ... the quiet layer where it decided
+                B_LPI = B_LPI + B_LPQ * B_KQL
             #                                                              read, the keep choice where it decided)
         if CMB:                                                          # (1.7) ... the combat order where it was asked and counted, the way
             B_LPI = B_LPI + B_LPO * B_OL                                 # where it was read (WAYS)
@@ -5774,7 +5974,35 @@ def main():
         def keep_lp(ho2, hs, chunk):
             """(1.4c) the keep choice's log-probability of what he drew [T, n], counted where it decided (zeros elsewhere); its logit"""
             kz = head2_.keep_logit(pol.head2, ho2["s_held"], hs, B_KX[:, chunk])
-            return torch.nn.functional.logsigmoid(torch.where(B_KD[:, chunk] > 0, kz, -kz)) * B_KL[:, chunk], kz
+            lk = torch.nn.functional.logsigmoid(torch.where(B_KD[:, chunk] > 0, kz, -kz)) * B_KL[:, chunk]
+            if KQ:                                                       # (2.1) the quiet layer's where it decided (its own numbers as played)
+                kq = head2_.keepq_logit(pol.head2, B_KQX[:, chunk])
+                lk = lk + torch.nn.functional.logsigmoid(torch.where(B_KQD[:, chunk] > 0, kq, -kq)) * B_KQL[:, chunk]
+            return lk, kz
+
+        def keep_teach(ho2, hs, chunk):
+            """(2.1, --keep-teach) the keep choice's lesson toward the stay value's sign at every keep reading of his seats with a target
+            (whoever decided it): p(re-decide) = sigmoid(-stay / scale); the zone layer where he was in contact or arrived, the quiet
+            layer in quiet. Its own layers only: the head's state, the hands' memory and the stay value detached. -> (the loss summed
+            over the readings, readings, [zone n, zone p, zone target, quiet n, quiet p, quiet target] sums for the record)"""
+            km = B_KM[:, chunk] * b_w[:, chunk]
+            sc = float(STAY.scale) if STAY is not None else 1.0
+            tgt = torch.sigmoid(-B_SV[:, chunk].float() / max(sc, 1e-6)).detach()
+            zone = ((B_KX[:, chunk, 1] + B_KX[:, chunk, 3]) > 0).float()
+            kz = head2_.keep_logit(pol.head2, ho2["s_held"].detach(), hs.detach(), B_KX[:, chunk])
+            bz = torch.nn.functional.binary_cross_entropy_with_logits(kz.float(), tgt, reduction="none")
+            loss = (bz * km * zone).sum()
+            with torch.no_grad():
+                acc = [(km * zone).sum(), (torch.sigmoid(kz) * km * zone).sum(), (tgt * km * zone).sum()]
+            if KQ:
+                kq = head2_.keepq_logit(pol.head2, B_KQX[:, chunk])     # (its numbers as played: the stay value of that reading among them)
+                bq = torch.nn.functional.binary_cross_entropy_with_logits(kq.float(), tgt, reduction="none")
+                loss = loss + (bq * km * (1.0 - zone)).sum()
+                with torch.no_grad():
+                    acc += [(km * (1.0 - zone)).sum(), (torch.sigmoid(kq) * km * (1.0 - zone)).sum(), (tgt * km * (1.0 - zone)).sum()]
+            else:
+                acc += [km.new_zeros(()), km.new_zeros(()), km.new_zeros(())]
+            return loss, km.sum(), torch.stack([x_.double() for x_ in acc])
 
         def keep_parts(ho2, hs, chunk):
             """(1.7a, the record) its logit's parts [T, n]: from the head's state, from the hands' memory, from its own numbers
@@ -6358,6 +6586,7 @@ def main():
             CMB_ACC = torch.zeros(2 + 2 * head2_.CMB_NK + 4 + 3, dtype=torch.float64, device=dev)   # (1.7) the combat order: asked, p(an order),
             #                                                              drawn by kind, p by kind; the brain's pass lesson: loss sum, questions, Brier,
             #                                                              base rate; the fire key on the head's clock: frames, its term, clipped
+            KT_ACC = torch.zeros(8, dtype=torch.float64, device=dev)    # (2.1) the keep lesson: zone n, p, target; quiet n, p, target; loss; readings
             KEEP_ACC = torch.zeros(16, dtype=torch.float64, device=dev)  # (1.4c) the keep choice: its readings (his, weighted), p(re-decide) there,
             SUM_ACC = torch.zeros(12, dtype=torch.float64, device=dev)   # (1.7) the two new sums' parts: [frames, hands, head's, cosine sum, its frames]
             #                                                                  for the fire key (0..4), the targets with the pointer's add (5..9; 10, 11:
@@ -6469,7 +6698,7 @@ def main():
                                 KEEP_ACC[11] += (pk_ * km_ * ar_).sum().double()
                                 KEEP_ACC[12] += (km_ * ar_ * B_KD[:, chunk]).sum().double()
                             else:
-                                KEEP_ACC[5] += ((B_LPK[:, chunk] * B_KL[:, chunk] - lk_) * km_).sum().double()
+                                KEEP_ACC[5] += ((B_LPK[:, chunk] * B_KL[:, chunk] + (B_LPQ[:, chunk] * B_KQL[:, chunk] if KQ else 0.0) - lk_) * km_).sum().double()
                                 KEEP_ACC[6] += km_.sum().double()
                 hme = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk], ent=True,
                                  lt=B_LT[:, chunk] if CMB else None, wl=B_WL[:, chunk] if B_WL is not None else None,
@@ -6715,6 +6944,15 @@ def main():
                         loss = loss + a.head2_v * vlw_
                         if epoch == 0:
                             HW_ACC += torch.stack([vlw_.detach() * wsum, wsum]).double()
+                    if KEEP and KT_ON and B_KM is not None:              # (2.1, --keep-teach) the keep choice toward the stay value's sign: a
+                        lkt_, nkt_, akt_ = keep_teach(ho2_, hs_all, chunk)    # cross-entropy a reading, its own layers only (live KEEP_TEACH)
+                        if KT_LIVE[0] > 0:
+                            loss = loss + KT_LIVE[0] * lkt_ / nkt_.clamp(min=1.0)
+                        if epoch == 0:
+                            with torch.no_grad():
+                                KT_ACC[:6] += akt_.to(KT_ACC.device)
+                                KT_ACC[6] += lkt_.detach().double()
+                                KT_ACC[7] += nkt_.double()
                     if INS_K is not None:                                # (2.1, inside the head) the instruction's choice at this piece's kept
                         ip_ = ins_piece(ho2_, chunk, ADV_W if ADV_W is not None else ADV_H)   # readings, from the re-run head: its terms in the head's loss (--ins-pay-win: the advantage of the win chance alone)
                         if ip_ is not None:
@@ -7322,7 +7560,7 @@ def main():
                 SPR_REC = dict(w=round(float(sw_), 4), frames=0)
             SPR_REC["secs"] = round(time.time() - t_spr, 3)
             SPR_B = None
-        MS_REC = APR_REC = BR_REC = None
+        MS_REC = APR_REC = BR_REC = STAY_REC = None
         if MS_ON:                                                        # (2.1, --map-sense) scored on each sample before it is learnt from
             t_ms = time.time()
             mw_ = MS_LIVE[0] * float(a.map_sense)
@@ -7372,7 +7610,33 @@ def main():
                     branch_.log_rows(os.path.join(out, "branches.jsonl"), update, bm_, od_, os_, SEAT_MAP)
                 BR_REC = branch_.record(bm_, od_, os_, n_br_, bm_.get("secs", 0.0), BR_P[0])
             else:
-                BR_REC = branch_.record(None, None, None, 0, 0.0, BR_P[0])
+                BR_REC = BR_REC_K if BR_REC_K is not None else branch_.record(None, None, None, 0, 0.0, BR_P[0])
+            if STAY_ON or BR_KEEP:                                       # (2.1, --stay) the keep forks' labels of this update: scored before the
+                t_st = time.time()                                       # lesson (held out), then taught; M1's numbers by kind each update
+                y_ = np.concatenate([b_["y"] for b_ in STAY_B]) if STAY_B else np.zeros(0)
+                kd_s = np.concatenate([b_["kind"] for b_ in STAY_B]).astype(np.int64) if STAY_B else np.zeros(0, np.int64)
+                sm_s = np.concatenate([b_["same"] for b_ in STAY_B]).astype(bool) if STAY_B else np.zeros(0, bool)
+                STAY_SEEN[0] += int(len(y_))
+                STAY_REC = dict(labels=int(len(y_)), seen=int(STAY_SEEN[0]), reading_long=int(sum(len(r_["seats"]) for r_ in STAY_LONG)) // 2,
+                                w=round(STAY_LIVE[0], 4), zone_p=round(BR_ZP[0], 4))
+                Xs_ = [b_["X"] for b_ in STAY_B if b_["X"] is not None and len(b_["X"])]
+                X_s = torch.cat(Xs_).to(dev) if (STAY_ON and Xs_) else None
+                p0_s = stay_.value(STAY, X_s).float().cpu().numpy() if X_s is not None else None     # (before the lesson: held out)
+                for j_, k_ in enumerate(("quiet", "contact", "arrived")):
+                    m_ = (kd_s == j_) & ~sm_s                            # (a draw of another target: how often it beats keeping, by how much)
+                    r_ = dict(n=int((kd_s == j_).sum()), differ=int(m_.sum()),
+                              new_wins=(round(float((y_[m_] < 0).mean()), 4) if m_.any() else None),
+                              mean=(round(float(y_[m_].mean()), 5) if m_.any() else None), sd=(round(float(y_[m_].std()), 5) if m_.sum() > 1 else None))
+                    if p0_s is not None and len(p0_s) == len(y_) and m_.any():
+                        big_ = m_ & (np.abs(y_) > 0.1 * float(STAY.scale))
+                        r_["sign_right"] = round(float((np.sign(p0_s[big_]) == np.sign(y_[big_])).mean()), 4) if big_.any() else None
+                        r_["n_sign"] = int(big_.sum())
+                    STAY_REC[k_] = r_
+                if X_s is not None and len(X_s) == len(y_):
+                    STAY_REC["held_out"] = stay_.learn(STAY, STAY_OPT, X_s, torch.from_numpy(y_).float().to(dev), gen=STAY_GEN,
+                                                       rate=STAY_LIVE[0] * float(a.stay))
+                    STAY_REC["scale"] = round(float(STAY.scale), 5)
+                STAY_REC["secs"] = round(time.time() - t_st, 3)
             n_lg_ = 0
             if BR_LG and APR_ON and BR_LFIN:                             # (2.1) the long branches played out: the appraisals' seventh output alone
                 for r_l in BR_LFIN:
@@ -7816,6 +8080,22 @@ def main():
                                   after_sound=int(kp_[15]), after_sound_changed=q_(kp_[14], kp_[15])),
                     pull=dict(s=q_(ka_[7], ka_[0]), hands=q_(ka_[8], ka_[0]), own=q_(ka_[9], ka_[0])),    # (1.7a) the logit's parts, mean size where it decided
                     arrived=dict(share=q_(ka_[10], ka_[0]), p=q_(ka_[11], ka_[10]), redecide_drawn=q_(ka_[12], ka_[10])))
+                k3_ = np.atleast_1d(agg.get("keep3", np.zeros(10))).astype(np.float64)    # (2.1, KEEP_ZONE) by zone: the guards' numbers
+                if len(k3_) == 10 and (k3_[0] + k3_[3]) > 0:
+                    rec["keep"]["zone"] = dict(
+                        share_zone=q_(k3_[0], k3_[0] + k3_[3]), zone_readings=int(k3_[1]), zone_changed=q_(k3_[2], k3_[1]),
+                        quiet_readings=int(k3_[4]), quiet_changed=q_(k3_[5], k3_[4]),     # (the guard: quiet re-decisions a reading)
+                        quiet_changes_a_player_min=round(float(k3_[5]) / max(1e-9, float(k3_[3]) * E_.DT / 60.0), 3),
+                        zone_layer=dict(decided=int(k3_[6]), redecide=q_(k3_[7], k3_[6])),
+                        quiet_layer=dict(decided=int(k3_[8]), redecide=q_(k3_[9], k3_[8])))
+                if KQ:                                                   # (2.1) the quiet layer: its share, its weights (the stay value, the age, the signals)
+                    rec["keep"]["quiet"] = dict(g=round(KQG_R, 5), g_next=round(KEEPQ_GV[0], 5),
+                                                w=[round(float(x_), 4) for x_ in pol.head2.keepq.weight[0]], bias=round(float(pol.head2.keepq.bias), 4))
+                if KT_ON and KT_ACC is not None:                         # (2.1) the keep lesson toward the stay value's sign: by layer, p(re-decide)
+                    kt_ = KT_ACC.cpu().numpy()                           # against the target, the loss a reading
+                    rec["keep"]["teach"] = dict(w=round(KT_LIVE[0], 4), readings=int(kt_[7]), loss=q_(kt_[6], kt_[7], 5),
+                                                zone=dict(n=int(kt_[0]), p=q_(kt_[1], kt_[0]), target=q_(kt_[2], kt_[0])),
+                                                quiet=dict(n=int(kt_[3]), p=q_(kt_[4], kt_[3]), target=q_(kt_[5], kt_[3])))
                 k2_ = np.atleast_1d(agg.get("keep2", np.zeros(14))).astype(np.float64)    # (1.7a) the simulators' count of its seconds and readings
                 if len(k2_) == 14 and k2_[0] > 0:
                     rec["keep"]["sim2"] = dict(
@@ -7937,6 +8217,8 @@ def main():
             rec["appraise"] = APR_REC
         if BR_REC is not None:                                           # (2.1, --branch) this rollout's frozen moments
             rec["branch"] = BR_REC
+        if STAY_REC is not None:                                         # (2.1, --stay / --branch-keep) the keep forks: M1's numbers, the stay value's skill
+            rec["stay"] = STAY_REC
         if H2:                                                           # (2.1) which pay each network learns from, every update
             rec["pay_of"] = dict(
                 hands="the pay table + the win part as today",

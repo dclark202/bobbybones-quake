@@ -246,7 +246,20 @@ class Policy:
         self.k_r = None                                      # (1.7a) the seats whose head ticked on the frame before (their keep reading)
         if self.h2 is not None and self.h2.get("keep") and "keep.weight" in self.h2W:
             self.keep_g = float(np.asarray(self.h2W.get("keep_g", 0.0)))
-        self.cmb_g = 0.0                                     # (1.7) the combat order's share of his readings (the file's head2.cmb_g)
+        self.kq_on, self.keepq_g = False, 0.0                # (2.1) the keep choice's quiet layer (sim/head2.py keepq) and its share (the file's
+        self.stayL = self.stayW = None                       # head2.keepq_g); the stay value (sim/stay.py, the checkpoint's "stay"; none: 0)
+        self.sv = None                                       # ... made at each keep reading of a seat, held between (the trainer's SV_)
+        if self.h2 is not None and self.h2.get("keep") and self.h2.get("keepq") and "keep.weight" in self.h2W:
+            import head2 as head2_
+            if head2_.np_has_keepq(self.h2W):
+                self.kq_on = True
+                self.keepq_g = float(np.asarray(self.h2W.get("keepq_g", 0.0)))
+                if ck.get("stay") is not None:
+                    self.stayL = dict(ck["stay"]["layout"])
+                    self.stayW = {k_: np.asarray(v_.cpu().numpy() if hasattr(v_, "cpu") else v_, np.float32) for k_, v_ in ck["stay"]["model"].items()}
+                    assert int(self.stayL["mem"]) == self.H and int(self.stayL["head"]) == int(self.h2["size"]) \
+                        and int(self.stayL["kx"]) == head2_.KEEP_F and int(self.stayL["ksig"]) == head2_.KSIG, "stay: its widths do not fit the network"
+        self.cmb_g = 0.0                                    # (1.7) the combat order's share of his readings (the file's head2.cmb_g)
         if self.o_at is not None:
             self.cmb_g = float(np.asarray(self.h2W.get("cmb_g", 0.0)))
             self.h2_live = self.h2_live or self.cmb_g > 0    # (the order reads the head's state: it is stepped)
@@ -476,6 +489,41 @@ class Policy:
         assert self.h2 is not None and self.h2.get("keep"), "set_keep_g: this network has no keep choice"
         self.keep_g = float(g)
 
+    def set_keepq_g(self, g):
+        """(2.1, the checks) the quiet layer's share (its coin), in place of the file's (a network without it: refused). It acts only in
+        the keep choice's seconds (keep_g) and with KEEP_ZONE in the simulator; at 0 the column is 1.7a's (no 512 / 1024 bits, no draw)"""
+        assert self.kq_on, "set_keepq_g: this network has no quiet layer"
+        self.keepq_g = float(g)
+
+    def keepq_play(self, kf, kx, h2s, hfast, bst, kcol):
+        """(2.1) the quiet layer's draw and its coin added to the keep column kcol (in place): + 512 d + 1024 c, after 1.7a's and the order's
+        draws on the keep choice's stream (the trainer's rollout: "the quiet layer's draw and its coin"). The stay value is made at the
+        seats' keep readings (k_r: the frame after their head's tick) from the brain's state, the hands' memory after the frame, the head's
+        state this frame's outputs read, keep_x and the change signals, and held between (0 before a seat's first reading; 0 without the
+        file's "stay"). Shared with plugins/netpass.py by the same sums (head2.np_keepq_*, stay.np_value)"""
+        import head2 as head2_
+        kf = np.asarray(kf, np.float32)
+        K0, K1 = head2_.KEEP_FEAT, head2_.KEEP_FEAT + head2_.KSIG
+        assert kf.shape[1] >= K1, "the quiet layer reads the change signals: a simulator with KEEP_SIG=1 (keep_feat {} columns, {} given)".format(K1, kf.shape[1])
+        n_ = len(kf)
+        if self.sv is None or len(self.sv) != n_:
+            self.sv = np.zeros(n_, np.float32)
+        if self.stayW is not None and bst is not None and self.k_r is not None and len(self.k_r) == n_ and self.k_r.any():
+            import stay as stay_
+            r_ = np.nonzero(self.k_r)[0]
+            S_ = int(self.h2["size"])
+            x_ = np.concatenate([np.asarray(bst[0].s, np.float32)[r_], np.asarray(hfast, np.float32)[r_, :self.H], np.asarray(h2s, np.float32)[r_, :S_],
+                                 np.asarray(kx, np.float32)[r_], kf[r_, K0:K1]], 1)
+            self.sv = self.sv.copy()
+            self.sv[r_] = stay_.np_value(self.stayW, x_)
+        kqx_ = head2_.np_keepq_x(kf, self.sv)
+        kqz_ = head2_.np_keepq_logit(self.h2W, kqx_)
+        kqd_ = (self.krng.random(n_) < sig(kqz_)).astype(np.int64)
+        kqc_ = (self.krng.random(n_) < self.keepq_g).astype(np.int64)
+        self.last_keepq = (kqx_, kqz_, kqd_, kqc_)
+        kcol += 512 * kqd_ + 1024 * kqc_
+        return kcol
+
     def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
         --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, KEEP_FEAT]: (1.4c,
@@ -621,6 +669,8 @@ class Policy:
                     co_ = np.where(ko_ == k_, pick_(ps_[:, c0_:c0_ + m_]), co_)
                 oq_ = ((self.krng.random(len(r_)) < self.cmb_g) & okc_).astype(np.int64)
                 kcol[r_] = kcol[r_] + (8 * ko_ + 32 * co_ + 256) * oq_
+            if self.kq_on and self.keepq_g > 0:              # (2.1) the quiet layer's draw and its coin (at share 0: 1.7a's column, no draw)
+                kcol = self.keepq_play(kf, kx_, h2s, hfast, bst, kcol)
         self.ins_pick = None                                 # (2.1) this frame's picks of an instruction: (rows, c, w, who) or None
         if self.i_at is not None and ix is not None and self.ins_g > 0 and h2s is not None and self.k_r is not None \
                 and len(self.k_r) == len(h2s) and self.k_r.any() and bst is not None:

@@ -178,6 +178,95 @@ def start(rng, pipes, w_off, n_self, G, share, top, rand, hold, scores, elig, ok
     return out
 
 
+def start_keep(rng, pipes, w_off, n_self, G, share, hold, cur, probs, elig, kind, zone_p=0.0, busy=None, long_kinds=(0,)):
+    """(2.1, build 3; the trainer's --branch-keep) before a rollout: the frozen moments KEEP AGAINST A NEW DRAW. Every moment (a source
+    match's even seat) is copied into two other self-play matches: in the first his held target is forced (cur [N]: he keeps it), in
+    the second a target drawn from his own scores of the moment (probs [N, targets], rows over the targets his map has, never "none":
+    what a re-decision gives; it may be the held one). Both play on as he plays after the hold. elig [N] (alive, in a game, a held
+    target), kind [N] each seat's moment: 0 quiet, 1 in contact, 2 arrived. zone_p: the share of the moments taken among the seats in
+    contact or arrived (as far as there are any); the rest drawn among all. long_kinds: the kinds read over the long window (quiet: a
+    trip). -> None or the plan: src [S], dst [2S] (keep, redraw for each moment, in that order), dst_src, tg [2S] (the forced targets),
+    arm [2S] (0 keep, 1 redraw), kind [S], keep_tg [S], new_tg [S], rows_src/rows_dst, long [2S] / src_long [S] (the long window's), keep=True"""
+    assert G == 2, "branch: duels"
+    src, dst, dst_src, tg, arm, rs, rd, kinds = [], [], [], [], [], [], [], []
+    sent = []
+    nt = probs.shape[1]
+    for w, p in enumerate(pipes):
+        o = int(w_off[w])
+        ns = int(n_self[w])
+        el = np.asarray(elig[o:o + G * ns], bool).reshape(ns, G)[:, 0]
+        fr = None
+        if busy is not None:
+            fr = ~np.asarray(busy[o:o + G * ns], bool).reshape(ns, G).any(1)
+            el = el & fr
+        zn = np.asarray(kind[o:o + G * ns]).reshape(ns, G)[:, 0] > 0
+        jobs = []
+        for s, ds in plan(rng, ns, el, share, 2, free=fr, prefer=zn, prefer_p=zone_p, chosen=set()):
+            seat = o + G * s
+            k_ = int(cur[seat])
+            pr_ = np.asarray(probs[seat], np.float64)
+            if k_ <= 0 or pr_.sum() <= 0:
+                continue
+            n_ = int(rng.choice(nt, p=pr_ / pr_.sum()))
+            jobs.append((s, ds, [k_, n_]))
+            for j_, (d, t) in enumerate(zip(ds, (k_, n_))):
+                dst.append(o + G * d)
+                dst_src.append(len(src))
+                tg.append(t)
+                arm.append(j_)
+                for q in range(G):
+                    rs.append(seat + q)
+                    rd.append(o + G * d + q)
+            src.append(seat)
+            kinds.append(int(kind[seat]))
+        if jobs:
+            p.send(("branch", dict(jobs=jobs, hold=int(hold), ins=False)))
+            sent.append(p)
+    for p in sent:
+        p.recv()
+    if not dst:
+        return None
+    out = dict(src=np.array(src, np.int64), dst=np.array(dst, np.int64), dst_src=np.array(dst_src, np.int64), tg=np.array(tg, np.int64),
+               arm=np.array(arm, np.int64), kind=np.array(kinds, np.int64), rows_src=np.array(rs, np.int64), rows_dst=np.array(rd, np.int64),
+               hold=int(hold), ins=False, keep=True)
+    out["keep_tg"] = out["tg"][out["arm"] == 0]
+    out["new_tg"] = out["tg"][out["arm"] == 1]
+    lk = np.isin(out["kind"], np.asarray(long_kinds, np.int64))
+    out["long"] = lk[out["dst_src"]]
+    out["src_long"] = np.zeros(len(src), bool)               # (the source plays on untouched: not read)
+    return out
+
+
+def keep_labels(meta, dv):
+    """(2.1) a keep plan's labels from each destination's dv [2S] (keep and redraw in that order for every moment): keep less redraw
+    [S], each arm's dv [S] (nan where it was not read)"""
+    a = np.asarray(meta["arm"], np.int64)
+    s_ = np.asarray(meta["dst_src"], np.int64)
+    S = len(meta["src"])
+    dk, dr = np.full(S, np.nan), np.full(S, np.nan)
+    dk[s_[a == 0]] = np.asarray(dv, np.float64)[a == 0]
+    dr[s_[a == 1]] = np.asarray(dv, np.float64)[a == 1]
+    return dk - dr, dk, dr
+
+
+def log_keep(path, update, meta, dk, dr, win, rows, seat_map=None, age=None, held=None):
+    """(2.1, M1's data) <run>/stay_forks.jsonl: a line a moment of rows [S] (bool): its kind, his target's age, the kept and the drawn
+    target, whether the draw was the same, both branches' dv and the window (frames) they were read over; held [S, 2]: each forced target
+    was really his at the hold's end (the simulator may refuse one)"""
+    import json as json_
+    kn = ("quiet", "contact", "arrived")
+    with open(path, "a", encoding="utf-8") as f:
+        for j in np.nonzero(np.asarray(rows, bool))[0]:
+            if not (np.isfinite(dk[j]) and np.isfinite(dr[j])):
+                continue
+            f.write(json_.dumps(dict(update=int(update), seat=int(meta["src"][j]), kind=kn[int(meta["kind"][j])],
+                                     map=(str(seat_map[int(meta["src"][j])]) if seat_map is not None else None),
+                                     age=(round(float(age[j]), 2) if age is not None else None),
+                                     keep=int(meta["keep_tg"][j]), new=int(meta["new_tg"][j]), same=bool(meta["keep_tg"][j] == meta["new_tg"][j]),
+                                     dv_keep=round(float(dk[j]), 5), dv_new=round(float(dr[j]), 5), win=int(win),
+                                     held=(None if held is None else [bool(x) for x in held[j]]))) + "\n")
+
+
 # ------------------------------------------------------------------------------------------------------- in the simulator's worker
 
 

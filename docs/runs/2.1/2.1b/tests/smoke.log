@@ -1,0 +1,47 @@
+Traceback (most recent call last):
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\docs\runs\2.1\2.1b\smoke.py", line 148, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\docs\runs\2.1\2.1b\smoke.py", line 70, in main
+    assert len(re.findall(r"--max-updates \d+ ", t)) == 1
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+Traceback (most recent call last):
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\docs\runs\2.1\2.1b\smoke.py", line 148, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\docs\runs\2.1\2.1b\smoke.py", line 70, in main
+    assert len(re.findall(r"--max-updates \d+ ", t)) == 1
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+[lowrun] exit code 1
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\docs\runs\2.1\2.1b\smoke.py", line 70
+    L_ = t.split("
+                 ^
+SyntaxError: unterminated string literal (detected at line 70)
+
+[lowrun] exit code 1
+PASS  keep_init same: share 0 to the bit | ['same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0', 'share 0: PASS (the same to the bit)', 'share 0.5: the coin 0.512 of frames; keep readings 0.122 of frames (the head ticks every few frames)']
+PASS  the trainer ended by itself in 0.2 min
+FAIL  exit 0 | exit 1
+FAIL  three updates in metrics.jsonl | 0
+FAIL  live.json applied | {}
+PASS  the optimizer's state loaded, not cold | ['optimizer: its state loaded from opt.pt (--learn-nosync: 0 step counts moved to the host)']
+FAIL  the saved optimizer's groups include keep and keepq | ['trk', 'bel', 'trz', 'btok', 'ahead', 'h2', 'wpn']
+FAIL  the trainer's keep choice lines (share 0, the quiet layer) | ["strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 973 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 69 + hands 512 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 685,932 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp; the keep choice (1.7a's) and its quiet layer on the stay value and 5 change signals (2.1)"]
+FAIL  the stay value got labels in some update (rec.stay.labels > 0) | {'labels': [], 'held_out': []}
+FAIL  rec.keep.zone recorded
+FAIL  rec.keep.teach recorded
+FAIL  rec.keep shares: KEEP_G 0, KEEPQ_G 0 | []
+FAIL  rec.map_sense recorded
+FAIL  rec.branch recorded (the keep forks) | []
+FAIL  stay_forks.jsonl has lines | 0
+FAIL  no NaN, no traceback in the log | ['Traceback (most recent call last):']
+FAIL  a save was written after the start
+FAIL  the save has a top-level 'stay' entry | ['model', 'obs_mean', 'obs_var', 'obs_count', 'map', 'obs_dim', 'action_dims', 'env', 'arch', 'attn', 'hidden', 'minutes', 'head2', 'legs_unify', 'track', 'track_z', 'ahead', 'control', 'belief', 'btoken', 'rule_fade', 'win_value', 'env_module', 'group', 'groups', 'inputs', 'input_names', 'react_ms', 'acquire_ms', 'no_walk', 'env_vars', 'round_secs', 'arena_secs', 'game_secs', 'game_vars', 'cells', 'cell_dim', 'aux_heads', 'live', 'live_settings']
+PASS  the ramp's pass over the metrics: exit 0, a summary line an update, no crash | (0, '', 0)
+    ramp: 11-14 14:24:36 ramp_21b --once on C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21b_smokec: the flags over its metrics, nothing written to live.json
+FAILED
+
+[lowrun] exit code 1

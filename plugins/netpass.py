@@ -97,7 +97,22 @@ def load(path):
             import passodds as passodds_                     # (numpy at the top: torch inside its torch functions only)
             P["_pass"] = (json.loads(str(P["passodds"])), {k[len("passr."):]: np.asarray(v, np.float32) for k, v in P.items()
                                                            if k.startswith("passr.")}, passodds_.np_forward)
-    P["_ins"] = None                                         # (2.1) the head's choice of an instruction: the scorer, the appraisals it reads,
+        if os.environ.get("NET_KEEP_G", "") != "" and "keep_g" in W2:       # (1.4c, checks and tests) the keep choice's share, in place of the file's
+            W2["keep_g"] = np.array(np.float32(float(os.environ["NET_KEEP_G"])))
+        P["_kq"] = None                                      # (2.1) the keep choice's quiet layer: its share (the file's head2.keepq_g; NET_KEEPQ_G
+        if lay2.get("keep") and lay2.get("keepq") and head2_.np_has_keepq(W2):   # overrides it) and the stay value's (layout, weights) or None
+            if os.environ.get("NET_KEEPQ_G", "") != "":      # (sim/stay.py; the export's "stay" and "stay.<name>"; none: 0)
+                W2["keepq_g"] = np.array(np.float32(float(os.environ["NET_KEEPQ_G"])))
+            st_ = None
+            if "stay" in P:
+                import stay as stay_                         # sim/stay.py: numpy at the top (torch inside make_module alone)
+                stL_ = json.loads(str(P["stay"]))
+                stW_ = {k[len("stay."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("stay.")}
+                assert int(stL_["mem"]) == int(P["whh"].shape[1]) and int(stL_["head"]) == int(lay2["size"]) \
+                    and int(stL_["kx"]) == head2_.KEEP_F and int(stL_["ksig"]) == head2_.KSIG, "stay: its widths do not fit the network"
+                st_ = (stL_, stW_, stay_.np_value)
+            P["_kq"] = dict(stay=st_, sv=None)
+    P["_ins"] = None                                        # (2.1) the head's choice of an instruction: the scorer, the appraisals it reads,
     if "ins" in P and "appraise" in P and P.get("_head2") is not None and P["_head2"][0].get("ins"):    # the brain's readouts written into
         if "/sim" not in sys.path and os.path.isdir("/sim"):                                             # the rows (sim/head2.py np_ins_prep,
             sys.path.insert(0, "/sim")                                                                   # np_ins_read: the checks' own sums)
@@ -347,6 +362,14 @@ def cmb_g(P):
     return float(np.asarray(P["_head2"][1].get("cmb_g", 0.0)))
 
 
+def keepq_g(P):
+    """(2.1) the keep choice's quiet layer's share (its coin) in this file (0: none; sim/head2.py keepq). It acts only in the keep
+    choice's seconds and with KEEP_ZONE in the simulator; the plugin's keep_feat() needs KEEP_SIG's columns then"""
+    if P.get("_kq") is None:
+        return 0.0
+    return float(np.asarray(P["_head2"][1].get("keepq_g", 0.0)))
+
+
 def column_on(P):
     """(1.4c, 1.7) step() gives the keep column (kf= needed): the keep choice or the combat order at a share above 0"""
     return keep_g(P) > 0 or cmb_g(P) > 0
@@ -558,6 +581,28 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
                 co_ = np.where(ko_ == k_, pick_(ps_[:, c0_:c0_ + m_]), co_)
             oq_ = ((P["_krng"].random(len(r_)) < cmb_g(P)) & okc_).astype(np.int64)
             P["_keep"][r_] = P["_keep"][r_] + (8 * ko_ + 32 * co_ + 256) * oq_
+        kqg_ = keepq_g(P)
+        if kqg_ > 0:                                         # (2.1) the quiet layer's draw and its coin: + 512 d + 1024 c, after 1.7a's and the order's
+            KQ_ = P["_kq"]                                   # draws on the keep choice's stream (test_suite.Policy.keepq_play: the same sums). The
+            kfq_ = np.asarray(kf, np.float32)                # stay value made at the seats' keep readings (the brain's state, the hands' memory
+            K0_, K1_ = hm2_.KEEP_FEAT, hm2_.KEEP_FEAT + hm2_.KSIG    # after the frame, the head's state, keep_x, the change signals), held between
+            assert kfq_.shape[1] >= K1_, "the quiet layer reads the change signals: a simulator with KEEP_SIG=1 (keep_feat {} columns, {} given)".format(K1_, kfq_.shape[1])
+            n_ = len(kfq_)
+            if KQ_["sv"] is None or len(KQ_["sv"]) != n_:
+                KQ_["sv"] = np.zeros(n_, np.float32)
+            if KQ_["stay"] is not None and bst is not None and kr_.any():
+                rq_ = np.nonzero(kr_)[0]
+                Sq_ = int(P["_head2"][0]["size"])
+                xq_ = np.concatenate([np.asarray(bst[0].s, np.float32)[rq_], np.asarray(hfast, np.float32)[rq_, :H], np.asarray(h2s, np.float32)[rq_, :Sq_],
+                                      np.asarray(kx_, np.float32)[rq_], kfq_[rq_, K0_:K1_]], 1)
+                KQ_["sv"] = KQ_["sv"].copy()
+                KQ_["sv"][rq_] = KQ_["stay"][2](KQ_["stay"][1], xq_)
+            kqx_ = hm2_.np_keepq_x(kfq_, KQ_["sv"])
+            kqz_ = hm2_.np_keepq_logit(P["_head2"][1], kqx_)
+            kqd_ = (P["_krng"].random(n_) < sig(kqz_)).astype(np.int64)
+            kqc_ = (P["_krng"].random(n_) < kqg_).astype(np.int64)
+            P["_last_keepq"] = (kqx_, kqz_, kqd_, kqc_)
+            P["_keep"] = P["_keep"] + 512 * kqd_ + 1024 * kqc_
     P["_ins_pick"] = None                                    # (2.1) this frame's picks of an instruction: (rows, c, w, who, q) for the
     I_ = P.get("_ins")                                       # plugin's env.instr_pick, or None
     kr1_ = P.get("_k_r")

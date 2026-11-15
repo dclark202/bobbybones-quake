@@ -1,0 +1,37 @@
+PASS  keep_init same: share 0 to the bit | ['same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0', 'share 0: PASS (the same to the bit)', 'share 0.5: the coin 0.512 of frames; keep readings 0.122 of frames (the head ticks every few frames)']
+PASS  the trainer ended by itself in 2.3 min
+PASS  exit 0 | exit 0
+PASS  three updates in metrics.jsonl | 3
+PASS  live.json applied | {'update': 1, 'status': 'applied', 'reason': None, 'time': '2026-11-14 14:25:29'}
+PASS  the optimizer's state loaded, not cold | ['optimizer: its state loaded from opt.pt (--learn-nosync: 0 step counts moved to the host)']
+PASS  the saved optimizer's groups include keep and keepq | ['trk', 'bel', 'trz', 'btok', 'ahead', 'h2', 'wpn', 'keep', 'keepq']
+PASS  the trainer's keep choice lines (share 0, the quiet layer) | ["strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 973 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 69 + hands 512 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 685,932 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp; the keep choice (1.7a's) and its quiet layer on the stay value and 5 change signals (2.1)", "stay value (2.1): 1024 + 7 + 5 numbers -> 128 -> 128 -> 1 (keeping beats a new draw by, the head's units; scale 1, 0 labels seen); new (its last layer at zero); lesson 1.0 (rate 0.0005 x weight; live STAY_W) from the keep forks", "keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.0 (live KEEP_G); its weights: bias 0.000, on its own numbers [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]", 'keep choice: share 0.0000 of his readings not forced (the rest: the lock rule, INTENT_HOLD)']
+PASS  the stay value got labels in some update (rec.stay.labels > 0) | {'labels': [0, 2, 2], 'held_out': [None, {'n': 2, 'n_sign': 2, 'sign': 0.0, 'cor': 0.0, 'mean': -0.56106, 'size': 0.56106, 'scale': 0.56106, 'loss': 0.55156}, {'n': 2, 'n_sign': 2, 'sign': 0.5, 'cor': 1.0, 'mean': 0.18384, 'size': 0.28534, 'scale': 0.55968, 'loss': 0.18568}]}
+PASS  rec.keep.zone recorded | [{'share_zone': 0.5081, 'zone_readings': 82, 'zone_changed': 0.561, 'quiet_readings': 70, 'quiet_changed': 0.0429, 'quiet_changes_a_player_min': 1.787, 'zone_layer': {'decided': 0, 'redecide': 0.0}, 'quiet_layer': {'decided': 0, 'redecide': 0.0}}]
+PASS  rec.keep.teach recorded | [{'w': 1.0, 'readings': 768, 'loss': 0.69315, 'zone': {'n': 371, 'p': 0.5, 'target': 0.5}, 'quiet': {'n': 397, 'p': 0.5, 'target': 0.5}}]
+PASS  rec.keep shares: KEEP_G 0, KEEPQ_G 0 | [(0.0, 0.0), (0.0, 0.0), (0.0, 0.0)]
+PASS  rec.map_sense recorded | [{'w': 1.0, 'pull': 1.0, 'frames': 0, 'secs': 0.0}]
+PASS  rec.branch recorded (the keep forks) | [None, {'moments': 2, 'held_both': 2, 'short': 2, 'long_begun': 0, 'by_kind': {'quiet': 0, 'contact': 2, 'arrived': 0}, 'same_draw': 0.5}, {'moments': 2, 'held_both': 2, 'short': 1, 'long_begun': 1, 'by_kind': {'quiet': 1, 'contact': 1, 'arrived': 0}, 'same_draw': 0.5}]
+PASS  stay_forks.jsonl has lines | 4
+PASS  no NaN, no traceback in the log | []
+PASS  a save was written after the start
+PASS  the save has a top-level 'stay' entry | ['model', 'obs_mean', 'obs_var', 'obs_count', 'map', 'obs_dim', 'action_dims', 'env', 'arch', 'attn', 'hidden', 'minutes', 'head2', 'legs_unify', 'track', 'track_z', 'ahead', 'control', 'belief', 'btoken', 'rule_fade', 'win_value', 'map_sense', 'stay', 'env_module', 'group', 'groups', 'inputs', 'input_names', 'react_ms', 'acquire_ms', 'no_walk', 'env_vars', 'round_secs', 'arena_secs', 'game_secs', 'game_vars', 'cells', 'cell_dim', 'aux_heads', 'live', 'live_settings']
+PASS  the ramp's pass over the metrics: exit 0, a summary line an update, no crash | (0, '', 3)
+    ramp: 11-14 14:27:44 ramp_21b --once on C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_21b_smoked: the flags over its metrics, nothing written to live.json
+    ramp: 11-14 14:27:44 live applied from update 1: {'KEEP_G': 0.0, 'KEEPQ_G': 0.0}
+    ramp: 11-14 14:27:44 update 1: ledger a player-minute: damage dealt 0.9357 taken -1.2096 | frags None deaths -1.1719 | win part -0.1794 (size share 0.5445) | items MH -0.3137 RA 0.0 YA 0.1172 points 0.0 decay 0.0081 | total -2.0004
+    ramp: 11-14 14:27:44 FLAG update 1: frags a match-minute 1.172 under 1.5 (passivity)
+    ramp: 11-14 14:27:44 FLAG update 1: the stay value's labels 0 this update (under 50)
+    ramp: 11-14 14:27:44 update 1: map sense (silent): samples 0 weight 1.0 pull 1.0 | R2 None (shared part alone None) exchange None | corrections mean None max None
+    ramp: 11-14 14:27:44 update 1: shares KEEP_G 0.0 KEEPQ_G 0.0 | quiet re-decisions a reading 0.058 (start None) 2.747 a player-minute | zone changed 0.3214 of 112 | trips 40.72 (start None) reached 0.144 (start None) | stay labels 0 seen 0 held-out sign None cor None | keep lesson w 1.0 zone p 0.5 / 0.5 quiet p 0.5 / 0.5 | sizes zone {'s': 0.0, 'hands': 0.0, 'own': 0.0, 'bias': 0.0} quiet {'w': 0.0, 'bias': 0.0} | forks: moments 0 keep moments None | frags a match-minute 1.172 | 2 flag(s)
+    ramp: 11-14 14:27:44 update 2: ledger a player-minute: damage dealt 1.8336 taken -1.1421 | frags 1.7578 deaths -0.5859 | win part -0.3591 (size share 0.4759) | items MH 0.2502 RA -0.2344 YA -0.3516 points -0.0 decay 0.0105 | total 1.1701
+    ramp: 11-14 14:27:44 FLAG update 2: the stay value's labels 2 this update (under 50)
+    ramp: 11-14 14:27:44 update 2: map sense (silent): samples 0 weight 1.0 pull 1.0 | R2 None (shared part alone None) exchange None | corrections mean None max None
+    ramp: 11-14 14:27:44 update 2: shares KEEP_G 0.0 KEEPQ_G 0.0 | quiet re-decisions a reading 0.0 (start None) 0.0 a player-minute | zone changed 0.3083 of 133 | trips 25.2 (start None) reached 0.244 (start None) | stay labels 2 seen 2 held-out sign 0.0 cor 0.0 | keep lesson w 1.0 zone p 0.5 / 0.5 quiet p 0.5 / 0.5 | sizes zone {'s': 0.0, 'hands': 0.0, 'own': 0.0, 'bias': 0.0} quiet {'w': 0.0, 'bias': 0.0} | forks: moments 2 keep moments 2 | frags a match-minute 2.344 | 1 flag(s)
+    ramp: 11-14 14:27:44 update 3: ledger a player-minute: damage dealt 1.6693 taken -0.5775 | frags 1.1719 deaths -0.5859 | win part 1.9367 (size share 0.4471) | items MH None RA -0.1147 YA 0.1676 points 0.0 decay -0.015 | total 3.7907
+    ramp: 11-14 14:27:44 FLAG update 3: the stay value's labels 2 this update (under 50)
+    ramp: 11-14 14:27:44 update 3: map sense (silent): samples 0 weight 1.0 pull 1.0 | R2 None (shared part alone None) exchange None | corrections mean None max None
+    ramp: 11-14 14:27:44 update 3: shares KEEP_G 0.0 KEEPQ_G 0.0 | quiet re-decisions a reading 0.0429 (start None) 1.787 a player-minute | zone changed 0.561 of 82 | trips 25.78 (start None) reached 0.182 (start None) | stay labels 2 seen 4 held-out sign 0.5 cor 1.0 | keep lesson w 1.0 zone p 0.5 / 0.5 quiet p 0.5 / 0.5 | sizes zone {'s': 0.0, 'hands': 0.0, 'own': 0.0, 'bias': 0.0} quiet {'w': 0.0, 'bias': 0.0} | forks: moments 2 keep moments 2 | frags a match-minute 1.758 | 1 flag(s)
+ALL PASSED
+
+[lowrun] exit code 0

@@ -102,6 +102,9 @@ PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "wv", "obs", "hands", 
 KEEP_F = 7                                                   # (1.7a) the keep choice's own numbers: age, contact, log p held, arrived, since arrival, sound, hit unseen
 KEEP_FEAT = 7                                                # (1.7a) the simulator's keep_feat() columns (duel_env.KEEP_FEAT)
 KEEP_AGE_MAX, KEEP_LP_MIN, KEEP_RECENT = 20.0, -10.0, 2.0
+KSIG = 5                                                     # (2.1, KEEP_SIG) the target's change signals after keep_feat's seven (duel_env.KSIG)
+KEEPQ_F = 2 + KSIG                                           # (2.1) the quiet layer's numbers: the stay value, the age, the change signals
+KEEPQ_SV = 3.0                                               # (2.1) the stay value as the quiet layer reads it: clipped to +- this
 CMB_KINDS = ("target", "cut", "spam", "out")              # (1.7) the combat order's kinds (sim/duel_env.py COMBAT: the same numbers)
 CMB_NK = len(CMB_KINDS)
 CMB_SLOTS = (0, 3, 8, 8)                                   # ... each kind's candidates, and the first of each among the new ones
@@ -189,7 +192,7 @@ def n_weights(L):
     U, I, S, P, E, N, Hh = u0_width(L), L["inp"], L["size"], L["plan"], L["enc"], L["n_target"], L["widths"]["hands"]
     Wo, Nw = int(L["widths"].get("wobs", 0)), int(L.get("weapon", 0) or 0)
     return (U * I + I) + 3 * S * (I + S) + 6 * S + (S * P + P) + (P * E + E) + (S * N + N) + (S + Hh + 1) + \
-        ((S + Hh + KEEP_F + 1) if L.get("keep") else 0) + ((Wo * I + I) + (S * Nw + Nw) if Nw else 0) + \
+        ((S + Hh + KEEP_F + 1) if L.get("keep") else 0) + ((KEEPQ_F + 1) if L.get("keepq") else 0) + ((Wo * I + I) + (S * Nw + Nw) if Nw else 0) + \
         ((S * CMB_NK + CMB_NCTX * CMB_NK + CMB_NK + S * CMB_HID + CMB_F * CMB_HID + 2 * CMB_HID + 1) if L.get("cmb") else 0) + \
         ((S * 2 + 2) if L.get("fire") else 0) + \
         ((lambda I_: 2 * (S + int(I_["xf"]) + 2) * int(I_["hid"]) + (int(I_["a"]) + 1) * int(I_["hid"]) + int(I_["hid"]) + 1
@@ -206,7 +209,8 @@ def describe(L):
          if L.get("weapon") else "") + \
         ("; the combat order: {} kinds ({}), a pointer of {} over {} candidates of {} numbers".format(
             CMB_NK, ", ".join(CMB_KINDS), CMB_HID, CMB_ROWS, CMB_F) if L.get("cmb") else "") + \
-        ("; the fire push: 2 scores added to the fire key's" if L.get("fire") else "")
+        ("; the fire push: 2 scores added to the fire key's" if L.get("fire") else "") +         ("; the keep choice (1.7a's) and its quiet layer on the stay value and {} change signals (2.1)".format(KSIG) if L.get("keepq") else
+         ("; the keep choice (1.7a's)" if L.get("keep") else ""))
 
 
 def _offs(L):
@@ -241,6 +245,11 @@ def make_module(L, seed=4044):
                 nn.init.zeros_(self.keep.bias)
                 self.register_buffer("keep_g", torch.zeros(()))
             self.register_buffer("gate", torch.zeros(()))
+            if L.get("keepq"):                               # (2.1) the keep choice's quiet layer: zeros (no draw: every stream as before)
+                self.keepq = nn.Linear(KEEPQ_F, 1)
+                nn.init.zeros_(self.keepq.weight)
+                nn.init.zeros_(self.keepq.bias)
+                self.register_buffer("keepq_g", torch.zeros(()))
             self.register_buffer("mix", torch.zeros(()))     # (b1.4a) his target choice moved from the hands' to the head's
             self.register_buffer("add", torch.zeros(()))     # (1.3b) the head's own scores added to the hands'
             for l_ in (self.plan_in, self.target, self.v):
@@ -308,6 +317,8 @@ def make_module(L, seed=4044):
                 state_dict[prefix + "add"] = torch.zeros(())
             if L.get("keep") and prefix + "keep_g" not in state_dict:     # (1.4c) no share in the file: 0
                 state_dict[prefix + "keep_g"] = torch.zeros(())
+            if L.get("keepq") and prefix + "keepq_g" not in state_dict:   # (2.1) no quiet share in the file: 0
+                state_dict[prefix + "keepq_g"] = torch.zeros(())
             if L.get("weapon") and prefix + "wadd" not in state_dict:     # (1.5a) no add in the file: 0
                 state_dict[prefix + "wadd"] = torch.zeros(())
             for k_, on_ in (("cmb_g", L.get("cmb")), ("padd", L.get("cmb")), ("fadd", L.get("fire"))):    # (1.7) no share, no add in the file: 0
@@ -692,6 +703,26 @@ def keep_logit(mod, s, h, f):
     return mod.keep(torch.cat([s, h.detach().float(), f], -1)).squeeze(-1)
 
 
+def has_keepq(mod):
+    """(2.1) the module has the keep choice's quiet layer"""
+    return mod is not None and hasattr(mod, "keepq")
+
+
+def keepq_x(feat, sv):
+    """(2.1) the quiet layer's numbers [..., KEEPQ_F] from the simulator's keep_feat with KEEP_SIG [..., KEEP_FEAT + KSIG] and the stay
+    value [...] (keeping beats a new draw by this much, sim/stay.py; clipped to +- KEEPQ_SV): the stay value, his target's age (s / 10, at
+    most 2), the KSIG change signals (numbers: no gradient). In quiet only it decides: there the age is the whole age"""
+    import torch
+    feat = feat.float()
+    return torch.cat([sv.float().clamp(-KEEPQ_SV, KEEPQ_SV)[..., None], feat[..., 0:1].clamp(0.0, KEEP_AGE_MAX) / 10.0,
+                      feat[..., KEEP_FEAT:KEEP_FEAT + KSIG]], -1).detach()
+
+
+def keepq_logit(mod, x):
+    """(2.1) the quiet layer's logit of re-deciding [...] from keepq_x"""
+    return mod.keepq(x.float()).squeeze(-1)
+
+
 def gae(rew, val, done, gamma, lam):
     """the head's advantages and returns: rew, done [T, B], val [T + 1, B]"""
     import torch
@@ -839,6 +870,23 @@ def np_keep_logit(W, L, hs, h, f):
     S = int(L["size"])
     x = np.concatenate([hs[:, :S], np.asarray(h, np.float32), f], 1)
     return (x @ W["keep.weight"].T + W["keep.bias"])[:, 0].astype(np.float32)
+
+
+def np_has_keepq(W):
+    """(2.1) the arrays have the keep choice's quiet layer"""
+    return "keepq.weight" in W
+
+
+def np_keepq_x(feat, sv):
+    """keepq_x() in numpy"""
+    feat = np.asarray(feat, np.float32)
+    return np.concatenate([np.clip(np.asarray(sv, np.float32), -KEEPQ_SV, KEEPQ_SV)[:, None], np.clip(feat[:, 0:1], 0.0, KEEP_AGE_MAX) / 10.0,
+                           feat[:, KEEP_FEAT:KEEP_FEAT + KSIG]], 1).astype(np.float32)
+
+
+def np_keepq_logit(W, x):
+    """keepq_logit() in numpy"""
+    return (np.asarray(x, np.float32) @ W["keepq.weight"].T + W["keepq.bias"])[:, 0].astype(np.float32)
 
 
 def np_adds(W, L, hs):
