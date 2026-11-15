@@ -44,6 +44,8 @@ assert len(cl_) == 1
 c = lines[cl_[0]]
 assert len(re.findall(r"--minutes \d+ --max-updates \d+ --gamma ", c)) == 1, "2.0e's --minutes / --max-updates not found"
 c = re.sub(r"--minutes \d+ --max-updates \d+ --gamma ", "--minutes {} --max-updates {} --gamma ".format(MIN, UPDATES), c)
+assert c.count(" --dmg-taken-w 1.0 ") == 1, "2.0e's --dmg-taken-w 1.0 not found"
+c = c.replace(" --dmg-taken-w 1.0 ", " --dmg-taken-w 0.9 ")   # (owner 11-14: damage taken costs 0.9 of what damage dealt pays)
 assert c.count(" %LEARN% >> ") == 1
 c = c.replace(" %LEARN% >> ", " " + NEW_ARGS + "%LEARN% >> ")
 lines[cl_[0]] = c
@@ -51,7 +53,7 @@ t = "\n".join(x if x.startswith("rem") else x.replace("duel_gru_2_0e", "duel_gru
 sub("rem the repo root: this file lives in docs\\runs\\2.0\\2.0e\\",
     "rem ==== 2.1b (owner, 2026-11-14: the lock replaced by a learned keep choice, step by step, in one run; docs/runs/2.1/2.1b/CARD.md): from 2.0e's "
     "end with the keep choice and its quiet layer added at zero, shares 0 (tools/keep_init.py add --start zero --quiet 1). 2.0e's command with: run "
-    "duel_gru_2_1b; --minutes {}; --max-updates {}; set KEEP_ZONE=1, KEEP_SIG=1; {}(live KEEP_G, KEEPQ_G, KEEP_TEACH, STAY_W, BRANCH_P, "
+    "duel_gru_2_1b; --minutes {}; --max-updates {}; --dmg-taken-w 0.9 (owner 11-14: damage taken costs 0.9 of the pay of damage dealt; live DMG_TAKEN_W 0.9); set KEEP_ZONE=1, KEEP_SIG=1; {}(live KEEP_G, KEEPQ_G, KEEP_TEACH, STAY_W, BRANCH_P, "
     "BRANCH_ZONE_P; the shares opened by ramp_21b.py only on the owner's steps.json). Made by make_files.py.\n"
     "rem the repo root: this file lives in docs\\runs\\2.1\\2.1b\\".format(MIN, UPDATES, NEW_ARGS))
 t = t.replace("docs\\runs\\2.0\\2.0e\\", "docs\\runs\\2.1\\2.1b\\")
@@ -66,7 +68,7 @@ for x_ in NEW_ARGS.split(" --"):                                          # ever
     assert cl_[0].count(" " + x_ + " ") == 1, x_
 assert "--gate-open 0 " in cl_[0] and "--run duel_gru_2_1b " in cl_[0] and "--habit-p 0 " in cl_[0] and "--resume " in cl_[0]
 assert "--head2 1 " in cl_[0] and "--head2-add 1 " in cl_[0] and "--head2-wpg 1 " in cl_[0] and "--head2-l2 0.01" in cl_[0]
-assert "--env duel_env_ffa20e " in cl_[0] and "--brain-fade 0 " in cl_[0] and "--opt-small-items 1 " in cl_[0] and "--dmg-reward 0.0055 " in cl_[0]
+assert "--env duel_env_ffa20e " in cl_[0] and "--brain-fade 0 " in cl_[0] and "--opt-small-items 1 " in cl_[0] and "--dmg-reward 0.0055 " in cl_[0] and "--dmg-taken-w 0.9 " in cl_[0]
 for s_ in ("INTENT_HOLD=8", "WEAPON_OWN=1", "INTENT_SWITCH=0", "AIM3=1", "AIM3_W=0", "AIM3_SIZE_A=1", "AIM3_SIZE_B=0", "AIM3_PURSUIT_TAU=0.125",
            "AIM3_PURSUIT_GAIN=1.0", "AIM3_FIX_TAU=0.05", "AIM3_LEAD=0", "AIM3_RELOAD=1", "KNOCK_QL=1", "KNOCK_NOW=1", "DODGE_IN=1", "DODGE_G=0",
            "KEEP_ZONE=1", "KEEP_SIG=1"):

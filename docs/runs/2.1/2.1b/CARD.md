@@ -39,11 +39,12 @@ its 17 targets and 10 weapon scores; the 8-second lock), given the keep choice a
 | 4 | The stay value (`--stay 1`, `sim/stay.py`), all run | silent lesson | the start |
 | 5 | The keep choice's lesson toward the stay value's sign (`--keep-teach 1`), all run | silent lesson (rule 13: its own lessons, no copy of the lock) | the start |
 | 6 | The map sense (`--map-sense 1 --map-sense-init <run>/keep/mapsense_start.pt`, from `data/sim_runs/space/mapsense_start.pt`) | silent lesson, nothing reads it | the start |
+| 6b | **Damage taken costs 0.9 of the pay of damage dealt** (owner, 11-14; 2.0e: 1.0): `--dmg-taken-w 0.9`, live `DMG_TAKEN_W` 0.9; enemy damage only (`DMG_ENEMY_ONLY=1`: his own splash, falls and hazards stay at full cost) | the hands' pay table (the head is paid by the win chance only) | the start, at once |
 | 7 | `KEEP_G` 0 → 1 | the share | B, on the owner's word |
 | 8 | `KEEPQ_G` 0 → 1 | the share | C, on the owner's word |
 
-**Left exactly as 2.0e's end played it:** AIM3 at its end values, the corrected knockback, the dodge inputs (`DODGE_G` 1), the zero-sum damage
-pay (0.005), the far rail 0.1, `WIN_ADD` 0.33, the lock rule itself (`INTENT_HOLD` 8, `CONTACT_FREE` 1) where the shares do not reach, the
+**Left exactly as 2.0e's end played it:** AIM3 at its end values, the corrected knockback, the dodge inputs (`DODGE_G` 1), the damage
+pay (0.005; no longer zero-sum: taken at 0.9, above), the far rail 0.1, `WIN_ADD` 0.33, the lock rule itself (`INTENT_HOLD` 8, `CONTACT_FREE` 1) where the shares do not reach, the
 head and its credit, no firing cost, no weapon habits, no teacher.
 
 ## Decisions
@@ -67,6 +68,7 @@ head and its credit, no firing cost, no weapon habits, no teacher.
 | The forks' cost | small | 2.1a ran about 7.8 minutes an update with forks | minutes an update from update 1 |
 | The checks see what trains | the checks play the network as the trainer does | `sim/test_suite.py` Policy now plays the zone layer, the quiet layer and the stay value as the trainer's rollout (keep21_playtest: the server's pass = the checks' to the bit over 800 frames); `PANEL_SETS` gains `KEEP_ZONE=1,KEEP_SIG=1` (start.ps1). Left: a league file with the quiet layer plays it in the checks but the lock in training (none in the league at the start) | ✅ built 11-14 |
 | A keepable hold becomes camping | | v0.4.3 | the panel's camping and spawn-camping measures at every check |
+| Damage taken at 0.9 | an even trade now pays a little (+0.1 × 0.005 a point of damage) | the damage pay was made zero-sum on purpose (1.0) so trading is neutral and the win chance decides; under 1.0 self-play can drift toward trading health for damage (more pushes, less care for the stack) | the ledger's dealt and taken per minute, his health and armor at contact, the deaths per game, the checks against the control |
 | Pay pathologies | | | negative frags, sign flips, lopsided games (the ledger, every update) |
 
 ## Research check (hard rule 14)

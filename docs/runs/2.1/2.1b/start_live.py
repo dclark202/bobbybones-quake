@@ -6,6 +6,7 @@
   STAY_W 1          the stay value's lesson from the keep forks, all run
   BRANCH_P 0.2      the share of each simulator's self-play matches that are fork destinations
   BRANCH_ZONE_P 0.5 the share of the keep forks' moments taken in contact or at an arrival (the rest quiet, read over 30 s)
+  DMG_TAKEN_W 0.9  changed from 2.0e's 1.0 (owner 11-14: damage taken costs 0.9 of the pay of damage dealt)
 Every other value as 2.0e's end played it. Refuses (exit 1) when 2.0e's file is not at its end values or already has a new name.
     python docs/runs/2.1/2.1b/start_live.py <2.0e's live.json> <out live.json> [--any]
 --any (the smoke only, on a file of 2.0e mid-run): the end values are not asserted."""
@@ -13,6 +14,7 @@ import json
 import sys
 
 NEW = dict(KEEP_G=0.0, KEEPQ_G=0.0, KEEP_TEACH=1.0, STAY_W=1.0, BRANCH_P=0.2, BRANCH_ZONE_P=0.5)
+CHANGED = dict(DMG_TAKEN_W=0.9)   # (owner 11-14: damage taken costs 0.9 of the pay of damage dealt; 2.0e ended at 1.0)
 END_20E = (("DMG_TAKEN_W", 1.0), ("DMG_REWARD", 0.005), ("RAIL_FAR_PAY", 0.1), ("WIN_ADD", 0.33), ("INTENT_HOLD", 8.0), ("CONTACT_FREE", 1.0),
            ("COST_FIRE_W", 0.0), ("SPEED_PAY", 0.0), ("INTENT_TEACH_W", 0.0), ("HABIT_P", 0.0), ("H2_PG", 1.0), ("H2_WPG", 1.0), ("ITEM_PT_MIX", 1.0),
            ("STACK_DIFF", 0.0), ("AIM3_W", 1.0), ("AIM3_SIZE_A", 0.39), ("AIM3_SIZE_B", 0.355), ("AIM3_LEAD", 1.0), ("AIM3_RELOAD", 0.0),
@@ -33,8 +35,9 @@ def main():
     if old_:
         raise SystemExit("2.0e's live.json already has {}: not made".format(old_))
     d.update(NEW)
-    print("2.1b's new names at the start: {}; every other value as 2.0e's {} ({} names)".format(
-        json.dumps(NEW), "file (not checked at its end values: --any)" if any_ else "end", len(d)))
+    d.update(CHANGED)
+    print("2.1b's new names at the start: {}; changed: {}; every other value as 2.0e's {} ({} names)".format(
+        json.dumps(NEW), json.dumps(CHANGED), "file (not checked at its end values: --any)" if any_ else "end", len(d)))
     json.dump(d, open(args[1], "w", encoding="utf-8"), indent=1)
     print("written: " + args[1])
 
