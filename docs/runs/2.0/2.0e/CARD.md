@@ -3,12 +3,24 @@
 **Started from:** 1.6a's end (`data/sim_runs/duel_gru_1_6a/keep/policy_end_16a.pt` + `opt_end_16a.pt`; 980 inputs, the head with its
 17 targets and 10 weapon scores, the 8-second lock, no keep choice, no combat order).
 
+**ENDED 2026-11-14 19:38 at update 80, by itself** ([RUNS.md](../../../RUNS.md) #52: 47.0 / 47.0 / 50.5% against 1.6a's end at updates 10 / 30 / 50, frag share 50.0% each; the lock's measures unchanged; `keep/policy_end_20e.pt` + `opt_end_20e.pt`). On a local server for the owner's play test from 19:50 (`qlduel_20e`, image `qlbot:20e`, the AIM3 aim table; the plugin sets the dodge inputs' beam and lightning-hit values: `plugins/duelbot.py`).
+
 **The owner's go, 2026-11-14** ("80 updates, rail at 0.1 ..., weapons habits ... should be dropped entirely, hand lag is bullshit"; "Just start it when it's ready"). The owner, 11-14: "starting from 1.7a is not the move. 1.6a is much
 better, despite what the win rate says. 1.7a literally only uses LG when I play against him"; "start from 1.6a; include aim3 config,
 and other changes (damage pay, zero sum, dodge inputs) from 2.0d"; "The dead inputs must come out too"; "Ideally it should only be
 60-80 updates and I can playtest tonight".
 
 **Marks:** ✅ known or decided · ⏳ to build · 🧪 to measure · ❓ owner's decision
+
+## The owner's play test (2026-11-14, 20:02 to 20:17, `data/duellive_20e/sessions`)
+
+Two games against the owner: 2-16 (Aerowalk) and 4-17 (Hektik; `!aim better` then `!aim max` during the second). The owner: "he's fine,
+but I don't expect him to be particularly amazing. Not shooting very much"; "the reason he's losing games is probably because he's become
+timid". From the sessions: the owner in his view 17.0% and 21.3% of the time; **he fired 53% and 35% of that time** (in training 60%, as
+1.6a); the lightning in his hand 41% and 24% (in training 60%), rockets 27% and 32%. From the run's ledger: the damage pay's net a
+player-minute went from +0.28 (1.6a's end: dealt 0.0055, taken at 0.8) to -0.08 (zero-sum, with his own splash and falls charged), the
+enemy in view 19.0% to 17.5% of his time, frags a match-minute 2.36 to 1.99; firing while in view and the hit rates unchanged in
+training. Fighting no longer pays by itself; against a person who out-hits him most trades lose. No pay change is decided.
 
 ## The owner's page
 
