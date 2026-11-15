@@ -11,6 +11,11 @@ Its input: the head's state at the reading (detached). Its output: per horizon, 
 
 Its own module, its own Adam and its own random stream (the minibatches' order); a top-level entry "plan" of the checkpoint (as the
 stay value's), never in "model"; the league files do not carry it.
+
+(2.1d, the pull: docs/runs/2.1/2.1d) The same module moves INSIDE the strategy head (sim/head2.py add_slowplan: the layers head2.plan.*, the
+buffers pull_g, pull_h; tools/plan_init.py add), so every reader of a network file plays it: his target scores as played get pull_g x
+log(max(the plan's odds, floor)). Its lesson is still this file's (labels from his fast odds BEFORE the pull, never the pulled choice), on
+the learner's copy with its own Adam (the checkpoint's top-level "plan_opt"); the main optimizer never steps it.
 """
 import math
 
@@ -110,9 +115,11 @@ def readouts(M, S, P, Y, h_i):
                 top1_plan=round(t1p, 4), top1_now=round(t1n, 4))
 
 
-def learn(M, opt, S, Y, H, epochs=2, mb=1024, gen=None, clip=1.0):
+def learn(M, opt, S, Y, H, epochs=2, mb=1024, gen=None, clip=1.0, decay=0.0):
     """one rollout's lesson: S [R, head] the states (detached), Y [R, NI] the labels, H [R] the horizon's index of each row; the
-    soft-label cross-entropy against a row's own horizon, each horizon's mean in a minibatch, summed over the horizons. -> the last loss"""
+    soft-label cross-entropy against a row's own horizon, each horizon's mean in a minibatch, summed over the horizons. -> the last loss.
+    (2.1d, CLAUDE.md rule 11) decay: decoupled weight decay on the last layer's weights after each step, lr x decay (the pull adds the plan's
+    log-odds to the head's target scores: a sum of two learned outputs; 0: none, as 2.1c)"""
     import torch
     R = int(len(Y))
     if R == 0:
@@ -132,6 +139,9 @@ def learn(M, opt, S, Y, H, epochs=2, mb=1024, gen=None, clip=1.0):
                 l_.backward()
                 torch.nn.utils.clip_grad_norm_(M.parameters(), float(clip))
                 opt.step()
+                if decay > 0:                                    # (2.1d) the decay of the sum's plan part, after its own step
+                    with torch.no_grad():
+                        M.l3.weight.mul_(1.0 - float(opt.param_groups[0]["lr"]) * float(decay))
                 loss_ = float(l_)
     return loss_
 

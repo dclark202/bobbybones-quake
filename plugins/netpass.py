@@ -99,6 +99,14 @@ def load(path):
                                                            if k.startswith("passr.")}, passodds_.np_forward)
         if os.environ.get("NET_KEEP_G", "") != "" and "keep_g" in W2:       # (1.4c, checks and tests) the keep choice's share, in place of the file's
             W2["keep_g"] = np.array(np.float32(float(os.environ["NET_KEEP_G"])))
+        P["_plan"] = None                                    # (2.1d, the pull) the slow plan inside the head: (its arrays, strength, horizon, floor,
+        if head2_.has_slowplan(lay2):                        # its refresh every `every` keep readings); NET_PULL_G overrides the file's strength
+            pw_ = head2_.np_plan_params(W2)
+            assert pw_ is not None, "the layout names the slow plan and the file has no head2.plan.* weights"
+            if os.environ.get("NET_PULL_G", "") != "":
+                W2["pull_g"] = np.array(np.float32(float(os.environ["NET_PULL_G"])))
+            P["_plan"] = dict(W=pw_, g=float(np.asarray(W2.get("pull_g", 0.0))), h=int(round(float(np.asarray(W2.get("pull_h", 0.0))))),
+                              floor=float(lay2["slowplan"]["floor"]), every=int(lay2["slowplan"]["every"]), odds=None, cnt=None)
         P["_kq"] = None                                      # (2.1) the keep choice's quiet layer: its share (the file's head2.keepq_g; NET_KEEPQ_G
         if lay2.get("keep") and lay2.get("keepq") and head2_.np_has_keepq(W2):   # overrides it) and the stay value's (layout, weights) or None
             if os.environ.get("NET_KEEPQ_G", "") != "":      # (sim/stay.py; the export's "stay" and "stay.<name>"; none: 0)
@@ -268,6 +276,9 @@ def clear(P, h, rows=None):
     r = slice(None) if rows is None else rows
     if P.get("_ist") is not None and len(P["_ist"]) == len(h):     # (2.1) the instruction's held numbers of these seats (kept beside the arrays)
         P["_ist"][r] = 0.0
+    if P.get("_plan") is not None and P["_plan"]["odds"] is not None and len(P["_plan"]["odds"]) == len(h):   # (2.1d) the plan's held odds: even
+        P["_plan"]["odds"] = P["_plan"]["odds"].copy()
+        P["_plan"]["odds"][r] = np.float32(1.0 / P["_plan"]["odds"].shape[-1])
     end = None
     if P.get("_brain") is not None:                          # (v0.4.1) the brain and its answer, by the same flag (the trainer's reset:
         B_, _, bt_, end, _ = P["_brain"]                     # btoken.packed_clear keeps its tick clock and the time since he noticed
@@ -382,6 +393,40 @@ def held_g(P):
     if P.get("_head2") is None:
         return 0.0
     return float(np.asarray(P["_head2"][1].get("held_g", 0.0)))
+
+
+def pull_g(P):
+    """(2.1d) the pull's strength in this file (0: none; sim/head2.py pull_g; NET_PULL_G overrides it)"""
+    return float(P["_plan"]["g"]) if P.get("_plan") is not None else 0.0
+
+
+def pull_on(P):
+    """(2.1d) the pull plays: the slow plan inside the head and its strength above 0 (it plays with the held draw's rows: kf_rows)"""
+    return pull_g(P) > 0
+
+
+def _pull(P, logits, si_, h2s, fr_):
+    """(2.1d) the pull on the target's logits (test_suite.Policy._pull's sums: each seat's plan odds made from the head's state before its tick
+    at its keep readings every `every` of its own and where its numbers are drawn anew, held between, even after a clear; + strength x
+    log(max(odds of its horizon, floor)), half precision) -> the logits with it (a copy: P["_logits"] stays the network's own)"""
+    PL_ = P["_plan"]
+    hm_ = P["_head2"][2]
+    lay_ = P["_head2"][0]
+    B_ = len(logits)
+    nh_, ni_ = len(lay_["slowplan"]["horizons"]), si_.stop - si_.start
+    if PL_["odds"] is None or len(PL_["odds"]) != B_:
+        PL_["odds"] = np.full((B_, nh_, ni_), 1.0 / ni_, np.float32)
+        PL_["cnt"] = np.zeros(B_, np.int64)
+    kr_ = P.get("_k_r")
+    kr_ = np.asarray(kr_, bool) if (kr_ is not None and len(kr_) == B_) else np.zeros(B_, bool)
+    rf_ = np.asarray(fr_, bool) | (kr_ & (PL_["cnt"] % PL_["every"] == 0))
+    PL_["cnt"] = PL_["cnt"] + kr_.astype(np.int64)
+    if rf_.any():
+        PL_["odds"] = PL_["odds"].copy()
+        PL_["odds"][rf_] = hm_.np_plan_odds(PL_["W"], lay_, np.asarray(h2s)[rf_])
+    logits = logits.copy()
+    logits[:, si_] += hm_.np_pull(PL_["odds"][:, PL_["h"]], PL_["g"], PL_["floor"])
+    return logits
 
 
 def goal_on(P):
@@ -578,18 +623,22 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
         kf = np.asarray(kf, np.float32)
         if kf.shape[1] in (hmk_.KEEP_FEAT + 1, hmk_.KEEP_FEAT + hmk_.KSIG + 1):
             te_, kf = kf[:, -1] > 0, kf[:, :-1]
+    assert not pull_on(P) or (kf is not None and h2s is not None and (held_g(P) > 0 or goal_on(P))), \
+        "(2.1d) the pull plays with the held draw's rows: give step() kf=kf_rows(P, env)"
     if (held_g(P) > 0 or goal_on(P)) and kf is not None and h2s is not None:   # (2.1c) the held draw (test_suite.Policy's, the trainer's): a
         assert kg_ <= 0 and cmb_g(P) <= 0, "the held draw: not with a keep choice or an order at a share"   # seat whose target ended (or is
         assert te_ is not None, "the held draw: give step() the keep rows with the trip-end column (head2.np_kf_end(env))"   # "nothing", once
         si_ = head_slices(P)[0]                                                 # a second) gets new numbers and a new coin; under the coin
-        li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)             # its target is the highest of its scores plus its numbers
-        lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
-        B_ = len(lsm_)
+        B_ = len(logits)                                                        # its target is the highest of its scores plus its numbers
         HD_ = P.get("_hd")
         first_ = HD_ is None or len(HD_["g"]) != B_
         if first_:
-            HD_ = P["_hd"] = dict(g=np.zeros(lsm_.shape, np.float32), on=np.zeros(B_, bool), t=0, rng=np.random.default_rng(2121))
+            HD_ = P["_hd"] = dict(g=np.zeros((B_, si_.stop - si_.start), np.float32), on=np.zeros(B_, bool), t=0, rng=np.random.default_rng(2121))
         fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (HD_["t"] % 40 == 0)) | first_
+        if pull_on(P):                                                          # (2.1d) the pull on his target scores before the held
+            logits = _pull(P, logits, si_, h2s, fr_)                            # draw's pick and the draw
+        li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
+        lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
         HD_["t"] += 1
         P["_hon_prev"] = HD_["on"].copy()
         if fr_.any():

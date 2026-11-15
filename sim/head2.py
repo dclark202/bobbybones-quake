@@ -214,6 +214,77 @@ def np_goal_u(L, kf, on):
     return out
 
 
+PULL_FLOOR = 0.01                                            # (2.1d) the plan's odds are floored here before the pull's log
+
+
+def add_slowplan(L, horizons=(10, 25), every=5, hid=128, floor=PULL_FLOOR):
+    """(2.1d, the pull; docs/runs/2.1/2.1d) a layout with the slow plan INSIDE the head: its layers head2.plan.* (sim/slowplan.py's module:
+    the head's state -> hid -> hid -> horizons x n_target), the buffers pull_g (the pull's strength) and pull_h (which horizon pulls), and its
+    settings under the key "slowplan" (the layout's "plan" is the hands' plan width since v0.4.3): the horizons in head ticks, the refresh
+    every `every` keep readings, the hidden width, the floor of its odds before the log"""
+    assert not has_slowplan(L), "the head has the slow plan already"
+    hz = [int(h_) for h_ in horizons]
+    assert len(hz) >= 1 and all(h_ >= 1 for h_ in hz), "the slow plan: horizons of at least one head tick"
+    return dict(L, slowplan=dict(horizons=hz, every=int(every), hid=int(hid), floor=float(floor)))
+
+
+def has_slowplan(L):
+    """(2.1d) the layout has the slow plan inside the head"""
+    return bool(L is not None and L.get("slowplan"))
+
+
+def slowplan_layout(L):
+    """(2.1d) sim/slowplan.py's layout of the head's plan"""
+    import slowplan as slowplan_
+    P = L["slowplan"]
+    return slowplan_.layout(head=int(L["size"]), n_target=int(L["n_target"]), hid=int(P["hid"]), horizons=tuple(P["horizons"]), every=int(P["every"]))
+
+
+def has_plan(mod):
+    """(2.1d) the module has the slow plan inside (head2.plan.*, the buffers pull_g and pull_h)"""
+    return mod is not None and hasattr(mod, "pull_g") and hasattr(mod, "plan")
+
+
+def plan_odds(mod, s):
+    """(2.1d) the plan's odds [B, horizons, n_target] from the head's state s [B, size] (no gradient)"""
+    import torch
+    with torch.no_grad():
+        return torch.softmax(mod.plan(s.detach().float()), -1)
+
+
+def pull_vec(odds_h, g, floor):
+    """(2.1d) the pull on the target's logits [B, n_target]: g x log(max(odds of the pull's horizon, floor)), rounded to half precision (the
+    trainer keeps it so a frame and adds it again in the learner to the bit; the checks' player and the plugin round it the same way). g: a
+    number or [B, 1]"""
+    import torch
+    return (g * torch.log(odds_h.float().clamp(min=float(floor)))).half().float()
+
+
+def np_plan_params(W):
+    """(2.1d) the plan's arrays (l1, l2, l3: weight, bias) from the head's weights (params_np), None without them"""
+    ks = ("plan.l1.weight", "plan.l1.bias", "plan.l2.weight", "plan.l2.bias", "plan.l3.weight", "plan.l3.bias")
+    if not all(k_ in W for k_ in ks):
+        return None
+    return tuple(np.asarray(W[k_], np.float32) for k_ in ks)
+
+
+def np_plan_odds(PW, L, hs):
+    """(2.1d) plan_odds() in numpy: PW from np_plan_params, hs [B, np_state_width] (the state's first `size` columns) -> [B, horizons,
+    n_target] float32"""
+    S = int(L["size"])
+    s = np.asarray(hs, np.float32)[:, :S]
+    h = np.maximum(s @ PW[0].T + PW[1], 0.0)
+    h = np.maximum(h @ PW[2].T + PW[3], 0.0)
+    z = (h @ PW[4].T + PW[5]).astype(np.float64).reshape(len(s), len(L["slowplan"]["horizons"]), int(L["n_target"]))
+    z = np.exp(z - z.max(-1, keepdims=True))
+    return (z / z.sum(-1, keepdims=True)).astype(np.float32)
+
+
+def np_pull(odds_h, g, floor):
+    """(2.1d) pull_vec() in numpy: [B, n_target], rounded to half precision"""
+    return (np.float32(g) * np.log(np.maximum(np.asarray(odds_h, np.float32), np.float32(floor)))).astype(np.float16).astype(np.float32)
+
+
 def np_kf_end(env):
     """(2.1c) the simulator's keep_feat() rows with one more column: his target ended (reached and not an arrival, gone, a spawn):
     what the held draw's players read (test_suite.Policy.act, plugins/netpass.py)"""
@@ -258,7 +329,10 @@ def describe(L):
         ("; the combat order: {} kinds ({}), a pointer of {} over {} candidates of {} numbers".format(
             CMB_NK, ", ".join(CMB_KINDS), CMB_HID, CMB_ROWS, CMB_F) if L.get("cmb") else "") + \
         ("; the fire push: 2 scores added to the fire key's" if L.get("fire") else "") +         ("; the keep choice (1.7a's) and its quiet layer on the stay value and {} change signals (2.1)".format(KSIG) if L.get("keepq") else
-         ("; the keep choice (1.7a's)" if L.get("keep") else ""))
+         ("; the keep choice (1.7a's)" if L.get("keep") else "")) + \
+        ("; the slow plan inside (2.1d): {} -> {} -> {} -> {} horizons {} x {} targets, refreshed every {} keep readings, the pull's floor {}".format(
+            L["size"], L["slowplan"]["hid"], L["slowplan"]["hid"], len(L["slowplan"]["horizons"]), L["slowplan"]["horizons"], L["n_target"],
+            L["slowplan"]["every"], L["slowplan"]["floor"]) if has_slowplan(L) else "")
 
 
 def _offs(L):
@@ -358,8 +432,17 @@ def make_module(L, seed=4044):
                 nn.init.zeros_(self.ins_vv.weight)           # value of the WIN-CHANCE pay alone (no entry of the pay table), on the state its
                 nn.init.zeros_(self.ins_vv.bias)             # older value reads; made last: every older layer's draw as before. At zero.
                 self.register_buffer("ins_g", torch.zeros(()))    # the share of seats whose instruction is the head's
+            if L.get("slowplan"):                            # (2.1d, the pull) the slow plan inside the head: sim/slowplan.py's module (its
+                import slowplan as slowplan_                 # own random stream: every older layer's draw as before; its last layer at zero),
+                self.plan = slowplan_.make_module(slowplan_layout(L))    # the pull's strength and its horizon (an index)
+                self.register_buffer("pull_g", torch.zeros(()))
+                self.register_buffer("pull_h", torch.zeros(()))
 
         def _load_from_state_dict(self, state_dict, prefix, *args, **kw):
+            if L.get("slowplan"):                            # (2.1d) no pull in the file: strength 0, the first horizon
+                for k_ in ("pull_g", "pull_h"):
+                    if prefix + k_ not in state_dict:
+                        state_dict[prefix + k_] = torch.zeros(())
             if prefix + "mix" not in state_dict:             # (a save from before b1.4a: no mix, 0)
                 state_dict[prefix + "mix"] = torch.zeros(())
             if prefix + "add" not in state_dict:             # (a save from before 1.3b: no add, 0)
