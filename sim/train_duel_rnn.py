@@ -2794,6 +2794,11 @@ def main():
                 for k_, v_ in net.head2.state_dict().items():
                     if k_.startswith(("keep.", "keep_g")):
                         sd["head2." + k_] = torch.zeros_like(v_)
+            if head2_.has_keepq(getattr(net, "head2", None)) and "head2.keepq.weight" not in sd:   # (2.1) a file without the quiet
+                sd = dict(sd)                                # layer (the anchors, 2.0e's end): zeros, its share 0 (the lock in quiet:
+                for k_, v_ in net.head2.state_dict().items():    # BUILD.md decision 7; 2.1b's crash at update 10, 11-14)
+                    if k_.startswith(("keepq.", "keepq_g")):
+                        sd["head2." + k_] = torch.zeros_like(v_)
             if head2_.has_ins_layers(getattr(net, "head2", None)) and "head2.ins_iv.weight" not in sd:   # (2.1) a file without the
                 sd = dict(sd)                                # instruction's scorer (a league file, an anchor): the network's own layers, its
                 for k_, v_ in net.head2.state_dict().items():    # share 0 (a league seat is under no instruction: nothing reads them)
