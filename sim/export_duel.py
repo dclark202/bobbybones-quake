@@ -158,6 +158,12 @@ if ck.get("head2") is not None:                              # (its value is the
     if a.head2_gate >= 0:
         head2["head2.gate"] = np.array(np.float32(a.head2_gate))
     assert "head2.plan_in.weight" in head2 and "head2.gate" in head2, "the checkpoint names a strategy head and has no weights for it"
+    if ck["head2"].get("slowplan"):                          # (2.1d, the pull) the slow plan inside the head: its layers, strength and horizon go with
+        assert all("head2.plan.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")) and "head2.pull_g" in head2 \
+            and "head2.pull_h" in head2, "the head names the slow plan and the checkpoint has not its weights or its pull"   # the head's (the layout
+        print("the slow plan inside the head (2.1d): horizons {}, the pull's strength {:.4f} on horizon {}, floor {}, refresh every {}".format(   # names
+            ck["head2"]["slowplan"]["horizons"], float(head2["head2.pull_g"]), int(round(float(head2["head2.pull_h"]))),                         # its settings)
+            ck["head2"]["slowplan"]["floor"], ck["head2"]["slowplan"]["every"]))
 else:
     assert a.head2_gate < 0, "--head2-gate: this network has no strategy head"
 if head2 and (ck.get("head2") or {}).get("keepq") and "head2.keepq.weight" in sd and ck.get("stay") is not None:   # (2.1, sim/stay.py) the stay

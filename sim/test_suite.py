@@ -251,6 +251,15 @@ class Policy:
             import head2 as head2_g
             self.held_g = float(np.asarray(self.h2W.get("held_g", 0.0)))
             self.goal_on = head2_g.has_goal(self.h2)
+        self.planW, self.pull_g, self.pull_h = None, 0.0, 0   # (2.1d, the pull) the slow plan inside the head (head2.plan.*), its strength (the
+        self.pl_odds = self.pl_cnt = None                    # file's head2.pull_g; set_pull_g), its horizon; each seat's held odds and its
+        if self.h2 is not None and head2_g.has_slowplan(self.h2):    # count of keep readings
+            self.planW = head2_g.np_plan_params(self.h2W)
+            assert self.planW is not None, "the layout names the slow plan and the file has no head2.plan.* weights"
+            self.pull_g = float(np.asarray(self.h2W.get("pull_g", 0.0)))
+            self.pull_h = int(round(float(np.asarray(self.h2W.get("pull_h", 0.0)))))
+            self.pull_floor = float(self.h2["slowplan"]["floor"])
+            self.plan_every = int(self.h2["slowplan"]["every"])
         self.hrng = np.random.default_rng(int(seed) + 2121)  # ... its numbers and coins: a stream of their own
         self.hd_g = self.hd_on = self.held_pick = None       # ... each seat's held numbers, its trip's coin; this frame's targets under it
         self.hd_t = 0
@@ -404,6 +413,9 @@ class Policy:
         """a seat's memory cleared (the trainer's `done`), in place; the head's tick clock kept (sim/head.py np_clear). For a
         network without a head the same as h[rows] = 0."""
         r = slice(None) if rows is None else rows
+        if self.pl_odds is not None and len(self.pl_odds) == len(h):    # (2.1d) the plan's held odds of these seats: even (the trainer's reset)
+            self.pl_odds = self.pl_odds.copy()
+            self.pl_odds[r] = np.float32(1.0 / self.pl_odds.shape[-1])
         if self.brain_at is not None:                        # (v0.4.1) the brain and its answer, by the same flag (its own clear)
             import btoken as btoken_
             btoken_.packed_clear(h[:, self.brain_at:], rows, self.brainP["H"])
@@ -496,6 +508,37 @@ class Policy:
         """(1.4c, the checks) the keep choice's share, in place of the file's (a network without it: refused)"""
         assert self.h2 is not None and self.h2.get("keep"), "set_keep_g: this network has no keep choice"
         self.keep_g = float(g)
+
+    @property
+    def pull_on(self):
+        """(2.1d) the pull plays: the slow plan inside the head and its strength above 0"""
+        return self.planW is not None and self.pull_g > 0
+
+    def set_pull_g(self, g):
+        """(2.1d, the checks and tests) the pull's strength, in place of the file's (a network without the plan inside its head: refused)"""
+        assert self.planW is not None, "set_pull_g: this network has no slow plan inside its head"
+        self.pull_g = float(g)
+
+    def _pull(self, logits, si_, h2s, fr_):
+        """(2.1d) the pull on the target's logits, as the trainer's rollout plays it: each seat's plan odds made from the head's state this frame's
+        outputs read (before its tick) at its keep readings every `every` of its own and where its numbers are drawn anew (fr_), held between,
+        even after a clear; + pull_g x log(max(odds of its horizon, floor)), rounded to half precision (head2.np_plan_odds, np_pull: the plugin's
+        sums). -> the logits with it (a copy: last_logits stays the network's own)"""
+        import head2 as head2_
+        B_ = len(logits)
+        nh_, ni_ = len(self.h2["slowplan"]["horizons"]), si_.stop - si_.start
+        if self.pl_odds is None or len(self.pl_odds) != B_:
+            self.pl_odds = np.full((B_, nh_, ni_), 1.0 / ni_, np.float32)
+            self.pl_cnt = np.zeros(B_, np.int64)
+        kr_ = self.k_r if (self.k_r is not None and len(self.k_r) == B_) else np.zeros(B_, bool)
+        rf_ = np.asarray(fr_, bool) | (kr_ & (self.pl_cnt % self.plan_every == 0))
+        self.pl_cnt = self.pl_cnt + kr_.astype(np.int64)
+        if rf_.any():
+            self.pl_odds = self.pl_odds.copy()
+            self.pl_odds[rf_] = head2_.np_plan_odds(self.planW, self.h2, np.asarray(h2s)[rf_])
+        logits = logits.copy()
+        logits[:, si_] += head2_.np_pull(self.pl_odds[:, self.pull_h], self.pull_g, self.pull_floor)
+        return logits
 
     def set_keepq_g(self, g):
         """(2.1, the checks) the quiet layer's share (its coin), in place of the file's (a network without it: refused). It acts only in
@@ -655,17 +698,21 @@ class Policy:
             kf = np.asarray(kf, np.float32)
             if kf.shape[1] in (head2_.KEEP_FEAT + 1, head2_.KEEP_FEAT + head2_.KSIG + 1):
                 te_, kf = kf[:, -1] > 0, kf[:, :-1]
+        assert not self.pull_on or (kf is not None and h2s is not None and (self.held_g > 0 or self.goal_on)), \
+            "(2.1d) the pull plays with the held draw's rows: give act() kf with the trip-end column (head2.np_kf_end(env))"
         if (self.held_g > 0 or self.goal_on) and kf is not None and h2s is not None:   # (2.1c) the held draw, as the trainer's rollout plays
             assert self.keep_g <= 0 and self.cmb_g <= 0, "the held draw: not with a keep choice or an order at a share"   # it: a seat whose
             assert te_ is not None, "the held draw: give act() the keep rows with the trip-end column (head2.np_kf_end(env))"   # target ended
             si_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))      # (or is "nothing", once a second) gets new numbers
-            li_ = logits[:, si_]                                                       # and a new coin; under the coin its target is the
-            li_ = li_ - li_.max(1, keepdims=True)                                      # highest of its scores plus its numbers, read at
-            lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))                     # every keep reading (the column: d 1, c 1)
-            B_, first_ = len(lsm_), False
-            if self.hd_g is None or len(self.hd_g) != B_:
-                self.hd_g, self.hd_on, first_ = np.zeros(lsm_.shape, np.float32), np.zeros(B_, bool), True
-            fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (self.hd_t % 40 == 0)) | first_
+            B_, first_ = len(logits), False                                            # and a new coin; under the coin its target is the
+            if self.hd_g is None or len(self.hd_g) != B_:                              # highest of its scores plus its numbers, read at
+                self.hd_g, self.hd_on, first_ = np.zeros((B_, si_.stop - si_.start), np.float32), np.zeros(B_, bool), True   # every keep
+            fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (self.hd_t % 40 == 0)) | first_     # reading (the column: d 1, c 1)
+            if self.pull_on:                                                           # (2.1d) the pull on his target scores before the
+                logits = self._pull(logits, si_, h2s, fr_)                             # held draw's pick and the draw
+            li_ = logits[:, si_]
+            li_ = li_ - li_.max(1, keepdims=True)
+            lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
             self.hd_t += 1
             hon_prev = self.hd_on.copy()
             if fr_.any():
