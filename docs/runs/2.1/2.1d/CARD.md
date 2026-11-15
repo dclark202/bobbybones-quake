@@ -126,6 +126,22 @@ Pathology check of the ledger: at the run's first updates.
 | 6 | Bot precedent | BOTS.md section 2 (FTW: a slow prior the fast choice is pulled toward) and 13.2 (ranked idea 2): this is that idea, with the pull added to the scores at play instead of a KL term in the loss, because the held draw compares totals. Its named risk there: "a strong KL can freeze a bad prior". Compatible with rule 13 per the notes: the prior is learned by the head itself, not an old network. **Difference from FTW**: our plan is a layer on the head's memory, not a slow recurrent core of its own |
 | 7 | Rule 12 | No pro number anywhere in it |
 
+## The start (11-15 17:08) and its first updates
+
+Started 17:08 from 2.1c's update-50 save, 884 minutes (to about 07:52). Both settings checks pass; the start answers as 2.1c's end with
+the pull at 0 (0 of 48,000 actions differ); the live file applied before the first rollout; the held share played is 0.25.
+
+**The proof's bar was wrong for the graphics card.** Updates 1 and 2 logged "THE PULL'S PROOF FAILED: first_err 0.00142 / 0.00106 over
+0.001". The pull's strength was 0 and the pull as added was exactly zero on those updates, so nothing of the pull could be mis-wired: at
+full size with mixed precision the measurement's own floor is about 0.001 to 0.0015 (the CPU tests gave 0.00001, and the bar was set
+from them). A real wiring fault would scale with the pull, whose added values reach about 4.6 at strength 1: errors far above 0.01. The
+ramp's bar is now 0.01, with a plain FLAG above 0.003, and the ramp restarted with `--resume`. **What to read from update 10 on: the
+proof staying at this floor as the pull opens.** The half-precision readout beside it (`first_err_half`) is 0.08 to 0.12 at its worst
+frame at full size: the existing `--obs-half` trait, larger on the card than in the CPU tests; a question for after this run.
+
+Updates 1 and 2 otherwise: frags 1.25 and 1.5 a match-minute (the fresh-start dip, as 2.1c's 1.1 and 1.4), the graphics card at 12.5 GB
+held, an update in about 5.3 minutes.
+
 ## Before the go
 
 | | |

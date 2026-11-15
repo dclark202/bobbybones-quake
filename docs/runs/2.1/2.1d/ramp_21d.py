@@ -9,8 +9,9 @@ mid-trip changes taken back within 2 seconds: the measure of flicker, no flag), 
 beside the target's two parts), trips, reached, the ledger. More trips a player-minute than on the lock is the point (owner, 2026-11-15): no
 flag on trips. Flagged as ramp_21c (the trainer refusing live.json, a dial applied not as written, a check under 40%, no held or plan record,
 the dodge gate, frags, targets reached under 0.7x of the first five updates, speed on trips, the win part, a part of a sum over 40, a firing
-cost), and: no pull record (MAJOR: the run has no --pull 1); the pull's proof first_err over 1e-3
-(MAJOR: the learner's target log-probability is not the one played: the wiring); its proof not measured (FLAG); the pull's size, length or
+cost), and: no pull record (MAJOR: the run has no --pull 1); the pull's proof first_err over PROOF_MAX = 0.01
+(MAJOR: the learner's target log-probability is not the one played: the wiring; the graphics card's floor at pull 0 is about 0.0011 to 0.0014), over
+0.003 but not over 0.01 (FLAG: a drift upward as the pull opens); its proof not measured (FLAG); the pull's size, length or
 largest value over 40 (FLAG, rule 11); the strength played none of the last written (MAJOR). A crash of the flag thread is logged as a MAJOR
 PROBLEM and the thread starts again (1.9a).
     python docs/runs/2.1/2.1d/ramp_21d.py <run> [--poll S] [--settle S] [--dir D] [--resume] [--once]
@@ -34,7 +35,10 @@ START = {"HELD_G": 0.25}                                     # ("start" values: 
 SIZE_FLAG = 40.0
 MAJOR = 0.40
 FRAGS_MIN = 1.5
-PULL_ERR_MAX = 1e-3
+PROOF_MAX = 0.01                                             # (the pull's proof first_err: the bar of 1e-3 came from CPU tests, ~1e-5; on the
+#                                                             card in mixed precision its floor at pull 0, the pull exactly zero, was 0.0011 to
+#                                                             0.0014 (updates 1-2, 2026-11-15); a wiring fault scales with the pull, ~4.6 at 1)
+PROOF_FLOOR_FLAG = 0.003                                     # (over it, under PROOF_MAX: a FLAG, a drift upward as the pull opens)
 
 
 def knots(name):
@@ -176,9 +180,12 @@ def main():
             fe_ = pu_.get("first_err")
             if fe_ is None:
                 log("FLAG update {}: the pull's proof was not measured (first_err none)".format(u_))
-            elif float(fe_) > PULL_ERR_MAX:
+            elif float(fe_) > PROOF_MAX:
                 log("MAJOR PROBLEM update {}: THE PULL'S PROOF FAILED: first_err {} over {} (the learner's target log-probability is not the one "
-                    "played: the wiring)".format(u_, fe_, PULL_ERR_MAX))
+                    "played: the wiring)".format(u_, fe_, PROOF_MAX))
+            elif float(fe_) > PROOF_FLOOR_FLAG:
+                log("FLAG update {}: the pull's proof first_err {} (above the floor of about 0.0015 seen at pull 0; under the bar {})".format(
+                    u_, fe_, PROOF_MAX))
             big_ = {k2_: v2_ for k2_, v2_ in (("size", pu_.get("size")), ("length", pu_.get("norm")), ("largest", pu_.get("max")),
                                                ("hands", pa_.get("hands")), ("head", pa_.get("head"))) if (v2_ or 0) > SIZE_FLAG}
             if big_:
