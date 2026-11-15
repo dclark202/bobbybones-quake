@@ -149,7 +149,8 @@ def main():
             and bool(ck_.get("plan_opt")) and "plan" not in ck_ and (ck_.get("head2") or {}).get("slowplan"),
             dict(plan_opt=bool(ck_.get("plan_opt")), plan=("plan" in ck_), pull_g=float(ck_["model"].get("head2.pull_g", -1)), slowplan=(ck_.get("head2") or {}).get("slowplan")))
         sn_ = [f_ for f_ in os.listdir(os.path.join(D, "snapshots")) if f_.startswith("snap_")]
-        chk("a snapshot of this run (the league plays its own pull from it)", bool(sn_), sn_)
+        print("INFO  snapshots of this run (written once a minute: none when the 3 updates take less; the league plays its own pull "
+              "from one, rec pull g_opp): {}; g_opp by update {}".format(sn_, [p_.get("g_opp") for p_ in pu]), flush=True)
     except Exception as e_:                                  # noqa: BLE001
         chk("the save read", False, repr(e_))
     bad = [x for x in log.splitlines() if "nan" in x.lower().split() or "Traceback" in x]

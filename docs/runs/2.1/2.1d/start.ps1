@@ -45,7 +45,7 @@ $ALLOW = "--run,--minutes,--max-updates,--head2-lam,--pull,--pull-g,--pull-h"
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\2.1\2.1c\train.cmd") "--allow=$ALLOW" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against 2.1c's command): not started"; exit 1 }
 # against the source save: its env_vars carry the live values 2.1c played (as 2.1c's own --ck allowed against 2.0e's end)
-$CKALLOW = "$ALLOW,--held,--held-g,--plan,--dmg-taken-w,AIM3_W,AIM3_SIZE_A,AIM3_SIZE_B,AIM3_LEAD,AIM3_RELOAD,DODGE_G,DMG_TAKEN_W,RAIL_FAR_PAY,CONTACT_FREE,LEVEL_PULL"
+$CKALLOW = "$ALLOW,AIM3_W,AIM3_SIZE_A,AIM3_SIZE_B,AIM3_LEAD,AIM3_RELOAD,DODGE_G,RAIL_FAR_PAY,CONTACT_FREE,LEVEL_PULL"
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ck $From "--allow=$CKALLOW" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against the source save): not started"; exit 1 }
 if (Test-Path (Join-Path $R1 "policy.pt")) { Log "$R1 already has a policy.pt: not started (nothing overwritten)"; exit 1 }
