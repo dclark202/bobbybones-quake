@@ -18,6 +18,11 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    him before any delete command runs.
 2. **Do only what the owner asks.** A question is not a go. Ask before starting runs, servers, agents, or anything that
    changes something outside this session; before renaming or restarting fresh. Public servers only on his word.
+   **Exception: a run he approved that crashes is fixed and restarted without asking** (owner, 2026-11-15: "Obviously this
+   was meant to run overnight"; 2.1b sat dead 10 hours waiting for a go). Find the cause, fix it in the code, test the fix
+   (a scratch smoke that exercises the failing path), move the dead folder aside (`<run>_crashN`, nothing deleted) or resume
+   from the last save, restart with the same settings and the remaining length, add the crash and the restart to `RUNS.md`,
+   and report it at once. A fix that changes the design, the pay or the settings still goes to him first.
 3. **Settings check before every run, check and calibration, and before using its numbers:**
    `python tools/run/check_settings.py <train.cmd> --ref <reference.cmd>` (and `--ck <checkpoint>` for a run's own saves).
    Any difference not deliberately allowed = the data is not used. Never build a run tool from an older copy.
