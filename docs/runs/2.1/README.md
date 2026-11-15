@@ -7,6 +7,10 @@ sets the weapon). The plain-words explanation, the red team and the Research che
 Superseded, kept as they were: [DESIGN.md](DESIGN.md) (the full 11-10 design: still the reference for the questions S1-S9 / A1-A6, the
 verbs and the frozen moment), [PLAN_FROM_17A.md](PLAN_FROM_17A.md), [2.1a](2.1a/CARD.md) (the instruction as a separate chooser; RUNS.md #51).
 
+**2.1c (2026-11-15): the lock out by the held draw.** 2.1b's stay value never learned from its forks (RUNS.md #54). 2.1c drops the
+keep choice and the judge: his draw's random numbers are rolled once per trip and held, so his goal changes only when his own scores cross,
+and the head reads the goal he holds. Built and tested, waiting for the owner's go: [2.1c/CARD.md](2.1c/CARD.md).
+
 ## The goal
 
 2.0e's end, with nothing new choosing his goal, brought to where 2.2 can add decisions: he keeps or drops a goal by a learned part (no

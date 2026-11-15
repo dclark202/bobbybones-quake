@@ -70,6 +70,20 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    `docs/research/README.md`, citing file and section; "not covered" is said plainly. A change that works against a principle there,
    or rests on a simulator value that the notes show is off the real game, says so up front. When a note proves wrong, fix it.
 
+15. **When an approach has failed more than once, change the structure, not the variant** (owner, 2026-11-15: "we've hit a
+   roadblock a bit and I think partially we're getting to be somewhat circular in our approaches. So rather than just offer some minor
+   tweak, I really want you to think critically about whether a plan will work and don't be afraid to tear down other parts of how
+   things are organized to get there"; "Stop thinking so linearly with what has been tried before ... just changing them slightly is
+   not going to be the solution"). Name the assumption every failed attempt shared and propose removing it. Say plainly, with odds,
+   whether a plan will work before it is built. "That is how it already is" is never a reason to keep a design: "I have no allegiance
+   to anything specific design wise. I want the bot that does the things I ask ... when you get blinders thinking that we have to
+   continue to do something a particular way because that's how it already is, it makes it a slog and I get frustrated." His part is
+   guidance on what seems reasonable and expertise on Quake ("I'm trying to axiomatize my understanding of quake"); his plain-words
+   description of how a player thinks is a design specification, to be mapped onto the mechanism (the lock's removal: six attempts
+   shared "something decides when a new draw counts"; the step forward removed the re-draw, then built his "I'm going to go get mega ...
+   every 200ms I ask myself what else should I be doing" as the slow plan and its pull, 2.1c and 2.1d). Never answer a design question
+   with "run a test first" in place of an idea. The other hard rules still hold.
+
 ## Where things are
 
 | | |

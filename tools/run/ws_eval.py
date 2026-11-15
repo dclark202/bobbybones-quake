@@ -308,7 +308,7 @@ def play(job):
         kf_ = None
         if kp_:
             a[:, -1] = -1
-            kf_ = env.keep_feat()
+            kf_ = __import__("head2").np_kf_end(env)                             # (2.1c: with the trip-end column, for the held draw)
         ox_ = None                                                              # (1.7) the combat order's candidates after the frame before
         if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False)):
             ox_ = env.order_feat()                                              # (a keep reading of some seat: its head ticked on that frame)
