@@ -2,15 +2,16 @@
 # From a 2.1c save (-From, with its optimizer -FromOpt) with the slow plan moved inside the head (tools/plan_init.py add: the same weights, its
 # Adam kept, the pull at 0 on the horizon -PullH), answering as the save (plan_init same: 0 actions differ); the league's anchors (2.1c's
 # snapshots\anchor_*.pt) given a plan with even odds and no pull (plan_init widen-league); the control in the league and in the checks: the
-# source save itself (anchor_21c.pt, keep\control_21c.pt); the long-term control 1.6a's end (as 2.1c).
-# The ramp (ramp_21d.py, its schedule PROVISIONAL): PULL_G 0 to update 10, 0 -> 1.0 over 10 to 40, held; HELD_G at the start file's value to
-# update 40, then -> 1.0 by update 100; never held or stepped back.
+# source save itself (anchor_21c.pt, keep\control_21c.pt); the long-term control 2.0e's end (2.1c's keep\control_20e.pt).
+# The ramp (ramp_21d.py, the owner's schedule of 2026-11-15): PULL_G 0 to update 10, 0 -> 1.0 over 10 to 30, 1.0 -> 2.0 over 30 to 50, 2.0
+# after; HELD_G at the start file's value (2.1c's last) to update 50, then -> 1.0 by update 110; never held or stepped back.
 # Refuses: no data\ here; a trainer running; a missing file; a difference from 2.1c's command beyond --run, --minutes, --max-updates,
 # --head2-lam, --pull, --pull-g, --pull-h; a firing cost above zero; a start that does not answer as the source; a live.json the trainer would
 # refuse (or one the ramp will write); a run folder that already has a policy.pt. Then: the trainer (0xC03C3), the watcher (checks every 20
-# updates, 200 games, against the source save, the control; every fourth against 1.6a's end), the ramp and the self-play logger (0x3C3C).
+# updates, 200 games, against the source save, the control; every fourth against 2.0e's end), the ramp and the self-play logger (0x3C3C).
 # Every window hidden.
-# Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\2.1\2.1d\start.ps1 -Minutes <n> -Updates <n> -From <2.1c save> -FromOpt <its opt> [-Lam 0.998] [-PullH 0]
+# Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\2.1\2.1d\start.ps1 -Minutes <n> -Updates <n> [-From <2.1c save>] [-FromOpt <its opt>] [-Lam 0.998] [-PullH 0]
+# (-From / -FromOpt default to 2.1c's end as tools/run/stop_run.py keeps it: data\sim_runs\duel_gru_2_1c\keep\policy_end_21c.pt, opt_end_21c.pt)
 param([int]$Minutes = 0, [int]$Updates = 0, [string]$Lam = "0.998", [string]$From = "", [string]$FromOpt = "", [int]$PullH = 0)
 $ErrorActionPreference = "Stop"
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -22,6 +23,8 @@ $RUN = "duel_gru_2_1d"
 $R1 = Join-Path $SR $RUN
 $LOG = Join-Path $HERE "start.log"
 function Log($m) { $l = (Get-Date -Format "MM-dd HH:mm:ss ") + $m; Add-Content -Path $LOG -Value $l; $l }
+if (-not $From) { $From = Join-Path $R0 "keep\policy_end_21c.pt" }   # (2.1c's end, as tools/run/stop_run.py keeps it)
+if (-not $FromOpt) { $FromOpt = Join-Path $R0 "keep\opt_end_21c.pt" }
 
 if ($Minutes -le 60) { Log "-Minutes (over 60) is needed: not started"; exit 1 }
 if ($Updates -le 0) { Log "-Updates (the run's --max-updates, the owner's length) is needed: not started"; exit 1 }
@@ -29,11 +32,11 @@ if (-not $From -or -not $FromOpt) { Log "-From <a 2.1c save> and -FromOpt <its o
 if ($PullH -lt 0 -or $PullH -gt 1) { Log "-PullH 0 (2 s) or 1 (5 s): not started"; exit 1 }
 if (-not (Test-Path (Join-Path $ROOT "data"))) { Log "NO data FOLDER IN $ROOT (a worktree?): run it from the main checkout after the merge: not started"; exit 1 }
 if ((Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*train_duel_rnn*" } | Measure-Object).Count -gt 0) { Log "A TRAINER IS RUNNING: not started"; exit 1 }
-$C16 = Join-Path $R0 "keep\control_16a.pt"
+$C20E = Join-Path $R0 "keep\control_20e.pt"                          # (the long-term control: 2.0e's end, as 2.1c kept it)
 $JUDGE = Join-Path $SR "judge\judge_v060_wpn.npz"
 $SAMPLE = Join-Path $SR "inputs20e\sample_obs.npy"
 $LIVE0 = Join-Path $R0 "live.json"; $LSE = Join-Path $R0 "live_settings.env"
-foreach ($p in $From, $FromOpt, $C16, $JUDGE, $SAMPLE, $LIVE0, $LSE) { if (-not (Test-Path $p)) { Log "MISSING ${p}: not started"; exit 1 } }
+foreach ($p in $From, $FromOpt, $C20E,$JUDGE, $SAMPLE, $LIVE0, $LSE) { if (-not (Test-Path $p)) { Log "MISSING ${p}: not started"; exit 1 } }
 $ANCH = @(Get-ChildItem -Path (Join-Path $R0 "snapshots") -Filter "anchor_*.pt" | ForEach-Object { $_.Name })
 if ($ANCH.Count -eq 0) { Log "MISSING 2.1c's anchors (snapshots\anchor_*.pt): not started"; exit 1 }
 & $PY (Join-Path $HERE "make_files.py") $Minutes $Updates $Lam $PullH | ForEach-Object { Log ("train.cmd, $Minutes minutes, $Updates updates, head2-lam ${Lam}, pull horizon ${PullH}: " + $_) }
@@ -84,9 +87,9 @@ Remove-Item Env:\DODGE_IN
 if ($la -ne 0) { Log "THE TRAINER WOULD REFUSE live.json (or a file the ramp may write): not started"; exit 1 }
 Copy-Item (Join-Path $R1 "policy.pt") (Join-Path $R1 "keep\policy_start_21d.pt")
 Copy-Item (Join-Path $R1 "opt.pt") (Join-Path $R1 "keep\opt_start_21d.pt")
-$CK = Join-Path $R1 "keep\control_21c.pt"; $CR = Join-Path $R1 "keep\control_16a.pt"
+$CK = Join-Path $R1 "keep\control_21c.pt"; $CR = Join-Path $R1 "keep\control_20e.pt"
 Copy-Item $From $CK
-Copy-Item $C16 $CR
+Copy-Item $C20E $CR
 Copy-Item $LSE (Join-Path $R1 "live_settings.env")
 Log ("from " + $From + " with the slow plan inside the head, pull 0 on horizon " + $PullH + " (plan_init add), with its optimizer; anchors " + ($ANCH -join ", ") + " and anchor_21c.pt (the source), given an even plan; the judge " + $JUDGE)
 
@@ -101,10 +104,10 @@ if ($null -eq $st -or $st.status -ne "applied") {
 }
 Log ("live.json applied by the trainer before its first rollout (" + $st.time + ")")
 $WD = Join-Path $R1 "watch"
-$env:CTRL_PREV = $CK; $env:CTRL_PREV_LABEL = "the control (the source 2.1c save)"
+$env:CTRL_PREV = $CK; $env:CTRL_PREV_LABEL = "the control (2.1c's end)"
 # the checks' aim and physics (tools/run/panel.py PANEL_SETS): as 2.1c's
 $env:PANEL_SETS = "AIM_LEVEL=3,PERCEPT_SPEED=0,AIM2=1,AIM2_SPLIT=1,AIM2_FOCUS=1,AIM2_FLINCH=1,PERCEPT_SIGMA=0.9,PERCEPT_TAU=0.15,SURPRISE_MS=0,MOTOR_NOISE=0.10,MOTOR_BASE=0.05,AIM2_W=1,AIM2_SPLIT_W=1,AIM2_FOCUS_GAIN=0,AIM2_FOCUS_SIG=1.0,AIM2_C_SLIP=0.023,AIM2_S0=5,AIM2_CAP_SLIP=2.1,AIM2_C_ECC=0.06,AIM2_E0=0,AIM2_CAP_ECC=2.8,FLINCH_PER_DMG=0.012,FLINCH_MAX=0.7,FLINCH_TAU=0.3,VEL_DELAY_MS=200,VEL_WEBER=0.2,RANGE_WEBER=0.19,AIM3=1,AIM3_W=1,AIM3_SIZE_A=0.39,AIM3_SIZE_B=0.355,AIM3_PURSUIT_TAU=0.125,AIM3_PURSUIT_GAIN=1.0,AIM3_FIX_TAU=0.05,AIM3_LEAD=1,AIM3_RELOAD=0,KNOCK_QL=1,KNOCK_NOW=1,KEEP_ZONE=1,KEEP_SIG=1"
-$env:CTRL_REF = $CR; $env:CTRL_REF_LABEL = "1.6a's end (the long-term control)"
+$env:CTRL_REF = $CR; $env:CTRL_REF_LABEL = "2.0e's end (the long-term control)"
 Remove-Item Env:\CTRL_TABLE -ErrorAction SilentlyContinue
 $env:PANEL_RUN = $RUN; $env:PANEL_CTRL = $CK; $env:CHECK_RULE = "0"
 $env:CHECK_EVERY = "20"; $env:CHECK_GAMES = "20"                  # 200 games a check (owner, 2026-11-02)
@@ -118,7 +121,7 @@ $r = Start-Process -FilePath $PY -ArgumentList (Join-Path $HERE "ramp_21d.py"), 
 $r.ProcessorAffinity = $CHK
 $s = Start-Process -FilePath $PY -ArgumentList (Join-Path $ROOT "tools\run\selfplay_loop.py"), $RUN, "--every", "40", "--games", "5", "--par", "1" -WorkingDirectory $ROOT -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $WD "selfplay_stdout.log") -RedirectStandardError (Join-Path $WD "selfplay_stderr.log")
 $s.ProcessorAffinity = $CHK
-Log ("watcher " + $w.Id + " | ramp " + $r.Id + " (ramp_21d.py: PULL_G 0 to update 10, 0 -> 1.0 over 10 to 40; HELD_G the start's to 40, -> 1.0 by 100; PROVISIONAL; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger " + $s.Id + " | all on 0x3C3C")
+Log ("watcher " + $w.Id + " | ramp " + $r.Id + " (ramp_21d.py: PULL_G 0 to update 10, 0 -> 1.0 over 10 to 30, -> 2.0 over 30 to 50; HELD_G the start's to 50, -> 1.0 by 110; marks 10, 30, 50, 80, 110; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger " + $s.Id + " | all on 0x3C3C")
 $TL = Join-Path $SR ($RUN + ".log")
 $ok = $false
 for ($i = 0; $i -lt 60; $i++) {

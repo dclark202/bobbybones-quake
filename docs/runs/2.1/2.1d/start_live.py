@@ -2,7 +2,7 @@
 values, the damage pay 0.005, DMG_TAKEN_W 0.9, the far rail 0.1, DODGE_G 1, the lock INTENT_HOLD 8 with CONTACT_FREE 1, no weapon habits, no
 firing cost, no item rule), with:
   PULL_G 0          the pull's strength: shut, his target scores as 2.1c played them         (ramp_21d.py opens it from update 10)
-Every other value as 2.1c's file has it; HELD_G is taken as found (ramp_21d.py holds it there to update 40). Refuses (exit 1) when 2.1c's file is
+Every other value as 2.1c's file has it; HELD_G is taken as found (ramp_21d.py holds it there to update 50). Refuses (exit 1) when 2.1c's file is
 not at the values 2.1c ran with or already has the new name.
     python docs/runs/2.1/2.1d/start_live.py <2.1c's live.json> <out live.json> [--any]
 --any (the smoke and the live test only): the values are not asserted, but the ones that must hold always (the lock, no firing cost, no

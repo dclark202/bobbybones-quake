@@ -1,13 +1,15 @@
 """2.1d's dials (the pull; docs/runs/2.1/2.1d), on the clock of updates done, straight lines between each name's knots (SCHEDULE, the one
-table below; PROVISIONAL until the owner sets it):
-  PULL_G (the pull's strength on his target scores)            0 to update 10, 0 -> 1.0 over 10 to 40, 1.0 after
-  HELD_G (the share of his trips on the held draw)              the start file's value to update 40, then -> 1.0 by update 100
+table below; set by the owner, 2026-11-15):
+  PULL_G (the pull's strength on his target scores)            0 to update 10, 0 -> 1.0 over 10 to 30, 1.0 -> 2.0 over 30 to 50, 2.0 after
+  HELD_G (the share of his trips on the held draw)              the start file's value to update 50, then -> 1.0 by update 110, 1.0 after
 Written to live.json after each new update; the clock never holds or steps back (CLAUDE.md rule 6); every check logged, one under 40% as a
-MAJOR PROBLEM. Kept with their optimizers: the first saves at or past the marks 10, 40, 70, 100 (keep/policy_u<update>_21d.pt). Logged every
-update: the held draw's record, the slow plan's (each horizon's skill, the pull's counterfactual, the kinds of his changes), the pull's (the
-strength played, its proof first_err, its size beside the target's two parts), trips, reached, the ledger. Flagged as ramp_21c (the trainer
-refusing live.json, a dial applied not as written, a check under 40%, no held or plan record, the dodge gate, frags, trips and reached, the
-win part, a part of a sum over 40, a firing cost), and: no pull record (MAJOR: the run has no --pull 1); the pull's proof first_err over 1e-3
+MAJOR PROBLEM. Kept with their optimizers: the first saves at or past the marks 10, 30, 50, 80, 110 (keep/policy_u<update>_21d.pt). Logged every
+update: the held draw's record, the slow plan's (each horizon's skill, the pull's counterfactual, the kinds of his changes, the share of his
+mid-trip changes taken back within 2 seconds: the measure of flicker, no flag), the pull's (the strength played, its proof first_err, its size
+beside the target's two parts), trips, reached, the ledger. More trips a player-minute than on the lock is the point (owner, 2026-11-15): no
+flag on trips. Flagged as ramp_21c (the trainer refusing live.json, a dial applied not as written, a check under 40%, no held or plan record,
+the dodge gate, frags, targets reached under 0.7x of the first five updates, speed on trips, the win part, a part of a sum over 40, a firing
+cost), and: no pull record (MAJOR: the run has no --pull 1); the pull's proof first_err over 1e-3
 (MAJOR: the learner's target log-probability is not the one played: the wiring); its proof not measured (FLAG); the pull's size, length or
 largest value over 40 (FLAG, rule 11); the strength played none of the last written (MAJOR). A crash of the flag thread is logged as a MAJOR
 PROBLEM and the thread starts again (1.9a).
@@ -22,11 +24,11 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
-# ---- THE SCHEDULE (PROVISIONAL, 2026-11-15): name -> knots (update, value); "start": the start file's value of that name. Before the first
+# ---- THE SCHEDULE (the owner's, 2026-11-15): name -> knots (update, value); "start": the start file's value of that name. Before the first
 #      knot its value, after the last its value, straight lines between
-SCHEDULE = {"PULL_G": ((10, 0.0), (40, 1.0)),
-            "HELD_G": ((40, "start"), (100, 1.0))}
-MARKS = (10, 40, 70, 100)
+SCHEDULE = {"PULL_G": ((10, 0.0), (30, 1.0), (50, 2.0)),
+            "HELD_G": ((50, "start"), (110, 1.0))}
+MARKS = (10, 30, 50, 80, 110)
 START = {"HELD_G": 0.25}                                     # ("start" values: read from live.json at the ramp's first start; 2.1c's held share
 #                                                             here only for tools/run/live_accept.py, which reads this module without a file)
 SIZE_FLAG = 40.0
@@ -157,6 +159,8 @@ def main():
             log("update {}: slow plan: the pull's changes mid-trip a seat-minute by strength (first order) {} | his changes mid-trip {}: back within "
                 "2 s {} (of {}), news {}, against the plan {}".format(u_, pn_.get("pull_changes_min"), ch_.get("n"), ch_.get("back_2s"), ch_.get("n_2s"),
                                                                       ch_.get("news"), ch_.get("against_plan")))
+            log("update {}: flicker: share of his mid-trip changes he took back within 2 seconds {} (of {} changes)".format(
+                u_, ch_.get("back_2s"), ch_.get("n_2s")))
         elif u_ and hd_:
             log("MAJOR PROBLEM update {}: no plan record in the metrics (the run has no --plan 1, or the plan's readouts failed)".format(u_))
         pu_ = m_.get("pull")                                 # (2.1d) the pull as played
@@ -223,12 +227,11 @@ def main():
             log("FLAG update {}: targets reached {} (start {:.3f}): flicker?".format(u_, now_[3], b_[3]))
         if now_[0] < 0.9 * b_[0] or now_[1] < 0.9 * b_[1]:
             log("FLAG update {}: speed on trips {} (start {:.0f}), share over 320 {} (start {:.3f})".format(u_, now_[0], b_[0], now_[1], b_[1]))
-        if now_[2] > 1.5 * b_[2]:
-            log("FLAG update {}: trips a player-minute {} (start {:.1f}): flicker?".format(u_, now_[2], b_[2]))
+        # (no flag on trips a player-minute: more trips than on the lock is the point, owner 2026-11-15; flicker is read from back within 2 s)
 
     def flags(once=False):
         seen = {"checks_prev.jsonl": 0, "checks_ref.jsonl": 0}
-        names = {"checks_prev.jsonl": "the control (the source 2.1c save)", "checks_ref.jsonl": "1.6a's end (the long-term control)"}
+        names = {"checks_prev.jsonl": "the control (2.1c's end)", "checks_ref.jsonl": "2.0e's end (the long-term control)"}
         if a.resume:
             seen = {f_: len(jl(os.path.join(WD, f_))) for f_ in seen}
         seen_m, base = [len(jl(MET)) if a.resume else 0], []
@@ -309,8 +312,8 @@ def main():
                 time.sleep(60)
 
     threading.Thread(target=flags_guard, daemon=True).start()
-    log("ramp_21d on for {}: {} (PROVISIONAL schedule); FREE: the clock never holds or steps back, a check under 40% is a MAJOR PROBLEM{}".format(
-        a.run, "; ".join("{} knots {}".format(n_, knots(n_)) for n_ in SCHEDULE), " (resumed)" if a.resume else ""))
+    log("ramp_21d on for {}: {} (the owner's schedule of 2026-11-15; marks {}); FREE: the clock never holds or steps back, a check under 40% is a MAJOR PROBLEM{}".format(
+        a.run, "; ".join("{} knots {}".format(n_, knots(n_)) for n_ in SCHEDULE), MARKS, " (resumed)" if a.resume else ""))
     L0 = jl(MET)
     done_n = int(L0[-1]["update"]) if (a.resume and L0) else 0
     seen, marked = mtime(), set()
