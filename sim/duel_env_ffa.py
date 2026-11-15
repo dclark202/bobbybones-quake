@@ -799,7 +799,8 @@ RG_FAR_DIST = float(os.environ.get("RG_FAR_DIST") or 700.0)
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
              "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN", "LEGS_LOOK", "LEGS_STAND", "LEGS", "LEGS_EVERY", "LEGS_OFF", "AUTO_SWITCH", "FIGHT_TARGET", "EN_KNOWN", "TARGETS", "TARGETS_FREE", "WAYS", "WAY_CAP", "WAY_ALPHA", "WAY_UNTESTED",
-             "STYLE_MIX", "EN_STACK", "ES_MU_H", "ES_MU_A", "ES_SD_H", "ES_SD_A", "ES_TAU", "HUNT", "CONTACT_FREE", "CONTACT_S")
+             "STYLE_MIX", "EN_STACK", "ES_MU_H", "ES_MU_A", "ES_SD_H", "ES_SD_A", "ES_TAU", "HUNT", "CONTACT_FREE", "CONTACT_S",
+             "KEEP_ZONE", "KEEP_SIG")                       # (2.1: the keep choice by zone, the target's change signals)
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -1122,6 +1123,22 @@ RULE_BLIND = float(os.environ.get("RULE_BLIND") or 0.0)
 #   DMG_ENEMY_ONLY=1      (a training switch) dmg_taken_w applies to damage from an enemy only: his own splash, falls and hazards stay at full cost.
 CONTACT_FREE = float(os.environ.get("CONTACT_FREE") or 0.0)
 CONTACT_S = float(os.environ.get("CONTACT_S") or 2.0)
+# 2.1 (owner 2026-11-14, docs/runs/2.1/README.md; off by default, off = bit-identical):
+#   KEEP_ZONE=1  (a PLAY_VAR and live) the keep choice (1.7a's: the keep column) is split by where he is. In contact (the enemy seen or
+#                heard within CONTACT_S) or at an arrival (intent_arr) its zone layer decides, as 1.7a's did (bit 0 of the column). In
+#                quiet (neither) a reading is the quiet layer's (bit 9 of the column: 512) only in a second whose quiet coin (bit 10: 1024,
+#                taken with the keep coin at his lock reading) gave it to the quiet layer; otherwise the lock rule (INTENT_HOLD) decides
+#                there as before. The quiet coin's share is the network's keepq_g (the trainer's KEEPQ_G). env.keep_live: 1 where the
+#                zone layer decided, 2 where the quiet layer did (an int8; 0 nowhere). With KEEP_ZONE=0: 1.7a's keep choice, unchanged.
+#   KEEP_SIG=1   (a PLAY_VAR) the change signals of his TARGET (the instruction's, 2.1a, taken out from behind INSTR for the target):
+#                keep_feat() gains KSIG columns after its seven: his target is an item that is there or back within his way to it by
+#                what he knows (0 or 1); his target is an item (0 or 1); how far his belief of the enemy's place moved since the target
+#                was chosen (units / 1000, at most 2; 2 when a belief came or went); a pain sound of the enemy within the head's tick
+#                (0 or 1); how far his believed stack of the enemy fell since the target was chosen (/ 100, 0 .. 2). The belief's
+#                numbers are made at the head's tick (every HEAD_EVERY frames, held between; reads only, no draw).
+KEEP_ZONE = float(os.environ.get("KEEP_ZONE") or 0.0) > 0
+KEEP_SIG = float(os.environ.get("KEEP_SIG") or 0.0) > 0
+KSIG = 5
 DMG_ENEMY_ONLY = float(os.environ.get("DMG_ENEMY_ONLY") or 0.0) > 0
 # b1.3a (owner, 2026-11-01: "We need to price ALL the health/armor on the map"; "remove fire toggle, jerk, weapon switch"), off by default:
 #   ITEM_RATE_HP, ITEM_RATE_AR  (live) pay a point of health or armor actually gained, on every such item, bubbles and shards too; zero-sum: the enemy loses as much.
@@ -2280,6 +2297,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "LEVEL_PULL",                                                                                          # (v0.4.3, B-275)
              "INTENT_HOLD",                                                                                         # (b1.1a, owner 2026-10-31: the target lock faded, a PLAY_VAR too)
              "CONTACT_FREE",                                                                                        # (b1.4a, the chance a contact is free of the lock)
+             "KEEP_ZONE",                                                                                           # (2.1, the keep choice by zone; read only in intend())
              "ITEM_RATE_HP", "ITEM_RATE_AR", "COST_FIRE_W", "COST_JERK_W",                                          # (b1.3a, a point of health or armor gained; the costs' factors)
              "ITEM_PT_LO", "ITEM_PT_HI", "ITEM_DECAY", "ITEM_PT_MIX",                                               # (b1.2d, the table by the point)
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
@@ -2353,6 +2371,10 @@ def live_values(get):
     v["CONTACT_FREE"] = float(cf_) if (cf_ or "").strip() else 0.0
     if not 0.0 <= v["CONTACT_FREE"] <= 1.0:
         raise ValueError("CONTACT_FREE must be within 0 .. 1")
+    kz_ = get("KEEP_ZONE")                                   # (2.1) the keep choice by zone, live (a PLAY_VAR too); unset: off
+    if (kz_ or "").strip() not in ("", "0", "1", "0.0", "1.0"):
+        raise ValueError("KEEP_ZONE must be 0 or 1")
+    v["KEEP_ZONE"] = float(kz_ or 0.0) > 0
     bap_ = get("BLIND_AHEAD_P")                              # (v0.4.3) BLIND_AHEAD's chance a life; unset: 1
     v["BLIND_AHEAD_P"] = float(bap_) if (bap_ or "").strip() else 1.0
     if not 0.0 <= v["BLIND_AHEAD_P"] <= 1.0:
@@ -4281,6 +4303,13 @@ class DuelEnv:
         self.keep_in = None                                 # (1.4c) the keep column of this frame (None: the lock rule)
         self.keep_live = np.zeros(self.n, bool)             # (1.4c) the readings his keep choice decided
         self.kown = np.zeros(self.n, bool)                  # (1.7a) this second of his readings is the keep choice's (the coin at his last lock reading)
+        self.kqown = np.zeros(self.n, bool)                 # (2.1, KEEP_ZONE) ... and its quiet readings the quiet layer's (the quiet coin there)
+        self.ks_b0 = np.zeros((self.n, 3), np.float32)      # (2.1, KEEP_SIG) his belief of the enemy's place when the target was chosen,
+        self.ks_b0k = np.zeros(self.n, bool)                # whether he had one, his believed stack of the enemy then and whether he had one,
+        self.ks_s0 = np.zeros(self.n, np.float32)           # the signals made at the last head's tick (held between ticks)
+        self.ks_s0k = np.zeros(self.n, bool)
+        self.ks_out = np.zeros((self.n, KSIG), np.float32)
+        self.ks_tick = 0
         self.intent_arr = np.zeros(self.n, bool)            # (1.7a) his target is arrived, not ended: the enemy hunted in view, the holding place stood at
         self.arr_t = np.zeros(self.n, np.float32)           # (1.7a) seconds since the arrival
         self.khit_t = np.full(self.n, 99.0, np.float32)     # (1.7a) seconds since he was hit with the enemy out of his view
@@ -7932,8 +7961,51 @@ class DuelEnv:
         seconds since he heard the enemy (a sound, a pickup, a pain sound), seconds since he was hit with the enemy out of view]"""
         n = self.n
         snd_ = np.minimum(np.minimum(self.ear_t[:n], self.snd_t[:n].min(1)), self.pain_t[:n])
-        return np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n], self.intent_arr[:n], self.arr_t[:n],
-                         snd_, self.khit_t[:n]], 1).astype(np.float32)
+        kf_ = np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n], self.intent_arr[:n], self.arr_t[:n],
+                        snd_, self.khit_t[:n]], 1).astype(np.float32)
+        if KEEP_SIG:                                         # (2.1) the target's change signals after the seven
+            kf_ = np.concatenate([kf_, self.keep_sig()], 1)
+        return kf_
+
+    def _ks_belief(self):
+        """(2.1, KEEP_SIG) his belief of the enemy's place [n, 3], whether he has one [n], his believed stack of the enemy [n] and
+        whether he has one [n]: reads only (the readers' counters put back), no draw"""
+        bel, bok = self._ins_bel()
+        st, _, sk, _ = self._fin_belief()
+        return bel, bok, np.asarray(st, np.float32), np.asarray(sk, bool)
+
+    def keep_sig(self):
+        """(2.1, KEEP_SIG) [n, KSIG] the change signals of his target (see KEEP_SIG): the item there or back in time, an item, the
+        belief's shift since the choice, the enemy's pain sound within the head's tick, the believed stack's fall since the choice.
+        All but the pain sound are made every HEAD_EVERY frames and held between (the head reads them at its tick)."""
+        n = self.n
+        if len(self.ks_out) != n:
+            self.ks_out = np.zeros((n, KSIG), np.float32)
+        self.ks_tick += 1
+        if self.ks_tick % HEAD_EVERY == 1 or HEAD_EVERY <= 1:
+            out = np.zeros((n, KSIG), np.float32)
+            tg = self.intent[:n]
+            it = (tg >= 1) & (tg < EN_INTENT)
+            out[:, 1] = it
+            R = self.route
+            if it.any() and R is not None and self.route_item:
+                ar = np.arange(n)
+                nh = R.locate(self.state[:n, :3].astype(np.float32))
+                gi = self._trip_goal(np.where(it, tg, 0), nh, who=ar)
+                grp = ar // (self._others_arr().shape[1] + 1)
+                okg = it & (gi >= 0) & (gi < len(R.T)) & (gi < len(self.route_item))
+                for gg_ in np.unique(gi[okg]):
+                    w_ = okg & (gi == gg_)
+                    up_, back_ = (np.asarray(x_)[:n] for x_ in self._goal_state(int(gg_), grp))
+                    out[w_, 0] = (up_[w_].astype(bool) | (back_[w_] <= R.T[int(gg_), nh[w_]])).astype(np.float32)
+            bel, bok, st, sk = self._ks_belief()
+            b0k = self.ks_b0k[:n]
+            out[:, 2] = np.where(bok & b0k, np.minimum(np.linalg.norm(bel - self.ks_b0[:n], axis=1) / 1000.0, 2.0), np.where(bok != b0k, 2.0, 0.0))
+            out[:, 4] = np.where(sk & self.ks_s0k[:n], np.clip((self.ks_s0[:n] - st) / 100.0, 0.0, 2.0), 0.0)
+            self.ks_out = out
+        out = self.ks_out.copy()
+        out[:, 3] = np.asarray(self.pain_t, np.float32)[:n] < HEAD_EVERY * DT
+        return out * (self.hp[:n] > 0)[:, None]
 
     def intend(self, choice, who, way=None):
         """the intention head: read once a second per player (staggered), at once after a spawn; held in between.
@@ -7955,13 +8027,26 @@ class DuelEnv:
             ci_ = np.array(CMB_C0)[co_] + np.minimum(cc_, np.maximum(np.array(CMB_SLOTS)[co_] - 1, 0))
             okc_ = np.where(co_ > 0, self.cmb_cok[np.arange(n), np.minimum(ci_, CMB_NEW - 1)], True)
             co_ = np.where(okc_, co_, 0)                               # (a candidate that was none: the target as chosen)
+            if KEEP_ZONE:                                              # (2.1) the quiet layer's draw and its coin (taken with the keep coin)
+                kqd_ = has_ & ((k_ & 512) > 0)
+                self.kqown = np.where(lock_, has_ & ((k_ & 1024) > 0), self.kqown[:n]) & has_
+            else:
+                kqd_ = np.zeros(n, bool)
+                self.kqown = np.zeros(n, bool)
         else:
-            kd_ = kr_ = np.zeros(n, bool)
+            kd_ = kr_ = kqd_ = np.zeros(n, bool)
             self.kown = np.zeros(n, bool)
+            self.kqown = np.zeros(n, bool)
             cq_, co_, cc_, ci_ = np.zeros(n, bool), np.zeros(n, np.int64), np.zeros(n, np.int64), np.zeros(n, np.int64)
         self.intent_arr = self.intent_arr[:n] & ~self.intent_new[:n] & ~self.intent_gone[:n] & (self.intent[:n] > 0)   # (a reading at once ends an arrival)
-        kread_ = who & self.kown & (kr_ | self.intent_new)   # (1.7a) the keep choice's readings: five a second in its seconds
-        live = (who & ~self.kown & (lock_ | self.intent_new)) | kread_
+        if KEEP_ZONE:                                        # (2.1) where the keep choice decides: in contact and at an arrival its zone
+            zone_ = (self.seen_t[:n] < CONTACT_S) | self.intent_arr     # layer; in quiet the quiet layer where its coin says so, else the lock rule
+            own_ = self.kown & (zone_ | self.kqown)
+        else:
+            zone_ = None
+            own_ = self.kown
+        kread_ = who & own_ & (kr_ | self.intent_new)        # (1.7a) the keep choice's readings: five a second in its seconds
+        live = (who & ~own_ & (lock_ | self.intent_new)) | kread_
         ct_on = CONTACT_FREE > 0 or self.contact_seat is not None
         if ct_on:                                            # (CONTACT_FREE) a contact begins: drawn once, a reading at once if it is free
             if self.ct_in is None or len(self.ct_in) != n:
@@ -7971,7 +8056,7 @@ class DuelEnv:
             p_ = CONTACT_FREE if self.contact_seat is None else self.contact_seat[:n]
             self.ct_free = np.where(new_, self.ct_rng.random(n) < p_, self.ct_free & in_)
             self.ct_in = in_
-            live = live | (who & new_ & self.ct_free & ~self.kown)   # (1.7a: in the keep choice's seconds its own readings)
+            live = live | (who & new_ & self.ct_free & ~own_)   # (1.7a: in the keep choice's seconds its own readings)
         choice = np.asarray(choice, np.int64)
         if not EN_ON:                                        # (the enemy as a target: only with the switch, FIGHT_TARGET or HUNT)
             choice = np.where(choice == EN_INTENT, 0, choice)
@@ -7999,8 +8084,13 @@ class DuelEnv:
         ended_ = (self.intent == 0) | (self.intent_done & ~self.intent_arr) | self.intent_gone | self.intent_new   # (1.7a) an arrival is not an end
         lrn_ = kread_ & ~ended_                              # (1.4c, 1.7a) the keep choice: a seat's own decision at a reading not forced
         rule_may_ = may
-        may = np.where(lrn_, kd_, np.where(kread_, True, may))     # (its forced readings count, as the lock rule's)
-        self.keep_live = lrn_
+        if KEEP_ZONE:                                        # (2.1) the zone layer's draw in contact and at an arrival, the quiet layer's in quiet
+            may = np.where(lrn_, np.where(zone_, kd_, kqd_), np.where(kread_, True, may))
+            self.keep_live = (lrn_ & zone_).astype(np.int8) + 2 * (lrn_ & ~zone_).astype(np.int8)
+            self.keep_rec = (zone_.copy(), forced_.copy(), rule_may_.copy(), kread_.copy(), lrn_.copy(), own_.copy(), kqd_.copy(), kd_.copy())   # (a record for the tests)
+        else:
+            may = np.where(lrn_, kd_, np.where(kread_, True, may))     # (its forced readings count, as the lock rule's)
+            self.keep_live = lrn_
         rd_ = live & ~forced_                                # (stats["keep"]) the readings not forced: who decided, what came of it
         held_ = rd_ & ~may                                   # ... held (the rule's lock or his keep)
         diff_ = choice != self.intent
@@ -8043,6 +8133,8 @@ class DuelEnv:
                 choice = np.where(f_, self.ins_tg[:n], choice)
                 live, may = live | f_, may | f_
         live = live & may
+        if KEEP_ZONE:
+            self.keep_rec2 = (live.copy(), may.copy(), np.asarray(choice).copy())   # (a record for the tests: the reading as applied)
         changed = live & ((choice != self.intent) | (co_ != self.cmb_k[:n]) | ((co_ > 0) & (cc_ != self.cmb_c[:n])))   # (1.7: another order is another target)
         same_ = kread_ & ended_ & live & ~changed & (self.intent > 0)    # (1.7a) a forced reading of the keep choice that drew the
         #                                                                  same target: a new choice of it (the lock rule keeps "reached")
@@ -8056,6 +8148,23 @@ class DuelEnv:
         self.intent_arr = self.intent_arr & ~changed & ~same_
         self.arr_t = np.where(self.intent_arr, self.arr_t[:n] + DT, 0.0).astype(np.float32)
         self.intent_live, self.intent_changed = live, changed
+        if KEEP_ZONE:                                        # (2.1, stats["keep3"]) by zone: seat-frames; readings not forced; of them changed (the
+            k3_ = self.stats.get("keep3")                    # lock rule's or a layer's); in contact or arrived, then in quiet; then the layers' own
+            if k3_ is None or len(k3_) != 10:                # decisions and their re-decides: zone, quiet
+                k3_ = np.zeros(10)
+            qz_ = who & ~zone_
+            zz_ = who & zone_
+            k3_ += np.array([zz_.sum(), (rd_ & zz_).sum(), (changed & rd_ & zz_).sum(), qz_.sum(), (rd_ & qz_).sum(), (changed & rd_ & qz_).sum(),
+                             (lrn_ & zone_).sum(), (lrn_ & zone_ & kd_).sum(), (lrn_ & ~zone_).sum(), (lrn_ & ~zone_ & kqd_).sum()], np.float64)
+            self.stats["keep3"] = k3_
+        if KEEP_SIG:                                         # (2.1) what he believed when the target was chosen: the signals' reference
+            nw_ = changed | same_
+            if nw_.any():
+                bel_, bok_, st_, sk_ = self._ks_belief()
+                self.ks_b0 = np.where(nw_[:, None], bel_, self.ks_b0[:n]).astype(np.float32)
+                self.ks_b0k = np.where(nw_, bok_, self.ks_b0k[:n])
+                self.ks_s0 = np.where(nw_, st_, self.ks_s0[:n]).astype(np.float32)
+                self.ks_s0k = np.where(nw_, sk_, self.ks_s0k[:n])
         if COMBAT:                                           # (1.7) the order he follows; the drawn target not applied under an order
             on_ = live & (co_ > 0)
             self.cmb_k = np.where(live, co_, self.cmb_k[:n])

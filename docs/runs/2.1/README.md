@@ -25,7 +25,11 @@ verbs and the frozen moment), [PLAN_FROM_17A.md](PLAN_FROM_17A.md), [2.1a](2.1a/
 | 6 | No new options, no question loop, no weapon hand-over: those are 2.2 and 2.3 |
 | 7 | One step opens after the other; each ends on its measure, reported; nothing holds or steps back on its own; a mark with its optimizer at each step's end |
 
-## Open for the owner (asked 11-14, not yet answered; my recommendation first)
+**Answered 11-14 (afternoon):** 1. the owner asked for a recommendation ("fitting has proven to be a shit move"): built as a ZERO start
+learning silently toward the stay value's sign (the fitted start kept as an option; 2.1b/BUILD.md decision 1). 3. **one run**, A to D (it
+may run on Sunday by day). 4. **2.2's first step**. 2. open until M1's numbers are in.
+
+## Open for the owner (asked 11-14; my recommendation first)
 
 1. The keep choice **starts as the lock made soft** (`tools/keep_init.py`: a fitted start, share 0 identical). Allowed, or out under rule 13?
 2. If M1 shows no usable signal: **(c) stop after step B** and keep the quiet hold on the lock; first try (a) more forks an update; (b) a
@@ -57,6 +61,9 @@ verbs and the frozen moment), [PLAN_FROM_17A.md](PLAN_FROM_17A.md), [2.1a](2.1a/
 | The run tools on 1.6a's line | yes (2.0e) | `docs/runs/2.0/2.0e/` (`make_files.py`, `start.ps1`, `ramp_20e.py`, `start_live.py`, `smoke.py`); `tools/inputs20d.py --list 20e`; list 20e |
 
 ## To build
+
+**Built 11-14 for 2.1b (branch `b21b`): 1 to 6 and 8; 7 not built** (owner: the map sense into the head is 2.2's first step). What was
+built, the decisions taken while building and the tests: [2.1b/BUILD.md](2.1b/BUILD.md).
 
 | # | What | Where | Notes |
 |---|---|---|---|

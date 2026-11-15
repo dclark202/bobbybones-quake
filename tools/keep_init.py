@@ -11,6 +11,10 @@
       (--arrive-p a second, as the lock rule's forced reading once a second) the exact chance a reading. keep_g 0 (the lock rule
       decides every second: the network plays as before). --opt copies the optimizer's state (the trainer adds the keep
       choice's group after the load).
+      (2.1, owner 2026-11-14) --start zero: no fitted start (rule 13): every weight and the bias at zero (p 0.5 a reading where it decides;
+      it plays nothing at share 0 and learns silently from the stay value's sign, the trainer's --keep-teach, before its share opens).
+      --quiet 1: the quiet layer too (the layout's "keepq" 1, sim/head2.py keepq: the stay value, the age, the change signals -> the
+      logit of re-deciding in quiet), at zero, its share keepq_g 0.
   python tools/keep_init.py same <a.pt> <b.pt> [--frames 400] [--seats 8]
       the checks' numpy forward pass of both on the same random inputs and draws (tools/head2_init.py same): 0 actions differ for
       a network and its copy with the keep choice at share 0; then b at share 1 with the simulator's numbers drawn at random:
@@ -73,23 +77,37 @@ def add(a):
     L = ck.get("head2")
     assert L is not None and "head2.gate" in sd, "the keep choice belongs to the strategy head: a network with it (1.3b on)"
     assert not L.get("keep") and "head2.keep.weight" not in sd, "the network already has the keep choice"
-    L = dict(L, keep=2)
+    L = dict(L, keep=2, **({"keepq": 1} if a.quiet else {}))
     S, Hh, F = int(L["size"]), int(L["widths"]["hands"]), head2_.KEEP_F
     w_age, b, ages, S_t, S_f = fit(a.slope, a.edge, a.rate)
     qc, qa = float(per_reading(a.contact_p, a.rate)), float(per_reading(a.arrive_p, a.rate))
     w = torch.zeros(1, S + Hh + F)
-    w[0, S + Hh + 0] = w_age * 10.0                          # (the age input is s / 10, 0 in contact and at an arrival)
-    w[0, S + Hh + 1] = logit(qc) - b                         # in contact: logit(qc)
-    w[0, S + Hh + 3] = logit(qa) - b                         # arrived out of contact: logit(qa)
+    if a.start == "fitted":
+        w[0, S + Hh + 0] = w_age * 10.0                      # (the age input is s / 10, 0 in contact and at an arrival)
+        w[0, S + Hh + 1] = logit(qc) - b                     # in contact: logit(qc)
+        w[0, S + Hh + 3] = logit(qa) - b                     # arrived out of contact: logit(qa)
+    else:
+        b = 0.0                                              # (2.1, --start zero: nothing fitted)
     sd["head2.keep.weight"] = w
     sd["head2.keep.bias"] = torch.tensor([b], dtype=torch.float32)
     sd["head2.keep_g"] = torch.zeros(())
+    if a.quiet:                                              # (2.1) the quiet layer at zero, its share 0
+        sd["head2.keepq.weight"] = torch.zeros(1, head2_.KEEPQ_F)
+        sd["head2.keepq.bias"] = torch.zeros(1)
+        sd["head2.keepq_g"] = torch.zeros(())
     ck["head2"] = L
     m = head2_.make_module(L)                                # (the module loads it: every key in place)
     m.load_state_dict({k[len("head2."):]: v for k, v in sd.items() if k.startswith("head2.")})
     torch.save(ck, a.out)
     print(head2_.describe(L))
-    print("wrote {}: the keep choice at share 0 (layout keep 2, {} numbers); its start at {} readings a second:".format(a.out, F, a.rate))
+    print("wrote {}: the keep choice at share 0 (layout keep 2, {} numbers){}; its start ({}) at {} readings a second:".format(
+        a.out, F, "; its quiet layer at zero (layout keepq 1, {} numbers), share 0".format(head2_.KEEPQ_F) if a.quiet else "", a.start, a.rate))
+    if a.start == "zero":
+        print("  every weight and the bias zero: p(re-decide) 0.5 a reading wherever it decides (it decides nowhere at share 0)")
+        if a.opt:
+            shutil.copyfile(a.opt[0], a.opt[1])
+            print("copied the optimizer's state {} -> {} (the keep choice's groups are added by the trainer)".format(*a.opt))
+        return
     print("  out of contact, quiet: z = {:.4f} x age + {:.4f} a reading (1.4c's start a second: sigmoid({} x (age - {})))".format(w_age, b, a.slope, a.edge))
     print("  {:>6} {:>12} {:>12} {:>12} {:>16}".format("age s", "start /s", "fit /s", "fit /reading", "held S fit-start"))
     for age in (1, 3, 5, 7, 8, 9, 10, 11.5, 13, 15):
@@ -169,8 +187,14 @@ def same(a):
                 good = good and abs(p_ - e_) < 0.06
         lo_ = sum(n_[k][1] for k in n_ if k[0] == "age" and k[1] <= 2) / max(1, sum(n_[k][0] for k in n_ if k[0] == "age" and k[1] <= 2))
         hi_ = sum(n_[k][1] for k in n_ if k[0] == "age" and k[1] >= 12) / max(1, sum(n_[k][0] for k in n_ if k[0] == "age" and k[1] >= 12))
-        good = good and lo_ < 0.02 and hi_ > 0.3
-        print("share 1: young targets kept {:.3f} a reading, old ones re-decided {:.3f} a reading".format(1 - lo_, hi_))
+        zero_ = bool(np.allclose(np.asarray(pb.h2W["keep.weight"]), 0.0)) and kb_ == 0.0     # (2.1, --start zero: an even chance everywhere)
+        if zero_:
+            ev_ = max(abs(n_[k_][1] / max(1, n_[k_][0]) - 0.5) for k_ in n_)
+            good = good and ev_ < 0.08
+            print("share 1 (a zero start): every band re-decided near 0.5 a reading, the largest distance {:.3f}".format(ev_))
+        else:
+            good = good and lo_ < 0.02 and hi_ > 0.3
+            print("share 1: young targets kept {:.3f} a reading, old ones re-decided {:.3f} a reading".format(1 - lo_, hi_))
     print("ALL PASSED" if (ok and good) else "FAILED")
 
 
@@ -183,6 +207,8 @@ def main():
             p.add_argument("inp")
             p.add_argument("out")
             p.add_argument("--opt", nargs=2, default=None)
+            p.add_argument("--start", choices=("fitted", "zero"), default="fitted", help="(2.1) fitted: 1.7a's lock made soft; zero: nothing fitted")
+            p.add_argument("--quiet", type=int, default=0, help="(2.1) 1: the quiet layer too (layout keepq 1), at zero")
         else:
             p.add_argument("a")
             p.add_argument("b")
