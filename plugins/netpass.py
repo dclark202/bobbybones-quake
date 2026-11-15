@@ -370,9 +370,29 @@ def keepq_g(P):
     return float(np.asarray(P["_head2"][1].get("keepq_g", 0.0)))
 
 
+def kf_rows(P, env):
+    """(2.1c) what step(kf=) reads: the simulator's keep_feat() rows, with the trip-end column for a network on the held draw"""
+    if held_g(P) > 0 or goal_on(P):
+        return P["_head2"][2].np_kf_end(env)
+    return env.keep_feat()
+
+
+def held_g(P):
+    """(2.1c) the held draw's share of his trips in this file (0: none, the lock rule; sim/head2.py held_g)"""
+    if P.get("_head2") is None:
+        return 0.0
+    return float(np.asarray(P["_head2"][1].get("held_g", 0.0)))
+
+
+def goal_on(P):
+    """(2.1c) the head reads the goal he holds (the layout's part "goal")"""
+    return P.get("_head2") is not None and P["_head2"][2].has_goal(P["_head2"][0])
+
+
 def column_on(P):
-    """(1.4c, 1.7) step() gives the keep column (kf= needed): the keep choice or the combat order at a share above 0"""
-    return keep_g(P) > 0 or cmb_g(P) > 0
+    """(1.4c, 1.7) step() gives the keep column (kf= needed): the keep choice or the combat order at a share above 0; (2.1c) the held
+    draw at a share above 0 or a head that reads the goal he holds: kf with the trip-end column then (head2.np_kf_end(env))"""
+    return keep_g(P) > 0 or cmb_g(P) > 0 or held_g(P) > 0 or goal_on(P)
 
 
 def order_on(P):
@@ -551,7 +571,43 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
     kd_ = None                                               # (the keep choice's draw of this frame, where there is one: it gates a change of instruction)
     P["_logits"] = logits                                    # (a parity check with test_suite.Policy's last_logits)
     kg_ = keep_g(P)
-    if column_on(P) and kf is not None and h2s is not None:  # (1.4c) the keep choice: the head's state this frame's outputs read (before its
+    te_ = None
+    P["_hon_prev"] = None
+    if kf is not None and P.get("_head2") is not None:       # (2.1c) keep rows with the trip-end column after them (head2.np_kf_end)
+        hmk_ = P["_head2"][2]
+        kf = np.asarray(kf, np.float32)
+        if kf.shape[1] in (hmk_.KEEP_FEAT + 1, hmk_.KEEP_FEAT + hmk_.KSIG + 1):
+            te_, kf = kf[:, -1] > 0, kf[:, :-1]
+    if (held_g(P) > 0 or goal_on(P)) and kf is not None and h2s is not None:   # (2.1c) the held draw (test_suite.Policy's, the trainer's): a
+        assert kg_ <= 0 and cmb_g(P) <= 0, "the held draw: not with a keep choice or an order at a share"   # seat whose target ended (or is
+        assert te_ is not None, "the held draw: give step() the keep rows with the trip-end column (head2.np_kf_end(env))"   # "nothing", once
+        si_ = head_slices(P)[0]                                                 # a second) gets new numbers and a new coin; under the coin
+        li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)             # its target is the highest of its scores plus its numbers
+        lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
+        B_ = len(lsm_)
+        HD_ = P.get("_hd")
+        first_ = HD_ is None or len(HD_["g"]) != B_
+        if first_:
+            HD_ = P["_hd"] = dict(g=np.zeros(lsm_.shape, np.float32), on=np.zeros(B_, bool), t=0, rng=np.random.default_rng(2121))
+        fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (HD_["t"] % 40 == 0)) | first_
+        HD_["t"] += 1
+        P["_hon_prev"] = HD_["on"].copy()
+        if fr_.any():
+            gn_ = HD_["rng"].gumbel(size=lsm_.shape).astype(np.float32)
+            cn_ = HD_["rng"].random(B_) < held_g(P)
+            HD_["g"] = np.where(fr_[:, None], gn_, HD_["g"])
+            HD_["on"] = np.where(fr_, cn_, HD_["on"])
+        pk_ = (lsm_ + HD_["g"]).argmax(1)
+        if HD_["on"].any():                                  # (whoever draws from these logits draws the held target: the others shut)
+            logits = logits.copy()
+            tl_ = logits[:, si_]
+            sh_ = np.full(tl_.shape, -1e9, np.float32)
+            sh_[np.arange(B_), pk_] = 0.0
+            logits[:, si_] = np.where(HD_["on"][:, None], sh_, tl_)
+        kr_ = P.get("_k_r")
+        kr_ = np.zeros(B_, np.int64) if kr_ is None or len(kr_) != B_ else np.asarray(kr_, np.int64)
+        P["_keep"] = 3 * HD_["on"].astype(np.int64) + 4 * kr_
+    elif (kg_ > 0 or cmb_g(P) > 0) and kf is not None and h2s is not None:  # (1.4c) the keep choice: the head's state this frame's outputs read (before its
         hm2_ = P["_head2"][2]                                # tick), the hands' memory after the frame, its own numbers (test_suite.Policy)
         si_ = head_slices(P)[0]
         li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
@@ -657,7 +713,9 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
                                   ctrl=hm2.np_ctrl(ct2, sb_, hfast[tkd_]), fight=hm2.np_fight(fo2, sb_, hfast[tkd_]),
                                   obs=xa[tkd_], hands=hfast[tkd_],
                                   ins=(hm2.np_ins_held_u(P["_ins"]["I"], P["_ist"][tkd_]) if (P.get("_ins") is not None and P.get("_ist") is not None
-                                                                                            and len(P["_ist"]) == len(tkd_)) else None))
+                                                                                            and len(P["_ist"]) == len(tkd_)) else None),
+                                  goal=(hm2.np_goal_u(lay2, np.asarray(kf)[tkd_], P["_hon_prev"][tkd_])     # (2.1c) the goal he holds
+                                        if (hm2.has_goal(lay2) and kf is not None and P.get("_hon_prev") is not None) else None))
                 h2s = h2s.copy()
                 h2s[tkd_] = hm2.np_tick(W2, lay2, u_, h2s[tkd_])
         hb = P["_brain"][2].pack(br_, tk_)

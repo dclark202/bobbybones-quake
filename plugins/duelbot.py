@@ -1039,7 +1039,7 @@ class duelbot(minqlx.Plugin):
             p_, z_ = _net.pose(self.P, self.env, self.mapname)    # (fill_player put them in the simulator this frame)
             pz = dict(pose=p_[:1], zmap=z_[:1])
         col_ = (_net.column_on(self.P) if hasattr(_net, "column_on") else (hasattr(_net, "keep_g") and _net.keep_g(self.P) > 0))
-        kf = (self.env.keep_feat()[:1] if (col_ and hasattr(self.env, "keep_feat"))
+        kf = ((_net.kf_rows(self.P, self.env) if hasattr(_net, "kf_rows") else self.env.keep_feat())[:1] if (col_ and hasattr(self.env, "keep_feat"))
               else None)                                     # (1.4c) what his keep choice reads (the simulator's numbers after the last frame)
         kw_ = {} if kf is None else dict(kf=kf)
         if hasattr(_net, "order_due") and _net.order_due(self.P) and hasattr(self.env, "order_feat"):

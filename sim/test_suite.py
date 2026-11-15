@@ -246,6 +246,14 @@ class Policy:
         self.k_r = None                                      # (1.7a) the seats whose head ticked on the frame before (their keep reading)
         if self.h2 is not None and self.h2.get("keep") and "keep.weight" in self.h2W:
             self.keep_g = float(np.asarray(self.h2W.get("keep_g", 0.0)))
+        self.held_g, self.goal_on = 0.0, False               # (2.1c) the held draw's share of his trips (the file's head2.held_g); the head
+        if self.h2 is not None:                              # reads the goal he holds (the layout's part "goal")
+            import head2 as head2_g
+            self.held_g = float(np.asarray(self.h2W.get("held_g", 0.0)))
+            self.goal_on = head2_g.has_goal(self.h2)
+        self.hrng = np.random.default_rng(int(seed) + 2121)  # ... its numbers and coins: a stream of their own
+        self.hd_g = self.hd_on = self.held_pick = None       # ... each seat's held numbers, its trip's coin; this frame's targets under it
+        self.hd_t = 0
         self.kq_on, self.keepq_g = False, 0.0                # (2.1) the keep choice's quiet layer (sim/head2.py keepq) and its share (the file's
         self.stayL = self.stayW = None                       # head2.keepq_g); the stay value (sim/stay.py, the checkpoint's "stay"; none: 0)
         self.sv = None                                       # ... made at each keep reading of a seat, held between (the trainer's SV_)
@@ -437,7 +445,7 @@ class Policy:
         """(1.4c, 1.7a) the keep choice decides a share of his seconds, or (1.7) the combat order is asked at a share of his readings:
         act(kf=...) gives one more column, d + 2 c + 4 r (its draw, the hand-over's coin, a keep reading: the frame after the head's
         tick; sim/duel_env.py KEEP_FEAT) + (8 kind + 32 candidate + 256) where the order is asked"""
-        return self.keep_g > 0 or self.cmb_g > 0
+        return self.keep_g > 0 or self.cmb_g > 0 or self.held_g > 0 or self.goal_on
 
     @property
     def order_on(self):
@@ -641,7 +649,35 @@ class Policy:
         if bt is not None:
             hb = self.token_post(xa, pose, zmap, bst)
         kcol = None
-        if self.keep_on and kf is not None and h2s is not None:   # (1.4c) the keep choice: the head's state this frame's outputs read
+        te_ = hon_prev = self.held_pick = None
+        if kf is not None:                                   # (2.1c) keep rows with the trip-end column after them (head2.np_kf_end)
+            import head2 as head2_
+            kf = np.asarray(kf, np.float32)
+            if kf.shape[1] in (head2_.KEEP_FEAT + 1, head2_.KEEP_FEAT + head2_.KSIG + 1):
+                te_, kf = kf[:, -1] > 0, kf[:, :-1]
+        if (self.held_g > 0 or self.goal_on) and kf is not None and h2s is not None:   # (2.1c) the held draw, as the trainer's rollout plays
+            assert self.keep_g <= 0 and self.cmb_g <= 0, "the held draw: not with a keep choice or an order at a share"   # it: a seat whose
+            assert te_ is not None, "the held draw: give act() the keep rows with the trip-end column (head2.np_kf_end(env))"   # target ended
+            si_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))      # (or is "nothing", once a second) gets new numbers
+            li_ = logits[:, si_]                                                       # and a new coin; under the coin its target is the
+            li_ = li_ - li_.max(1, keepdims=True)                                      # highest of its scores plus its numbers, read at
+            lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))                     # every keep reading (the column: d 1, c 1)
+            B_, first_ = len(lsm_), False
+            if self.hd_g is None or len(self.hd_g) != B_:
+                self.hd_g, self.hd_on, first_ = np.zeros(lsm_.shape, np.float32), np.zeros(B_, bool), True
+            fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (self.hd_t % 40 == 0)) | first_
+            self.hd_t += 1
+            hon_prev = self.hd_on.copy()
+            if fr_.any():
+                gn_ = self.hrng.gumbel(size=lsm_.shape).astype(np.float32)
+                cn_ = self.hrng.random(B_) < self.held_g
+                self.hd_g = np.where(fr_[:, None], gn_, self.hd_g)
+                self.hd_on = np.where(fr_, cn_, self.hd_on)
+            self.held_pick = (self.hd_on.copy(), (lsm_ + self.hd_g).argmax(1))
+            if self.k_r is None or len(self.k_r) != B_:
+                self.k_r = np.zeros(B_, bool)
+            kcol = 3 * self.hd_on.astype(np.int64) + 4 * self.k_r.astype(np.int64)
+        elif (self.keep_g > 0 or self.cmb_g > 0) and kf is not None and h2s is not None:   # (1.4c) the keep choice: the head's state this frame's outputs read
             import head2 as head2_                           # (before its tick), the hands' memory after the frame, its own numbers
             si_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
             li_ = logits[:, si_]
@@ -702,7 +738,9 @@ class Policy:
                                      fight=head2_.np_fight(self.h2_fo, sb_, hfast[tk_]),
                                      wv=head2_.np_wv(getattr(self, "h2_wv", None), sb_, hfast[tk_]),
                                      obs=xa[tk_], hands=hfast[tk_],
-                                     ins=(self._ins_u(ist[tk_]) if ist is not None else None))
+                                     ins=(self._ins_u(ist[tk_]) if ist is not None else None),
+                                     goal=(head2_.np_goal_u(self.h2, np.asarray(kf)[tk_], hon_prev[tk_])    # (2.1c) the goal he holds
+                                           if (self.goal_on and kf is not None and hon_prev is not None) else None))
                 h2s = h2s.copy()
                 h2s[tk_] = head2_.np_tick(self.h2W, self.h2, u_, h2s[tk_])
             h = np.concatenate([h, h2s.astype(np.float32)], 1)
@@ -739,6 +777,8 @@ class Policy:
             out[:, 6] = np.where(a_ >= 0, a_, out[:, 6])
             t_ = self.wpush.targets(obs, self.wrng)         # the weapon he lacks as his target where the rule speaks (the simulator's
             out[:, 10] = np.where(t_ >= 0, t_, out[:, 10])  # readings, hold and his keep choice as ever)
+        if self.held_pick is not None:                       # (2.1c) a seat on the held draw: its target is the held draw's
+            out[:, 10] = np.where(self.held_pick[0], self.held_pick[1], out[:, 10])
         if hb is not None:                                   # (v0.4.1) the brain's state back at the end of the array
             h = np.concatenate([h, hb.astype(np.float32)], 1)
         if kcol is not None:                                 # (1.4c) the keep column after the outputs (the simulator takes it off)

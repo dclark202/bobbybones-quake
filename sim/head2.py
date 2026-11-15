@@ -94,7 +94,7 @@ import os
 import numpy as np
 
 VERSION = 1
-PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "wv", "obs", "hands", "ins", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide);
+PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "wv", "obs", "hands", "ins", "goal", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide);
 #                                                          (1.7b) fight: the brain's fight odds, two chances - 0.5 (sim/fightodds.py; without: 0 wide)
 #                                                          (1.9a) wv: his own reading of his chance of winning beyond what the score and the clock say
 #                                                          (the shadow win value, sim/win_value.py, on the brain's state and his hands' memory; one
@@ -174,6 +174,54 @@ def add_weapon(L, wobs, n):
     return dict(L, widths=dict(L["widths"], wobs=len(wobs)), on=dict(L["on"], wobs=1), wobs_cols=wobs, weapon=int(n))
 
 
+GOAL_X = 2                                                   # (2.1c) the part "goal" after its one-hot: the target's age, on the held draw
+GOAL_AGE = (20.0, 2.0)                                       # ... the age cut at 20 s and counted in twos of seconds (0 .. 10): measured on 2.0e's
+#                                                              end (tools/run/held_playtest.py, 4,800 rows, Aerowalk): average 0.99, spread 1.04
+
+
+def add_goal(L):
+    """(2.1c, the held draw's learned comparison) a layout with the part "goal": the target he holds (one of n_target, "nothing"
+    too), its age and whether this trip is on the held draw: what lets his scores favour the goal he is on. After "ins", before
+    "wobs": at the end of what the head's first layer reads (zero weights at the start: tools/held_init.py)"""
+    assert not has_goal(L), "the head has the part 'goal' already"
+    return dict(L, widths=dict(L["widths"], goal=int(L["n_target"]) + GOAL_X), on=dict(L["on"], goal=1))
+
+
+def has_goal(L):
+    return bool(L is not None and int(L["widths"].get("goal", 0)) > 0)
+
+
+def goal_u(L, kf, on):
+    """(2.1c) the part "goal" [B, n_target + GOAL_X] from the simulator's keep_feat rows kf [B, >= 3] (column 0 the target's age in
+    seconds, column 2 the target) and on [B] (the trip is on the held draw); torch"""
+    import torch
+    n = int(L["n_target"])
+    out = torch.zeros(kf.shape[0], n + GOAL_X, device=kf.device)
+    out.scatter_(1, kf[:, 2].long().clamp(0, n - 1)[:, None], 1.0)
+    out[:, n] = kf[:, 0].float().clamp(0.0, GOAL_AGE[0]) / GOAL_AGE[1]
+    out[:, n + 1] = on.float()
+    return out
+
+
+def np_goal_u(L, kf, on):
+    """goal_u() in numpy"""
+    n = int(L["n_target"])
+    kf = np.asarray(kf, np.float32)
+    out = np.zeros((len(kf), n + GOAL_X), np.float32)
+    out[np.arange(len(kf)), np.clip(kf[:, 2].astype(np.int64), 0, n - 1)] = 1.0
+    out[:, n] = np.clip(kf[:, 0], 0.0, GOAL_AGE[0]) / GOAL_AGE[1]
+    out[:, n + 1] = np.asarray(on, np.float32)
+    return out
+
+
+def np_kf_end(env):
+    """(2.1c) the simulator's keep_feat() rows with one more column: his target ended (reached and not an arrival, gone, a spawn):
+    what the held draw's players read (test_suite.Policy.act, plugins/netpass.py)"""
+    n = env.n
+    te = (env.intent_done[:n] & ~env.intent_arr[:n]) | env.intent_gone[:n] | env.intent_new[:n]
+    return np.concatenate([env.keep_feat(), te.astype(np.float32)[:, None]], 1)
+
+
 def ctrl_src(L):
     """the ctrl slot's source ("none" for a layout made before it was wired)"""
     return str(L.get("ctrl_src", "none") or "none")
@@ -245,6 +293,7 @@ def make_module(L, seed=4044):
                 nn.init.zeros_(self.keep.bias)
                 self.register_buffer("keep_g", torch.zeros(()))
             self.register_buffer("gate", torch.zeros(()))
+            self.register_buffer("held_g", torch.zeros(()))  # (2.1c) the share of his trips on the held draw (0: the lock rule; a file without it: 0)
             if L.get("keepq"):                               # (2.1) the keep choice's quiet layer: zeros (no draw: every stream as before)
                 self.keepq = nn.Linear(KEEPQ_F, 1)
                 nn.init.zeros_(self.keepq.weight)
@@ -315,6 +364,8 @@ def make_module(L, seed=4044):
                 state_dict[prefix + "mix"] = torch.zeros(())
             if prefix + "add" not in state_dict:             # (a save from before 1.3b: no add, 0)
                 state_dict[prefix + "add"] = torch.zeros(())
+            if prefix + "held_g" not in state_dict:          # (2.1c) no held-draw share in the file: 0 (the lock rule)
+                state_dict[prefix + "held_g"] = torch.zeros(())
             if L.get("keep") and prefix + "keep_g" not in state_dict:     # (1.4c) no share in the file: 0
                 state_dict[prefix + "keep_g"] = torch.zeros(())
             if L.get("keepq") and prefix + "keepq_g" not in state_dict:   # (2.1) no quiet share in the file: 0
@@ -333,12 +384,12 @@ def make_module(L, seed=4044):
         return Head2()
 
 
-def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None):
+def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None, goal=None):
     """u [B, u_width] (float32 holding half-precision numbers) from the parts (a part None or off: zeros). obs: his
     normalised inputs [B, all inputs] (the columns are taken here). (2.1) ins: the instruction he is on (ins_u; before wobs: what
     inp reads; a layout without the part: 0 wide)"""
     import torch
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv, goal=goal)
     ref = next(v for v in src.values() if v is not None)
     B = ref.shape[0]
     cols = []
@@ -355,7 +406,7 @@ def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, ha
             v = v[:, torch.as_tensor(L[p + "_cols"], dtype=torch.long, device=v.device)]
         if v.shape[1] != w:                                  # (ctrl: the readout's first columns, zeros past its end)
             v = v[:, :w] if v.shape[1] > w else torch.cat([v, v.new_zeros(B, w - v.shape[1])], 1)
-        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins", "wv"):
+        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins", "wv", "goal"):
             v = v.clamp(-CLIP, CLIP)
         cols.append(v)
     return torch.cat(cols, 1).half().float()
@@ -958,9 +1009,9 @@ def np_fight(P, s_brain, hands):
     return (1.0 / (1.0 + np.exp(-np_mlp(P, x))) - 0.5).astype(np.float32)
 
 
-def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None):
+def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None, goal=None):
     """feats() in numpy"""
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv, goal=goal)
     B = len(next(v for v in src.values() if v is not None))
     cols = []
     for p in PARTS:
@@ -976,7 +1027,7 @@ def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None,
             v = v[:, np.asarray(L[p + "_cols"], np.int64)]
         if v.shape[1] != w:
             v = v[:, :w] if v.shape[1] > w else np.concatenate([v, np.zeros((B, w - v.shape[1]), np.float32)], 1)
-        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins", "wv"):
+        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins", "wv", "goal"):
             v = np.clip(v, -CLIP, CLIP)
         cols.append(v)
     return np.concatenate(cols, 1).astype(np.float16).astype(np.float32)

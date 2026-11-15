@@ -139,6 +139,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             delta["air_fast"] = int(((np.hypot(s[:, 3], s[:, 4]) > 330) & (s[:, 6] < 0.5)).sum())
             delta["visible"] = int(env.visible.sum())
             delta["players"] = env.n
+            if hasattr(env, "intent_arr"):                   # (2.1c, --held) per seat: his target ended (reached and not an arrival, gone, a spawn):
+                n_ = env.n                                   # the next reading is forced (a list: per seat, not summed)
+                delta["trip_end"] = [((env.intent_done[:n_] & ~env.intent_arr[:n_]) | env.intent_gone[:n_] | env.intent_new[:n_]).astype(bool)]
             delta["way_trips"] = list(getattr(env, "way_trips", ()))      # (WAYS) this step's trips between two places: [from, to, 16 points]
             # frags scored by even (learner) players and by odd players, for learner-vs-snapshot win tracking
             ev = info["events"]
@@ -283,7 +286,8 @@ LIVE_TRAINER = LIVE_TRAINER + ("WIN_VALUE_W",)                     # (v0.4.3, --
 LIVE_TRAINER = LIVE_TRAINER + ("ITEM_FLOOR", "ITEM_FLOOR_W")          # (2026-10-25, --item-floor) the floor on his item intentions by map, its weight
 LIVE_TRAINER = LIVE_TRAINER + ("H2_GATE_CAP", "H2_GATE_OPEN", "H2_PG", "H2_PLAN_GRAD", "H2_MIX", "H2_COPY", "INTENT_SEEK_W", "H2_L2")    # (v0.4.3, --head2) the strategy head's gate: its cap and its opening's minutes; its own lesson's factor; the plan's gradient into it
 LIVE_TRAINER = LIVE_TRAINER + ("KEEP_G",)                          # (1.4c) the share of his readings the keep choice decides (the rest: the lock rule)
-LIVE_TRAINER = LIVE_TRAINER + ("ORD_GATE",)                        # (1.7) the order's attention token's gate (shut -30 .. open 0; never lowered)
+LIVE_TRAINER = LIVE_TRAINER + ("HELD_G",)                          # (2.1c, --held) the share of his trips whose target is the held draw (the rest: the lock rule)
+LIVE_TRAINER = LIVE_TRAINER + ("ORD_GATE",)                      # (1.7) the order's attention token's gate (shut -30 .. open 0; never lowered)
 LIVE_TRAINER = LIVE_TRAINER + ("FIGHT_W", "H2_OPG", "ORD_KL")              # (1.7b) the fight odds' lesson, the order's share of the head's term, its KL
 LIVE_TRAINER = LIVE_TRAINER + ("CMB_G", "FADD", "PADD", "PASS_W", "H2_FPG")   # (1.7) the combat order's share, the fire push's add, the pointer's
 #                                                                    adds' share on the targets and the ways, the brain's pass lesson, the fire key's credit
@@ -314,7 +318,8 @@ LIVE_TRAINER = LIVE_TRAINER + ("BRANCH_LONG_P", "INS_LONG_W")       # (2.1, --br
 LIVE_RANGE["BRANCH_LONG_P"] = (0.0, 1.0)                     # window; the long window's share of the lesson's target
 LIVE_RANGE["INS_LONG_W"] = (0.0, 1.0)
 LIVE_TRAINER = LIVE_TRAINER + ("KEEPQ_G", "KEEP_TEACH", "STAY_W", "BRANCH_ZONE_P")   # (2.1, owner 11-14: the lock's replacement) the share of
-LIVE_RANGE["KEEPQ_G"] = (0.0, 1.0)                           # his quiet seconds the keep choice's quiet layer decides (with KEEP_ZONE=1; the
+LIVE_RANGE["HELD_G"] = (0.0, 1.0)
+LIVE_RANGE["KEEPQ_G"] = (0.0, 1.0)                          # his quiet seconds the keep choice's quiet layer decides (with KEEP_ZONE=1; the
 LIVE_RANGE["KEEP_TEACH"] = (0.0, 100.0)                      # rest: the lock rule); the weight of the keep choice's lesson toward the stay
 LIVE_RANGE["STAY_W"] = (0.0, 100.0)                          # value's sign (both layers, all run); a factor on the stay value's own lesson
 LIVE_RANGE["BRANCH_ZONE_P"] = (0.0, 1.0)                     # (0 stops it); the share of the keep forks' moments taken in contact or arrived
@@ -1153,6 +1158,19 @@ def main():
                                                             "-1: the file's own)")
     ap.add_argument("--opt-cold-ok", action="store_true", help="(1.7a) on --resume, an opt.pt that does not fit the network's groups starts the "
                                                                "optimizer cold; without it the trainer stops (1.4c's resume chain met a cold start silently)")
+    ap.add_argument("--held", type=int, default=0, help="(2.1c, --head2) 1: the held draw is built in: a trip under it (a coin a trip, share --held-g, "
+                    "live HELD_G) plays the highest of his target scores plus random numbers drawn once a trip (at its end: reached, gone, "
+                    "a spawn; 'nothing': once a second), read five times a second; no lock, no keep choice. 0: nothing changes")
+    ap.add_argument("--held-g", type=float, default=-1.0, help="(--held) the share at the start (-1: the file's own, 0 for a file without it). "
+                    "Each league network plays at the share in its own file")
+    ap.add_argument("--plan", type=int, default=0, help="(2.1c, sim/slowplan.py; needs --head2 and --held 1) 1: the slow plan in shadow: from the "
+                    "head's state at a keep reading, his own target odds averaged over the next head ticks (--plan-horizons), refreshed every "
+                    "--plan-every ticks and at a new draw, taught from his own fast odds after the reading. Nothing reads it (readouts only). "
+                    "0 = off (a checkpoint that has one keeps it, unread)")
+    ap.add_argument("--plan-lr", type=float, default=3e-4, help="... its own Adam's rate")
+    ap.add_argument("--plan-every", type=int, default=5, help="... its refresh, in head ticks (5 = 1 s)")
+    ap.add_argument("--plan-horizons", type=str, default="10,25", help="... its horizons, in head ticks (10 = 2 s, 25 = 5 s); a new plan only "
+                    "(a checkpoint's plan keeps its own)")
     ap.add_argument("--keep-g", type=float, default=-1.0, help="(1.4c, a network with the keep choice: sim/head2.py, tools/keep_init.py) the share of his "
                                                                "readings it decides at the start (live KEEP_G; -1: the file's own); the rest the lock rule. "
                                                                "Each league network plays at the share in its own file (none: 0)")
@@ -2008,6 +2026,7 @@ def main():
     WV_CK = None                                             # (--win-value, v0.4.3) the shadow win value: its layout and weights
     MS_CK = APR_CK = None                                    # (2.1, --map-sense, --appraise) top-level entries too, never in "model"
     STAY_CK = None                                           # (2.1, --stay) the same
+    PLAN_CK = None                                           # (2.1c, --plan) the slow plan: the same
     INS_CK = KN_CK = SPW_CK = None
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
@@ -2036,6 +2055,7 @@ def main():
         WV_CK = ck0_.get("win_value")                        # (--win-value) a top-level entry, never in "model"
         MS_CK, APR_CK = ck0_.get("map_sense"), ck0_.get("appraise")    # (2.1) the same
         STAY_CK = ck0_.get("stay")                           # (2.1, --stay) the stay value: the same
+        PLAN_CK = ck0_.get("plan")                           # (2.1c, --plan) the slow plan: the same
         INS_CK = ck0_.get("ins")                             # (2.1, --ins) the instruction's scorer: the same
         KN_CK, SPW_CK = ck0_.get("known"), ck0_.get("spawn")  # (2.1, --known-odds, --spawn-odds) the brain's two new readouts: the same
         del ck0_
@@ -3755,6 +3775,7 @@ def main():
                            else ({"appraise": APR_CK} if APR_CK is not None else {})),        # (2.1, --appraise: never in "model")
                         **({"stay": dict(layout=STAY_L, model={k_: v_.detach().cpu() for k_, v_ in STAY.state_dict().items()}, opt=STAY_OPT.state_dict())}
                            if STAY is not None else ({"stay": STAY_CK} if STAY_CK is not None else {})),   # (2.1, --stay: never in "model"; its Adam with it)
+                        **({"plan": plan_save()} if PLAN is not None else ({"plan": PLAN_CK} if PLAN_CK is not None else {})),   # (2.1c, --plan: the same)
                         **({"ins": dict(INS_CK or {}, seen=int(INS_SEEN[0]), warm=int(a.ins_warm), none_row=int(INS_NONE), fill=dict(INS_FILL))}
                            if INS else ({"ins": INS_CK} if INS_CK is not None else {})),   # (2.1, --ins: what is not a weight: the branches
                         #                                      seen, the warm-up, the row "none", the filled columns; the scorer is in "model": head2.ins_*)
@@ -3950,6 +3971,49 @@ def main():
     H2_G, H2_LAST, H2_T0 = [0.0], [None], 0.0
     H2_M, H2_CW, SEEK_W = [0.0], [1.0], [1.0]                # (b1.4a) the mix, a factor on the copy lesson, a factor on the way pay (all live)
     KEEP_GV = [0.0]                                          # (1.4c) the keep choice's share (live KEEP_G)
+    HELD_GV = [0.0]                                          # (2.1c) the held draw's share of his trips (live HELD_G)
+    HELD = bool(H2 and a.held)
+    assert not a.held or H2, "--held: only with --head2"
+    assert not (HELD and (KEEP or ORDER)), "--held: not with a keep choice in the network or --ordered-heads (the held draw is the only decider)"
+    HGEN = None
+    HELD_ST = [None]                                         # (the last rollout's share as played and its counts, for the record)
+    import slowplan as slowplan_                             # (2.1c, --plan) the slow plan (sim/slowplan.py), in shadow: not a part of `pol`
+    PLAN = PLAN_OPT = PLAN_L = PLAN_GEN = None
+    PLAN_ST = [None]                                         # (the plan readouts of the update's own rollout (R["plan"]), for the record)
+    import threading as threading_p
+    PLAN_LOCK = threading_p.Lock()                           # (--overlap: its lesson runs in the rollout's thread, the save in the main one)
+    if a.plan:
+        assert H2 and HELD and not HEADL, "--plan: with --head2 and --held 1"
+        PLAN_L = PLAN_CK["layout"] if PLAN_CK is not None else slowplan_.layout(
+            head=int(H2L["size"]), n_target=ACTION_DIMS[I_HEAD], horizons=tuple(int(x_) for x_ in a.plan_horizons.split(",") if x_.strip()),
+            every=a.plan_every)
+        PLAN_L = dict(PLAN_L, every=int(a.plan_every))       # (the refresh is the command's: a setting, not a weight)
+        assert int(PLAN_L["head"]) == int(H2L["size"]) and int(PLAN_L["n_target"]) == ACTION_DIMS[I_HEAD], "--plan: its widths do not fit the network"
+        PLAN = slowplan_.make_module(PLAN_L).to(dev)
+        if PLAN_CK is not None:
+            PLAN.load_state_dict(PLAN_CK["model"])
+        PLAN_OPT = torch.optim.Adam(PLAN.parameters(), lr=a.plan_lr)
+        if PLAN_CK is not None and PLAN_CK.get("opt") is not None:
+            PLAN_OPT.load_state_dict(PLAN_CK["opt"])
+        PLAN_GEN = slowplan_.generator()
+        print("slow plan (2.1c, shadow): head state {} -> {} -> {} -> {} horizons x {} targets (horizons {} head ticks, refresh every {} "
+              "and at a new draw); {}; lesson: his own odds after the reading, Adam {}; nothing reads it".format(
+                  PLAN_L["head"], PLAN_L["hid"], PLAN_L["hid"], len(PLAN_L["horizons"]), PLAN_L["n_target"], PLAN_L["horizons"],
+                  PLAN_L["every"], "from the checkpoint" if PLAN_CK is not None else "new (its last layer at zero)", a.plan_lr), flush=True)
+
+    PLAN_OFF = [False]                                       # (a failure in the shadow plan: off for the rest of the run, the run goes on)
+
+    def plan_fail():
+        import traceback
+        PLAN_OFF[0] = True
+        print("MAJOR PROBLEM: the slow plan (shadow) failed and is off for the rest of the run; the run goes on: "
+              + traceback.format_exc().replace(chr(10), " | ")[-1500:], flush=True)
+
+    def plan_save():
+        """(2.1c, --plan) the checkpoint's entry: the layout, the weights, its Adam (copied under the lock)"""
+        with PLAN_LOCK:
+            return dict(layout=PLAN_L, model={k_: v_.detach().cpu().clone() for k_, v_ in PLAN.state_dict().items()},
+                        opt=copy.deepcopy(PLAN_OPT.state_dict()))
     KEEPQ_GV = [0.0]                                         # (2.1) its quiet layer's share of his quiet seconds (live KEEPQ_G)
     CMB_GV, FADD_V = [0.0], [0.0]                            # (1.7) the combat order's share (live CMB_G), the fire push's add (live FADD)
     PADD_V = [0.0]                                           # (1.7) the pointer's adds on the targets and the way (live PADD)
@@ -3967,6 +4031,14 @@ def main():
             if a.head2_mix >= 0:
                 pol.head2.mix.fill_(float(a.head2_mix))
         H2_M[0] = float(pol.head2.mix)
+        if HELD:                                             # (2.1c) the held draw's share: the file's own unless set; live HELD_G; its own stream
+            with torch.no_grad():
+                if a.held_g >= 0:
+                    pol.head2.held_g.fill_(min(1.0, float(a.held_g)))
+            HELD_GV[0] = float(pol.head2.held_g)
+            HGEN = torch.Generator(device=dev)
+            HGEN.manual_seed(2121)
+            print("held draw (2.1c): share {:.4f} of his trips (the rest: the lock rule, INTENT_HOLD)".format(HELD_GV[0]), flush=True)
         if KEEP:                                             # (1.4c) the keep choice's share: the file's own unless set; live KEEP_G
             with torch.no_grad():
                 if a.keep_g >= 0:
@@ -4404,6 +4476,11 @@ def main():
                             KEEPQ_GV[0] = min(1.0, max(0.0, float(lt_["KEEPQ_G"])))
                         else:
                             print("live: KEEPQ_G ignored (the network has no quiet layer)", flush=True)
+                    if "HELD_G" in lt_:                                                # (2.1c) the held draw's share, from the next rollout
+                        if HELD:
+                            HELD_GV[0] = min(1.0, max(0.0, float(lt_["HELD_G"])))
+                        else:
+                            print("live: HELD_G ignored (the run has no --held 1)", flush=True)
                     if "KEEP_G" in lt_:                                                # (1.4c) the keep choice's share, from the next rollout
                         if KEEP:
                             KEEP_GV[0] = min(1.0, max(0.0, float(lt_["KEEP_G"])))
@@ -4459,6 +4536,7 @@ def main():
                                   **({"KEEP_TEACH": KT_LIVE[0]} if KEEP else {}),
                                   **({"BRANCH_ZONE_P": BR_ZP[0]} if BR_KEEP else {}),
                                   **({"KEEPQ_G": KEEPQ_GV[0]} if KQ else {}),
+                                  **({"HELD_G": HELD_GV[0]} if HELD else {}),
                                   **({"KNOWN_W": KN_LIVE[0]} if KN_ON else {}),
                                   **({"SPAWN_W": SPW_LIVE[0]} if SPW_ON else {}),
                                   **({"BRANCH_P": BR_P[0], "BRANCH_WPN_P": BR_WP[0]} if BR_ON else {}),
@@ -4504,6 +4582,8 @@ def main():
             with torch.no_grad():
                 pol.head2.gate.fill_(H2_G[0])
                 pol.head2.mix.fill_(H2_M[0])                             # (b1.4a) the mix of this rollout: played and learnt at it
+                if HELD:
+                    pol.head2.held_g.fill_(HELD_GV[0])                   # (2.1c) the held draw's share of this rollout (the file's too)
                 if KEEP:
                     pol.head2.keep_g.fill_(KEEP_GV[0])                   # (1.4c) the keep choice's share of this rollout (the file's too)
                 if KQ:
@@ -5113,6 +5193,41 @@ def main():
             CG_PLAY = float(net.head2.cmb_g) if CMB else 0.0
             CG_OPP = (float(onet.head2.cmb_g) if CMB and has_snaps and not HEADL and onet.h2_open and head2_.has_cmb(onet.head2) else 0.0)
             KG_OPP = (float(onet.head2.keep_g) if has_snaps and not HEADL and onet.h2_open and head2_.has_keep(onet.head2) else 0.0)
+        if HELD:                                                         # (2.1c) the held draw: each seat's random numbers (held for its trip), its
+            NI_H = ACTION_DIMS[I_HEAD]                                   # trip's coin, whether its target ended (the simulators', after the last
+            HD_ = C.get("hd")                                            # frame), what the keep choice would read (his target: column 2)
+            if HD_ is None:
+                HD_ = dict(g=-torch.log(-torch.log(torch.rand(N, NI_H, generator=HGEN, device=dev).clamp(1e-12, 1.0 - 1e-7))),
+                           on=torch.zeros(N, dtype=torch.bool, device=dev), te=torch.ones(N, dtype=torch.bool, device=dev),
+                           kf=torch.zeros(N, head2_.KEEP_FEAT + (head2_.KSIG if getattr(E_, "KEEP_SIG", False) else 0), device=dev))
+            HG_PLAY = float(net.head2.held_g)
+            HG_OPP = float(onet.head2.held_g) if (has_snaps and not HEADL and onet.h2_open) else 0.0
+            b_hfr = torch.zeros(T, N, dtype=torch.bool, device=dev)      # the frames a seat's numbers were drawn anew; the frames it was on the held draw
+            b_hon = torch.zeros(T, N, dtype=torch.bool, device=dev)
+            HD_CNT = torch.zeros(5, device=dev)                          # his seat-frames; on the held draw; readings applied there; of them a new draw; a change mid-trip
+        if PLAN is not None and not PLAN_OFF[0]:                                             # (2.1c, --plan) the slow plan in shadow: at each keep reading the head's
+            try:
+                JP_ = T // BK                                                # state and his fast target odds (all seats; his rows marked), the rows
+                NHP_ = len(PLAN_L["horizons"])                               # where his plan was refreshed; its held odds per seat (carried over); the
+                PEV_ = int(PLAN_L["every"])                                  # pull's counterfactual picks at each strength; the actual changes'
+                b_ps = torch.zeros(JP_, N, int(PLAN_L["head"]), device=dev)  # kinds (the ones still waiting for their 2 s: a list)
+                b_pf = torch.zeros(JP_, N, NI_H, device=dev)
+                b_prow = torch.zeros(JP_, N, dtype=torch.bool, device=dev)
+                PL_ = C.get("pl")
+                if PL_ is None:
+                    PL_ = torch.full((N, NHP_, NI_H), 1.0 / NI_H, device=dev)
+                PREF_ = torch.zeros(N, dtype=torch.bool, device=dev)         # (refreshed since the last reading)
+                PK_ = (0.0, 0.5, 1.0, 2.0)
+                PCF_ = torch.full((len(PK_), N), -1, dtype=torch.long, device=dev)   # (each strength's pick at the last reading, -1: none)
+                PCF_ON = torch.zeros(N, dtype=torch.bool, device=dev)        # (on the held draw at the last reading)
+                PROLL_ = torch.zeros(N, dtype=torch.bool, device=dev)        # (numbers drawn anew since the last reading)
+                PCF_N = torch.zeros(len(PK_), device=dev)                    # (the counterfactual changes mid-trip)
+                PCH_ = torch.zeros(4, device=dev)                            # actual changes: n; news; against the plan; (back within 2 s: below)
+                PBK_ = dict(seat=torch.zeros(0, dtype=torch.long, device=dev), old=torch.zeros(0, dtype=torch.long, device=dev),
+                            t0=torch.zeros(0, dtype=torch.long, device=dev), back=torch.zeros(0, dtype=torch.bool, device=dev),
+                            alive=torch.zeros(0, dtype=torch.bool, device=dev))
+            except Exception:
+                plan_fail()
         BS_ = C.get("bs")                                                # (--belief) its live state; kept at the start for the update
         if WV_ON and WV_ST[0] is None:                                   # (--win-value) the per-seat stream, carried from rollout to rollout
             WV_ST[0] = wv_.Stream(WV_L, N, "cpu", group=2)            # (on the host: a few vectors a frame)
@@ -5225,14 +5340,16 @@ def main():
                     sb_ = BS_.s
                     rd_ = dict(brain=sb_, trk=net.track(sb_), trz=net.trackz(sb_) if TRZ else None, ahead=net.ahead(sb_) if AH else None,
                                obs=x)
+                    GU_ = head2_.goal_u(H2L, HD_["kf"], HD_["on"]) if (HELD and head2_.has_goal(H2L)) else None   # (2.1c) the goal he holds
                     u2_ = head2_.feats(H2L, hands=h, ctrl=head2_.control_t(net, sb_, h, head2_.ctrl_src(H2L)),
                                        fight=head2_.fight_t(net, sb_, h, H2L), ins=IU_ if INS else None,
-                                       wv=head2_.wv_t(WV_ACT if WV_ACT is not None else WV, sb_, h, H2L), **rd_)   # (1.9a: his shadow win value)
+                                       wv=head2_.wv_t(WV_ACT if WV_ACT is not None else WV, sb_, h, H2L),   # (1.9a: his shadow win value)
+                                       goal=GU_, **rd_)
                     b_u2[t // BK] = u2_.half().cpu()
                     H2S.tick(net.head2, u2_)
                     if has_snaps and onet.h2_open:                       # (the league's own head on the same brain's answer, its own hands)
                         H2O.tick(onet.head2, head2_.feats(H2L, hands=h_opp, ctrl=head2_.control_t(net, sb_, h_opp, head2_.ctrl_src(H2L)),
-                                                          fight=head2_.fight_t(onet, sb_, h_opp, H2L), **rd_))
+                                                          fight=head2_.fight_t(onet, sb_, h_opp, H2L), goal=GU_, **rd_))
                 if bt_ and TOK_ is not None:                             # (v0.4.1) a tick: the readouts' answer, kept in map coordinates
                     TOK_.answer(None, net.track(BS_.s).float().cpu().numpy(), net.trackz(BS_.s).float().cpu().numpy() if TRZ else None, pose_, zm_)
                     if ms_bel is not None:                               # (2.1, --map-sense) this tick's belief, for the seeds
@@ -5264,6 +5381,49 @@ def main():
                         lo = wkey_add(lo, torch.from_numpy(habit_push(obs, hb_acc)).to(lo.device))
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
+                if HELD:                                                 # (2.1c) the held draw. A seat whose target ended (or is "nothing", once a
+                    cur_h = HD_["kf"][:, 2].long()                       # second) gets new random numbers and a new coin for the trip; under the
+                    fr_ = HD_["te"] | ((cur_h == 0) & (t % 40 == 0))     # coin its target is the highest of its scores plus its numbers, at every
+                    if fr_.any():                                        # keep reading (five a second; the simulator's keep column: d 1, c 1), and
+                        gn_ = -torch.log(-torch.log(torch.rand(N, NI_H, generator=HGEN, device=dev).clamp(1e-12, 1.0 - 1e-7)))
+                        cn_h = torch.rand(N, generator=HGEN, device=dev) < ((snap_players.float() * HG_OPP + (~snap_players).float() * HG_PLAY) if has_snaps else HG_PLAY)
+                        HD_["g"] = torch.where(fr_[:, None], gn_, HD_["g"])   # changes only when his scores cross. The numbers are Gumbel's: a new
+                        HD_["on"] = torch.where(fr_, cn_h, HD_["on"])    # draw is exactly a draw from his choice's probabilities
+                    li_ = logits[:, HD_I0:HD_I0 + NI_H].float()
+                    if has_snaps:
+                        li_ = torch.where(snap_players[:, None], lo[:, HD_I0:HD_I0 + NI_H].float(), li_)
+                    ah_ = (torch.log_softmax(li_, -1) + HD_["g"]).argmax(-1)
+                    act[:, I_HEAD] = torch.where(HD_["on"], ah_, act[:, I_HEAD])
+                    lps[I_HEAD] = ds[I_HEAD].log_prob(act[:, I_HEAD])    # (as played: his seats' ratio reads it)
+                    if H2:
+                        b_lpi[t] = lps[I_HEAD]
+                    b_hfr[t], b_hon[t] = fr_, HD_["on"]
+                    kcol_ = HD_["on"].long() * 3 + 4 * int(t % BK == 0)  # (d + 2 c + 4 r; not under the coin: no draw, no coin: the lock rule)
+                if PLAN is not None and not PLAN_OFF[0]:                                     # (2.1c, --plan) the slow plan, in shadow (nothing here changes a choice):
+                    try:
+                        mine_p = (~snap_players) if has_snaps else torch.ones(N, dtype=torch.bool, device=dev)
+                        rd_p = t % BK == 0                                   # refreshed at a keep reading every --plan-every ticks and where a seat's
+                        rf_p = b_hfr[t] | bool(rd_p and (t // BK) % PEV_ == 0)   # numbers were drawn anew; held between
+                        if rf_p.any():
+                            PL_ = torch.where(rf_p[:, None, None], slowplan_.odds(PLAN, s_keep_), PL_)
+                        PREF_ |= rf_p
+                        PROLL_ |= b_hfr[t]
+                        if rd_p:                                             # a keep reading: the head's state, his fast odds (before the held
+                            j_p = t // BK                                    # numbers), the rows; the pull's counterfactual picks (first order)
+                            lsm_p = torch.log_softmax(logits[:, HD_I0:HD_I0 + NI_H].float(), -1)
+                            b_ps[j_p], b_pf[j_p] = s_keep_.float(), lsm_p.exp()
+                            b_prow[j_p] = mine_p & PREF_
+                            PREF_ = torch.zeros_like(PREF_)
+                            on_p = HD_["on"] & mine_p
+                            lpl_p = torch.log(PL_[:, 0].clamp(min=1e-6))
+                            for k_i, k_p in enumerate(PK_):
+                                pk_p = (lsm_p + HD_["g"] + k_p * lpl_p).argmax(-1)
+                                PCF_N[k_i] += (on_p & PCF_ON & ~PROLL_ & (PCF_[k_i] >= 0) & (pk_p != PCF_[k_i])).sum().float()
+                                PCF_[k_i] = torch.where(on_p, pk_p, torch.full_like(pk_p, -1))
+                            PCF_ON = on_p
+                            PROLL_ = torch.zeros_like(PROLL_)
+                    except Exception:
+                        plan_fail()
                 if WR_ON:                                                # (1.7c) the pros' weapon table chooses the weapon of every seat under it:
                     wd_ = torch.from_numpy(wrule_act(obs)).to(dev)       # the key's action set after the draw (as the checks and the servers do);
                     b_wd[t] = wd_                                        # the key's log-probability counts only where his own stood (head_masks)
@@ -5472,7 +5632,7 @@ def main():
                 for p in pipes:
                     p.send(("instr", dict(want=True)))
             an = act.cpu().numpy()
-            if KEEP:                                                     # (1.4c) the keep column beside the actions (the simulator takes it off)
+            if KEEP or HELD:                                             # (1.4c) the keep column beside the actions (the simulator takes it off)
                 an = np.concatenate([an, kcol_.cpu().numpy()[:, None].astype(an.dtype)], 1)
             tp1_ = time.perf_counter()
             RP_["net"] += tp1_ - tp0_                                    # (his network on the card and its draws, the frame's buffers)
@@ -5530,6 +5690,40 @@ def main():
                 b_wg[t] = torch.from_numpy(wl_[:, 0]).to(dev)
                 b_wb[t] = torch.from_numpy(wl_[:, 1]).to(dev)
             live = torch.from_numpy(np.concatenate([r[6] for r in res]).astype(np.float32)).to(dev)
+            if HELD:                                                     # (2.1c) a seat on the held draw learns its target where it was a decision:
+                kf_n = torch.from_numpy(np.concatenate([r[23] for r in res]).astype(np.float32)).to(dev)   # a new draw applied, or a change
+                chg_ = kf_n[:, 2] != HD_["kf"][:, 2]                     # mid-trip (his scores crossed); a reading that kept the target is none
+                dec_h = b_hfr[t] | chg_
+                mine_h = (~snap_players) if has_snaps else torch.ones(N, dtype=torch.bool, device=dev)
+                HD_CNT += torch.stack([mine_h.sum(), (mine_h & b_hon[t]).sum(), (mine_h & b_hon[t] & (live > 0)).sum(),
+                                       (mine_h & b_hon[t] & (live > 0) & b_hfr[t]).sum(), (mine_h & b_hon[t] & (live > 0) & chg_ & ~b_hfr[t]).sum()]).float()
+                if PLAN is not None and not PLAN_OFF[0]:                                     # (2.1c, --plan) the kinds of his changes mid-trip: back to the old target
+                    try:
+                        tg_n = kf_n[:, 2].long().clamp(0, NI_H - 1)          # within 2 s (no new draw between), news (contact, a sound, a hit unseen:
+                        if len(PBK_["seat"]):                                # the rows the choice read), against the plan (its odds, horizon 0)
+                            al_ = PBK_["alive"]
+                            cut_ = b_hfr[t][PBK_["seat"]]
+                            bk_ = al_ & ~cut_ & (tg_n[PBK_["seat"]] == PBK_["old"])
+                            PBK_["back"] = PBK_["back"] | bk_
+                            PBK_["alive"] = al_ & ~cut_ & ~bk_ & ((t - PBK_["t0"]) < 80)
+                        ev_p = mine_h & b_hon[t] & (live > 0) & chg_ & ~b_hfr[t]
+                        if ev_p.any():
+                            se_ = torch.nonzero(ev_p, as_tuple=True)[0]
+                            old_ = HD_["kf"][se_, 2].long().clamp(0, NI_H - 1)
+                            kfo_ = HD_["kf"][se_]
+                            nws_ = (kfo_[:, 1] > 0) | (kfo_[:, 5] < 1.0) | (kfo_[:, 6] < 1.0)
+                            agp_ = PL_[se_, 0].gather(1, tg_n[se_][:, None]).squeeze(1) < PL_[se_, 0].gather(1, old_[:, None]).squeeze(1)
+                            PCH_ += torch.stack([torch.tensor(float(len(se_)), device=dev), nws_.sum().float(), agp_.sum().float(),
+                                                 torch.zeros((), device=dev)])
+                            PBK_ = dict(seat=torch.cat([PBK_["seat"], se_]), old=torch.cat([PBK_["old"], old_]),
+                                        t0=torch.cat([PBK_["t0"], torch.full_like(se_, t)]),
+                                        back=torch.cat([PBK_["back"], torch.zeros_like(se_, dtype=torch.bool)]),
+                                        alive=torch.cat([PBK_["alive"], torch.ones_like(se_, dtype=torch.bool)]))
+                    except Exception:
+                        plan_fail()
+                live = torch.where(b_hon[t], live * dec_h.float(), live)
+                HD_["kf"] = kf_n
+                HD_["te"] = torch.from_numpy(np.concatenate([r[3]["trip_end"][0] for r in res])).to(dev)
             b_live[t] = live
             if KEEP:                                                     # (1.4c) the readings his keep choice decided (his seats), the numbers
                 kl_ = torch.from_numpy(np.concatenate([r[22] if r[22] is not None else np.zeros(len(r[2]), bool) for r in res]).astype(np.float32)).to(dev)
@@ -5689,7 +5883,41 @@ def main():
                 ctl_b = control_.batch(CTL_RING[0], CTL_G0[upd], b_aux, TRK_IX, int(CTL_L["horizon"]))   # now, before the next
             CTL_G0.pop(upd, None)                                        # rollout writes over the ring (with --overlap too)
         t_done = time.time() if OVL else None
+        PLAN_R = None                                                    # (2.1c, --plan) this rollout's readouts, handed to its own update
+        HELD_R = None
         C.update(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp, rjl=rjl, rjc=rjc)
+        if HELD:
+            HELD_R = (HG_PLAY, [float(x_) for x_ in HD_CNT.cpu()])   # (handed to its own update through R: --overlap)
+            C["hd"] = HD_                                                # (2.1c) the held draw's numbers, coins and ends, carried to the next rollout
+        if PLAN is not None and not PLAN_OFF[0]:                                             # (2.1c, --plan) the slow plan's labels, its readouts BEFORE the lesson
+            try:
+                t_pl = time.time()                                           # (held out), the lesson (its own Adam and stream), the loss after
+                C["pl"] = PL_
+                with torch.no_grad():
+                    lab_p = slowplan_.labels(b_pf, b_done[:T], b_prow, PLAN_L["horizons"], BK)
+                hz_p, S_l, Y_l, H_l = {}, [], [], []
+                for h_i, (jj_p, ii_p, yy_p) in enumerate(lab_p):
+                    S_h, P_h = b_ps[jj_p, ii_p], b_pf[jj_p, ii_p]
+                    hz_p[h_i] = slowplan_.readouts(PLAN, S_h, P_h, yy_p.to(dev), h_i)
+                    S_l.append(S_h)
+                    Y_l.append(yy_p.to(dev))
+                    H_l.append(torch.full((len(yy_p),), h_i, dtype=torch.long, device=dev))
+                S_a, Y_a, H_a = torch.cat(S_l), torch.cat(Y_l), torch.cat(H_l)
+                with PLAN_LOCK, torch.enable_grad():
+                    slowplan_.learn(PLAN, PLAN_OPT, S_a, Y_a, H_a, epochs=2, mb=1024, gen=PLAN_GEN, clip=1.0)
+                    loss_p = slowplan_.loss_of(PLAN, S_a, Y_a, H_a)
+                sm_p = float(HD_CNT[1]) / 2400.0                             # (his held seat-minutes)
+                full_ = PBK_["t0"] <= (T - 1 - 80)
+                PLAN_R = dict(
+                    hz={int(PLAN_L["horizons"][h_i]): r_ for h_i, r_ in hz_p.items()},
+                    loss=round(loss_p, 5) if loss_p is not None else None, rows=int(len(Y_a)), secs=round(time.time() - t_pl, 3),
+                    pull_changes_min={str(k_p): round(float(PCF_N[k_i]) / max(sm_p, 1e-9), 3) if sm_p > 0 else None for k_i, k_p in enumerate(PK_)},
+                    held_min=round(sm_p, 3),
+                    changes=dict(n=int(PCH_[0]), back_2s=round(float((PBK_["back"] & full_).sum()) / max(1.0, float(full_.sum())), 4),
+                                 n_2s=int(full_.sum()), news=round(float(PCH_[1]) / max(1.0, float(PCH_[0])), 4),
+                                 against_plan=round(float(PCH_[2]) / max(1.0, float(PCH_[0])), 4)))
+            except Exception:
+                plan_fail()
         if KEEP:
             C["kf"] = KF_                                                # (1.4c) what the keep choice reads on the next rollout's first frame
         if CMB:
@@ -5710,7 +5938,7 @@ def main():
                     b_ok=b_ok, b_oc=b_oc, b_ol=b_ol, b_oon=b_oon, b_lpo=b_lpo, b_x=b_x, b_c=b_c, b_p=b_p, b_xm=b_xm, b_wl=b_wl, b_lpwy=b_lpwy,
                     cg=CG_PLAY if CMB else 0.0,
                     h2g=float(net.head2.gate) if H2 else 0.0, h2m=float(net.head2.mix) if H2 else 0.0, wv=WV_ST[0].take() if WV_ON else None,
-                    ms_bel=ms_bel, b_ws=b_ws, ins=IB_, b_hw=b_hw, b_vw=b_vw)
+                    ms_bel=ms_bel, b_ws=b_ws, ins=IB_, b_hw=b_hw, b_vw=b_vw, plan=PLAN_R, held=HELD_R)
 
     def launch(upd):
         """(--overlap) between two rollouts: what comes before rollout `upd`, pol copied into ACT, the rollout started in a thread"""
@@ -5908,6 +6136,10 @@ def main():
         B_KD, B_KX, B_KL, B_LPK = (R.get(k_) for k_ in ("b_kd", "b_kx", "b_kl", "b_lpk"))      # (1.4c) the keep choice as played
         KG_R = float(R.get("kg") or 0.0)                                 # ... at the share it was played at
         B_KQD, B_KQX, B_KQL, B_LPQ, B_SV, B_KM = (R.get(k_) for k_ in ("b_kqd", "b_kqx", "b_kql", "b_lpq", "b_sv", "b_km"))   # (2.1) the quiet
+        if HELD:                                                         # (2.1c) the held draw's record of this update's own rollout
+            HELD_ST[0] = R.get("held")
+        if PLAN is not None:                                             # (2.1c, --plan) the slow plan's readouts of this update's own rollout
+            PLAN_ST[0] = R.get("plan")                                   # (for the record: a main-scope holder)
         KQG_R = float(R.get("kqg") or 0.0)                               # layer as played, the stay value, the keep readings; its share
         B_LPW = R.get("b_lpw")                                           # (1.5a, B) the weapon key as played
         B_LPF = R.get("b_lpf")                                           # (1.7, S6) the fire key as played
@@ -8063,6 +8295,18 @@ def main():
                                            way_add=q_(SUM_ACC[11], SUM_ACC[10])) if CMB else None),
                     fire=dict(add=round(FADD_V[0], 5), fsc=round(float(pol.head2.fsc.weight.norm()), 5), credit=round(H2_FPG[0], 4) if FCR else None,
                               frames=int(ca_[14]), pg=q_(ca_[15], ca_[14], 6), clip_share=q_(ca_[16], ca_[14])) if FIRE else None)
+            if HELD and HELD_ST[0] is not None:                          # (2.1c) the held draw of his seats this rollout: the share played, the share
+                HG_R, hc_ = HELD_ST[0]                 # of seat-frames on it, its readings a seat-second, the share that were new
+                rec["held"] = dict(g=round(HG_R, 5), g_next=round(HELD_GV[0], 5), share=round(hc_[1] / max(1.0, hc_[0]), 4),   # draws, changes mid-trip a
+                                   readings_s=round(hc_[2] / max(1.0, hc_[1]) * 40.0, 3), new_draws_min=round(hc_[3] / max(1.0, hc_[1]) * 2400.0, 3),   # seat-minute
+                                   changes_min=round(hc_[4] / max(1.0, hc_[1]) * 2400.0, 3))
+            if PLAN is not None and PLAN_ST[0] is not None:              # (2.1c, --plan) the slow plan in shadow: each horizon's skill against his
+                pr_ = PLAN_ST[0]                                         # own odds at the reading (held out), the pull that would have been, the
+                hk_ = sorted(pr_["hz"])                                  # kinds of his changes mid-trip
+                rec["plan"] = dict(**({"h2s":dict(pr_["hz"][hk_[0]], ticks=hk_[0])} if hk_ else {}),
+                                   **({"h5s": dict(pr_["hz"][hk_[1]], ticks=hk_[1])} if len(hk_) > 1 else {}),
+                                   pull_changes_min=pr_["pull_changes_min"], held_min=pr_["held_min"], changes=pr_["changes"],
+                                   loss=pr_["loss"], rows=pr_["rows"], secs=pr_["secs"], lr=a.plan_lr, every=int(PLAN_L["every"]))
             if KEEP:                                                     # (1.4c) the keep choice: its share, its readings and choices (the learner's
                 ka_ = KEEP_ACC.cpu().numpy()                             # pass), what the simulators counted (stats["keep"]), its weights
                 kp_ = np.atleast_1d(agg.get("keep", np.zeros(16))).astype(np.float64)
