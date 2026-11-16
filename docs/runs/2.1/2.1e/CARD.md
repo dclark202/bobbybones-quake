@@ -121,6 +121,28 @@ Pathology checks of the ledger as every card (negative frags, sign flips, lopsid
    Quake III bot (8.1) keeps one long-term goal: one persistent goal is enough for good item play.
 7. **Rule 12**: no pro number is used anywhere.
 
+## Built and tested (11-15 evening; branch `b21e`, commits `9a69349`, `9159f93`, on `bhalf`; an Opus 5.5 subagent; not merged)
+
+Everything of "What is built" is there, in the worktree. Tests, all on the CPU on the check cores:
+
+| Test | Result |
+|---|---|
+| `slow_init add`, then `same` | the head's inputs 957 → 1,085; 0 of 48,000 actions differ |
+| The trainer with the slow halves at mix 0, back 0 against the same save without them | 0 of 43,008 actions differ; log-probabilities, values and pay identical |
+| The smoke (three runs; mix 0.5, back 0.5, test weights off zero, a league network playing its own halves) | ALL PASSED: all three halves tick on all three causes, the readouts are there, the resume works; the proof 0.000006 to 0.000012 |
+| The live test | ALL PASSED: the dials move mid-run, the pick switches halves, out-of-range values are refused |
+| The export and the server's pass against the checks' player (1,200 frames, Blood Run, mix 0.5, back 0.5) | 0 frames differ; at mix 0, back 0 identical to the source |
+| The settings check against 2.1d's command; the two start scripts | PASS; 0 parser errors |
+
+Decisions the build took where the design was silent:
+- **A trip's end ticks once.** The held draw rolls anew on every frame until a reading takes the new target; ticking on each gave about 8 ticks an event. One event, one tick.
+- **The slow halves tick before the head** on a frame, so the read-back and the pull read this frame's plan.
+- **The read-back enters the head's first layer as a term of its own**, so the widened network answers to the bit as before.
+- **One Adam for the three halves** (`slow_opt`), the plan's rate.
+- New stored data at full size: about 230 MB on the host.
+
+Not run: the eval tools themselves (the state lives in the shared player, which was tested), a full-size update on the card.
+
 ## Before the go
 
 - 2.1d's result, and the schedule and marks above fixed from it.
