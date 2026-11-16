@@ -11,7 +11,7 @@ verbs and the frozen moment), [PLAN_FROM_17A.md](PLAN_FROM_17A.md), [2.1a](2.1a/
 keep choice and the judge: his draw's random numbers are rolled once per trip and held, so his goal changes only when his own scores cross,
 and the head reads the goal he holds. Built and tested, waiting for the owner's go: [2.1c/CARD.md](2.1c/CARD.md).
 
-**2.1d (2026-11-15, running): the pull.** The slow plan moved inside the head and its 2-second odds, times a strength, added to his goal
+**2.1d (2026-11-15, ended 11-16 at update 158): the pull. The lock is out and he holds his level** (52.0% against 2.1c's end, 55.0% against 2.0e's end; 31.5% with the pull at 0). The slow plan moved inside the head and its 2-second odds, times a strength, added to his goal
 scores; the held share to 1.0 by update 110 (the lock out). [2.1d/CARD.md](2.1d/CARD.md), RUNS.md #56.
 
 **Decided (owner, 2026-11-15 evening): the head gets a slow half, whatever 2.1d's result.** "We're basically expanding the current head with
@@ -26,6 +26,8 @@ fast one; `docs/research/BOTS.md` 13.2). Why for 2.2: the plan and pull work on 
 gets cleaner credit, a new choice can be forecast silently before it is played. Open: the tick length (hand-set), the plan's output widens
 with 2.2's choices, whether the trainer's older `--slow-mem` part can be reused. Not designed in detail, not built: its card (with the
 research check) comes after 2.1d's result.
+
+**2.1e (2026-11-16, stopped at update 50): the slow half as built is a slow duplicate of the pull; harmless, no gain** ([card](2.1e/CARD.md), RUNS.md #57). **Next: [2.1f](2.1f/CARD.md), an outlook for each goal** (owner, 11-16: "the more principled design. It adds a genuine new signal, the hypothetical future value"), built on branch `b21f`; see [2.1f/HANDOFF.md](2.1f/HANDOFF.md). 2.2 and 2.3 were rewritten the same day from how 2.1 ended ([2.2](../2.2/README.md), [2.3](../2.3/README.md)).
 
 ## The goal
 

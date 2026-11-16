@@ -95,7 +95,7 @@ Checks every 20 updates, 200 games, against 2.1d's end; every fourth against 2.0
 | Hand-built or assumed | Why it is there | Its weakness, and the measured alternative |
 |---|---|---|
 | The 2-second clock | FTW's slow core ticks on a fixed period; 2 s is the horizon the pull already uses | a hand-set number. Too long: slow to re-plan after a fight; too short: it flickers like the fast plan. The interrupts (channel 4) cover the first; the tick-to-tick movement readout shows the second. The period is a setting, to be tried at 1 s and 4 s on the silent readouts before it plays |
-| The interrupt at a change of mind | so the plan follows an override | it can make the slow half as fast as the fast half if he changes his mind constantly: then nothing is steadied. Read: ticks by cause; if "change of mind" dominates, the slow half is not slow |
+| The interrupt at a change of mind | so the plan follows an override | **(corrected 11-16, owner)** the first version of this row called a slow half that ticks mostly on his changes of mind "not slow" and a fault. That is wrong: an interrupt that answers something real is what should happen, and a slow half that could not be interrupted would be the lock again. A count of interrupts is not a measure; the question is whether what he interrupts on is noise or a real signal (the readout added at update 30) |
 | The slow half is taught only to forecast | rule 13: silent first; one new thing | a forecaster of a flickering chooser can only average the flicker; it does not decide. That is the limit of this run and the reason for the fork's 2.2 step |
 | The mixed log-odds, a sum of learned parts | to move the pull's source slowly | rule 11: decay on both plans' last layers from the first update, each part's size recorded and flagged over 40 |
 | The read-back | so his fast thinking knows the commitment | a new input of the head, live through a gate: it can destabilise the goal (2.0b). It opens last, alone, from zero weights |
@@ -142,6 +142,37 @@ Decisions the build took where the design was silent:
 - New stored data at full size: about 230 MB on the host.
 
 Not run: the eval tools themselves (the state lives in the shared player, which was tested), a full-size update on the card.
+
+## The run (11-16 09:58 to 15:17) and how it ended
+
+**Stopped by the owner at the update-50 save. Harmless, and no gain: the slow half as built is a slow duplicate of the pull.** The end kept as
+`keep/policy_end_21e.pt` + `opt_end_21e.pt` (update 50: the pull's source 90% moved to the 2-second slow half, the read-back shut, the pull
+2.0, the lock out), backed up to T: (SHA-256 read back). The owner keeps it for a play test.
+
+| | |
+|---|---|
+| The silent stage (updates 1 to 20) | the three halves' forecasts of his goals 2 s ahead: error 1.09 at update 6, 0.73 to 0.75 at update 19, against 0.61 to 0.67 for the fast plan; the three speeds nearly alike (most of their refreshes come from events, not the clock). The pick left on the 2-second half (owner: "2s is fine") |
+| The pull's source moved (20 to 50) | by update 41 the slow half's forecast matched the fast plan's (0.67 against 0.66) and stayed level with it (0.67 / 0.67 at update 50). No better |
+| His changes of mind as it took over | of his mid-trip changes: no news and taken back within 2 s 7% (source one third moved) → 8% (90% moved); after news and taken back 29% → 30%; after news and stuck 44% → 45%; no news and stuck 19% → 17%. Mid-trip changes 34 to 43 a seat-minute throughout |
+| Checks against 2.1d's end (200 games) | update 10 (silent): 103-97 = 51.5%; update 30: 105-95 = 52.5%; UPDATE50 |
+| Fighting | 1.9 to 2.0 frags a match-minute before the midday restart, 1.7 to 2.0 after (0.99 on the restart's first update, as after every restart) |
+| The read-back (50 to 80) | not run: stopped at its first step |
+| The proof | 0.0001 to 0.003 throughout, one spike of 0.0441 at update 41 (a MAJOR line; the nine updates after it at the floor; cause not traced: 2.1f's build names the worst frame) |
+| Restart | the trainer and the ramp at the update-30 save (12:55 to 12:56) for the readouts of his changes of mind (branch `b22r`: 0 of 43,008 actions differ with and without them) |
+
+**Why it did nothing.** The slow half was given the fast plan's own lesson (forecast his goals 2 and 5 s ahead) and the same inputs (the
+head's state, his goal). A second forecaster of the same thing from the same information can at best match the first, and it did. The
+card's red team said so before the start. The owner, 11-16: "2.1e just provides a slow (and currently worse) approximation of what the pull
+already does."
+
+**What it gave.** (1) The readout of his changes of mind, and the owner's rule for reading it: never the count, only noise against real
+signal. First numbers: three in four changes come after news, but news is present at 58 to 61% of all moments (a lift of 1.2 to 1.3), and
+a "back" is typically away for one reading (0.2 s; mean 2.4): too short to be "fire a shot and resume", so much of "after news and back" is
+probably a one-reading flip. Real dithering is somewhere between 8% and 38% of his changes; the readout cannot yet say where. (2) The reason
+the next part gets a different job: [2.1f](../2.1f/CARD.md), an outlook for each goal (what committing to it brings), not a second forecast
+of what he will do.
+
+**Not done.** The 200 games with the slow half blanked (it never carried a gain to blank); the server image rebuild; the play test.
 
 ## Before the go
 
