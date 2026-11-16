@@ -157,6 +157,23 @@ with `restart.ps1` (810 minutes, to about 07:52). The watcher, the ramp and the 
 | The ramp's clock, a fault of the restart | after a `--resume` the trainer numbers its updates from 1 and the ramp read that number: the pull stayed at 0 for updates 11 to 13 (it should have been 0.05 to 0.15). The ramp now counts the lines of `metrics.jsonl` as the watcher does, and was restarted alone at 18:44 (clock 13, `PULL_G` 0.15). The ramp's lines for updates 11 to 13 in `watch.log` are labelled 1 to 3 |
 | The check at update 10 (before the pull opened) | 102-98 = 51.0% against 2.1c's end |
 
+## The restart at update 30 (11-15 20:16): half precision, played and learnt alike
+
+Full precision cost more than the PC has to spare (the row above). Owner, 11-15 evening: "I don't think it matters what we use, it just
+needs to be consistent"; "alright do it at update 30". The trainer now rounds every normalised input to half precision once, in `norm()`,
+before anything reads it (his policy, the league's networks, the brain, the learner), and stores the inputs at float16 again, which is
+then lossless (built by an Opus 5.5 subagent; smoke ALL PASSED, the proof's two readings identical, about 0.000007 on the CPU). The trainer
+was stopped at the update-30 save (20:15; `keep/policy_u30.pt` + `opt_u30.pt`) and restarted alone with `restart.ps1` (695 minutes, to
+about 07:52); about a minute without training.
+
+| | |
+|---|---|
+| Memory after | the stored inputs 6.28 GB a buffer; the trainer 37.8 GB (was about 50); 17.6 GB of RAM available, 70.8 GB committed |
+| The proof, updates 31 to 33 (pull played 1.0) | 0.0029, 0.0055, 0.0017. Above the 0.0002 to 0.002 of the lower strengths: `b_pull` (the pull as played, stored at float16) is rounded for the learner while play adds it unrounded; at values of 4 to 9 the float16 spacing is 0.004 to 0.008. Expected to read up to about 0.006, with spikes, at strength 2.0; a wiring fault would be far above. Fixed in 2.1e's build (the pull rounded at its source); not in this run |
+| The spikes at updates 15 and 25 | 0.0085 with the pull played at 0, and 0.0113 at 0.6 (a MAJOR line, over the 0.01 bar): the same size with and without the pull, no trend with the strength between: the measurement, not the wiring (the owner told; not concerned) |
+| The dip after each restart | frags 1.18, 1.39, 1.67 a match-minute at updates 31 to 33 (after the update-10 restart: 1.83 by its third update): every game starts anew at a restart |
+| The checks, the servers, the export | still feed full precision tonight; rounded the same way on branch `bhalf` (`04fff00`: bit-identical inputs on 40,000 real rows, the plugin against the checks' player 0 of 2,400 frames differing), to be merged after this run; the `qlbot` image is to be rebuilt before a server plays |
+
 ## Before the go
 
 | | |

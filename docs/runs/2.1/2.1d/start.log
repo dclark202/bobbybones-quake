@@ -64,3 +64,22 @@
 11-15 18:21:55 the watcher running: 34936
 11-15 18:21:55 the ramp running: 33060
 11-15 18:21:55 the self-play logger running: 38228
+11-15 20:16:34 restart.ps1 (the trainer only, from the run's last save): -Minutes 695 -Updates 1000 -Lam 0.998 -PullH 0
+11-15 20:16:34 train.cmd, 695 minutes, 1000 updates, head2-lam 0.998, pull horizon 0: wrote train.cmd: --minutes 695 --max-updates 1000 --head2-lam 0.998 --pull 1 --pull-g 0 --pull-h 0 ; aim2_env.cmd: 2.1c's
+11-15 20:16:34 no firing cost in the command: every one at zero
+11-15 20:16:34 allowed arg --max-updates: run '1000' | reference '100'
+11-15 20:16:34 allowed arg --minutes: run '695' | reference '384'
+11-15 20:16:34 allowed arg --obs-half: run '<unset>' | reference ''
+11-15 20:16:34 allowed arg --pull: run '1' | reference '<unset>'
+11-15 20:16:34 allowed arg --pull-g: run '0' | reference '<unset>'
+11-15 20:16:34 allowed arg --pull-h: run '0' | reference '<unset>'
+11-15 20:16:34 allowed arg --run: run 'duel_gru_2_1d' | reference 'duel_gru_2_1c'
+11-15 20:16:34 settings check: PASS
+11-15 20:16:35 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\live.json: accepted
+11-15 20:16:35 the ramp ramp_21d.py: 112 files (clocks 0 to 111), all accepted
+11-15 20:16:35 LIVE ACCEPT: PASS
+11-15 20:16:35 trainer restarted: cmd 39276, --resume from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\policy.pt and opt.pt, 695 minutes, at most 1000 updates (--max-updates)
+11-15 20:16:50 live.json applied by the restarted trainer (2026-11-15 20:16:50)
+11-15 20:16:50 the watcher running: 34936
+11-15 20:16:50 the ramp running: 27904
+11-15 20:16:50 the self-play logger running: 38228

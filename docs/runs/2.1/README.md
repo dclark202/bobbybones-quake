@@ -11,6 +11,22 @@ verbs and the frozen moment), [PLAN_FROM_17A.md](PLAN_FROM_17A.md), [2.1a](2.1a/
 keep choice and the judge: his draw's random numbers are rolled once per trip and held, so his goal changes only when his own scores cross,
 and the head reads the goal he holds. Built and tested, waiting for the owner's go: [2.1c/CARD.md](2.1c/CARD.md).
 
+**2.1d (2026-11-15, running): the pull.** The slow plan moved inside the head and its 2-second odds, times a strength, added to his goal
+scores; the held share to 1.0 by update 110 (the lock out). [2.1d/CARD.md](2.1d/CARD.md), RUNS.md #56.
+
+**Decided (owner, 2026-11-15 evening): the head gets a slow half, whatever 2.1d's result.** "We're basically expanding the current head with
+a slower half, to handle long term planning ... I think we should plan to do this anyway, since it sounds like it makes the goals of 2.n
+more achievable as well. And there's precedent for it with other bots." The form agreed in the chat: a recurrent memory of its own (about
+128) beside the head, ticking every 2 seconds and at a trip's end, its state fixed between ticks; it reads the head's state, the goal he
+holds and its age, and the brain's picture; the plan's odds are read from it (so the pull's bar is fixed between ticks); the head reads it
+back as an input at zero weight. It learns silently by the plan's own lesson (his fast odds ahead), then the pull's source is blended from
+today's plan to it (rule 13); rule 11 on the sum from the start. From DeepMind's Capture the Flag agent (FTW: a slow core as a prior for the
+fast one; `docs/research/BOTS.md` 13.2). Why for 2.2: the plan and pull work on any choice list (more choices = more near-ties), a long play
+(hold an angle until an item spawns) needs a holder, the slow inputs (map sense, item timings, control) enter there, a decision every 2 s
+gets cleaner credit, a new choice can be forecast silently before it is played. Open: the tick length (hand-set), the plan's output widens
+with 2.2's choices, whether the trainer's older `--slow-mem` part can be reused. Not designed in detail, not built: its card (with the
+research check) comes after 2.1d's result.
+
 ## The goal
 
 2.0e's end, with nothing new choosing his goal, brought to where 2.2 can add decisions: he keeps or drops a goal by a learned part (no
