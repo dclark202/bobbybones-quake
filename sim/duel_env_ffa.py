@@ -3148,6 +3148,12 @@ PLAY_VARS = PLAY_VARS + ("SPACE_IN", "SPACE_GATE")                   # (2.0b)
 #   lands as he arrives).
 # Off, or a seat under none: the columns are zeros and nothing else is changed (no draw is made, nothing kept that anything reads).
 INSTR = float(os.environ.get("INSTR") or 0.0) > 0
+# DESC_OX=1 (2.2a, docs/runs/2.2/DESIGN.md; the outlook that scores a description of a play): the order's map numbers (sim/order_maps/<map>.npz)
+# are loaded without COMBAT or INSTR, so order_feat() gives the 17 targets' numbers (the way's seconds from him and from where he believes the
+# enemy, the place's height, range and direction, its sight of the enemy's coming places, the item's state as he knows it) and the situation
+# (contact, his health and armor, the weapon in his hand) for the trainer's description of each target. A read only: nothing of the game reads
+# them without COMBAT or INSTR (off and on: the simulator to the bit; proven by a fixed-seed replay, docs/runs/2.2/2.2a)
+DESC_OX = float(os.environ.get("DESC_OX") or 0.0) > 0
 # INS_BIND=1 (2.1a; the owner, 2026-11-12: "I think that makes sense"; a PLAY_VAR): THE WEAPON ASKED FOR IS BINDING. While a seat is
 # under an instruction that names a weapon he owns with ammunition (the gauntlet: owned), his weapon key's action is that weapon's
 # (ins_bind_act(): 0 keep where it is in his hand, 1 + the weapon else), set after his own draw and before the finger limits, so
@@ -3213,6 +3219,7 @@ HEAD_EVERY = 8                                             # frames between the 
 INS_CHUNK, INS_PAT_SECS, INS_PAT_NEAR, INS_PAT_UNSEEN, INS_PAT_HIGH = 40.0, 1.0, 1500.0, 2.0, 150.0
 N_INS = len(INS_VERBS) + 3 + 1 + 5 + 5 + NW + 1 + 7 + 1 + N_FIN
 PLAY_VARS = PLAY_VARS + ("INSTR", "FIN_RATE", "INS_WAKE_DROP", "INS_BIND", "INS_WAY", "INS_NO_NONE")
+PLAY_VARS = PLAY_VARS + ("DESC_OX",)                       # (2.2a: a network whose desc term plays reads order_feat(): its checks and servers load the map's numbers)
 # (2.1) THE CANDIDATES: what the head may choose among at a tick, INS_C rows a seat in a fixed order (a row means the same thing at
 # every tick: the head's last choice is "row c", and a held instruction stays in its row): go to each item (INS_GO_TG), contest the
 # mega, the red and the yellows (INS_CONTEST_TG), hold each of the map's holding places watching its best opening, spam the
@@ -4504,7 +4511,7 @@ class DuelEnv:
                         self.hold_tg = [[float(x_) for x_ in p_] for p_ in self.hold_pos]
         self.bsp_path = bsp                                 # (1.9a: item_race finds the map's walking table by it)
         self.om = None                                      # (1.7, COMBAT) the map's numbers for the order (tools/order_maps.py)
-        if (COMBAT or INSTR) and self.route is not None:     # (2.1, INSTR: the seconds of walking to the instruction's place)
+        if (COMBAT or INSTR or DESC_OX) and self.route is not None:     # (2.1, INSTR: the seconds of walking to the instruction's place; 2.2a: DESC_OX)
             of_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "order_maps", os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz")
             if os.path.exists(of_):
                 z_ = np.load(of_)
