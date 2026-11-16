@@ -15,7 +15,10 @@ plan's, its loss and last layer's size. Flagged as ramp_21d (the trainer refusin
 a part of a sum over 40, a firing cost, the pull's proof: MAJOR over PROOF_MAX = 0.01, FLAG over 0.003, FLAG not measured), and: no slow record
 (MAJOR: the run has no --slow-half 1); the halves' readouts or lesson off (MAJOR: they failed in the trainer); the mix or the back played none of
 the last written (MAJOR); the half played not the live file's SLOW_PICK (MAJOR); a half's last layer or the read-back's weights over 40 (FLAG,
-rule 11); the picked half ticking mostly on changes of mind (FLAG: then it is not slow, the card's red team). A crash of the flag thread is
+rule 11). (b22r, owner 2026-11-16: "Interrupts themselves are not the problem": the flag on the picked half ticking mostly on changes of mind
+is removed; its ticks by cause stay in the log line as plain numbers.) Also logged every update, no flag and no threshold: the kinds of his
+changes mid-trip (sim/change_kinds.py): after news or quiet x taken back within 2 s or stuck, news's share of his keep readings beside its
+share of his changes, the backs that returned to the plan's top goal and how long they were away. A crash of the flag thread is
 logged as a MAJOR PROBLEM and the thread starts again (1.9a).
     python docs/runs/2.1/2.1e/ramp_21e.py <run> [--poll S] [--settle S] [--dir D] [--resume] [--once]
 --once: one pass of the flags over the metrics there is, then out (the smoke's check of this file; nothing written to live.json)."""
@@ -36,7 +39,6 @@ UNSCHEDULED = ("SLOW_PICK", "PULL_G", "HELD_G")              # (never written by
 MARKS = (20, 50, 80)
 START = {}                                                   # ("start" values: none in this schedule)
 SIZE_FLAG = 40.0
-CHANGE_SHARE_FLAG = 0.5                                      # (the picked half's ticks on a change of mind over this share of its ticks: not slow)
 MAJOR = 0.40
 FRAGS_MIN = 1.5
 PROOF_MAX = 0.01                                             # (the pull's proof first_err: as 2.1d's now: the card's floor at pull 0 in mixed
@@ -72,6 +74,25 @@ END = max(d[2] for d in DIALS)                                                  
 def dial_at(clock, lo, hi, v0, v1, pre):
     """(live_accept's older form: one segment) unused here: values() gives every name"""
     return v1 if clock >= hi else (pre if clock < lo else v0 + (v1 - v0) * (clock - lo) / float(hi - lo))
+
+
+def kinds_line(ch_, u_):
+    """(b22r) the kinds of his changes mid-trip in plain words (rec plan.changes; sim/change_kinds.py): no flag, no threshold"""
+    if ch_.get("kinds_off"):
+        return "update {}: his changes mid-trip: the kinds' readouts are off (failed in the trainer; a readout only)".format(u_)
+    nk_ = ch_.get("news_kind") or {}
+    bg_ = ch_.get("back_gap") or {}
+    return ("update {}: his changes mid-trip (of {} judged): after news and stuck {} ({}), after news and back {} ({}), quiet and stuck {} ({}), "
+            "quiet and back {} ({}) | news is present at {} of readings ({}), at {} of changes (lift {}); contact {} / {}, a sound {} / {}, "
+            "a hit unseen {} / {} | of the backs, {} returned to the plan's top goal; away {} readings (median; mean {}, {} backs) | of those "
+            "that stuck, {} went to the plan's top goal (plan: {}) | a held seat-minute: {} after news, {} quiet | {} changes off a keep "
+            "reading").format(
+        u_, ch_.get("n_2s"), ch_.get("news_stuck"), ch_.get("news_stuck_n"), ch_.get("news_back"), ch_.get("news_back_n"),
+        ch_.get("quiet_stuck"), ch_.get("quiet_stuck_n"), ch_.get("quiet_back"), ch_.get("quiet_back_n"), ch_.get("news_base"), ch_.get("base_n"),
+        ch_.get("news_at_change"), ch_.get("news_lift"),
+        *[x_ for k_ in ("contact", "sound", "hit_unseen") for x_ in ((nk_.get(k_) or {}).get("base"), (nk_.get(k_) or {}).get("at_change"))],
+        ch_.get("back_to_plan"), bg_.get("median"), bg_.get("mean"), bg_.get("n"), ch_.get("stuck_to_plan"), ch_.get("plan_src"),
+        ch_.get("news_min"), ch_.get("quiet_min"), ch_.get("off_reading_n"))
 
 
 def main():
@@ -160,9 +181,6 @@ def main():
                     h_.get("loss"), h_.get("l3")))
             if (h_.get("l3") or 0) > SIZE_FLAG:
                 log("FLAG update {}: slow half {}'s last layer {} over {} (rule 11)".format(u_, k_, h_.get("l3"), SIZE_FLAG))
-            if k_ == sl_.get("pick") and (tm_.get("all") or 0) > 0 and (tm_.get("change") or 0) / tm_["all"] > CHANGE_SHARE_FLAG:
-                log("FLAG update {}: the picked half {} ticks mostly on changes of mind ({} of {} a seat-minute): it is not slow".format(
-                    u_, k_, tm_.get("change"), tm_.get("all")))
         if (sl_.get("readback_w") or 0) > SIZE_FLAG:
             log("FLAG update {}: the read-back's weights {} over {} (rule 11)".format(u_, sl_.get("readback_w"), SIZE_FLAG))
         for n_, k2_ in (("SLOW_MIX", "mix"), ("SLOW_BACK", "back"), ("SLOW_PICK", "pick")):
@@ -215,6 +233,8 @@ def main():
                                                                       ch_.get("news"), ch_.get("against_plan")))
             log("update {}: flicker: share of his mid-trip changes he took back within 2 seconds {} (of {} changes)".format(
                 u_, ch_.get("back_2s"), ch_.get("n_2s")))
+            if "news_back" in ch_ or ch_.get("kinds_off"):       # (b22r) the kinds of his changes: plain numbers, no flag
+                log(kinds_line(ch_, u_))
         elif u_ and hd_:
             log("MAJOR PROBLEM update {}: no plan record in the metrics (the run has no --plan 1, or the plan's readouts failed)".format(u_))
         pu_ = m_.get("pull")                                 # (2.1d) the pull as played

@@ -4108,6 +4108,15 @@ def main():
         print("MAJOR PROBLEM: the slow plan (shadow) failed and is off for the rest of the run; the run goes on: "
               + traceback.format_exc().replace(chr(10), " | ")[-1500:], flush=True)
 
+    import change_kinds as chgk_                             # (b22r) the kinds of his changes mid-trip: readouts only, own guard (a failure
+    CK_OFF = [False]                                         # turns them off for the rest of the run; the plan, its lesson and the run go on)
+
+    def ck_fail():
+        import traceback
+        CK_OFF[0] = True
+        print("PROBLEM (a readout only): the kinds of his changes mid-trip (sim/change_kinds.py) failed and are off for the rest of the run; "
+              "nothing played or learnt is touched: " + traceback.format_exc().replace(chr(10), " | ")[-1500:], flush=True)
+
     def plan_save():
         """(2.1c, --plan) the checkpoint's entry: the layout, the weights, its Adam (copied under the lock); (2.1d, the plan inside the head)
         its Adam alone (the weights are the head's, in "model")"""
@@ -5447,6 +5456,11 @@ def main():
                             alive=torch.zeros(0, dtype=torch.bool, device=dev))
             except Exception:
                 plan_fail()
+            if not CK_OFF[0]:                                    # (b22r) the change kinds' list beside PBK_ and their counts (readouts)
+                try:
+                    CK_S, CK_NB = chgk_.new_state(dev)
+                except Exception:
+                    ck_fail()
         BS_ = C.get("bs")                                                # (--belief) its live state; kept at the start for the update
         if WV_ON and WV_ST[0] is None:                                   # (--win-value) the per-seat stream, carried from rollout to rollout
             WV_ST[0] = wv_.Stream(WV_L, N, "cpu", group=2)            # (on the host: a few vectors a frame)
@@ -6020,6 +6034,15 @@ def main():
                                         alive=torch.cat([PBK_["alive"], torch.ones_like(se_, dtype=torch.bool)]))
                     except Exception:
                         plan_fail()
+                    if not PLAN_OFF[0] and not CK_OFF[0]:                # (b22r) the kinds of his changes (readouts only): the backs' frames, news's
+                        try:                                             # base rate over his keep readings on held trips, each change's kinds of
+                            ck_mx_ = bool(PULL and SH_PLAY and SH_MIXED and MX_P > 0)    # news and the plan's top target as it pulled (horizon 0)
+                            CK_S = chgk_.frame(CK_S, CK_NB, PBK_, t, t % BK == 0, HD_["kf"], kf_n[:, 2].long().clamp(0, NI_H - 1),
+                                               mine_h & b_hon[t] & (live > 0) & chg_ & ~b_hfr[t], mine_h & b_hon[t] & (live > 0) & ~b_hfr[t],
+                                               lambda s_: chgk_.plan_top(PL_[s_, 0], SHS.odds[int(PK_P), s_, 0] if ck_mx_ else None,
+                                                                         MX_P if ck_mx_ else 0.0, PFL_ if ck_mx_ else 0.0))
+                        except Exception:
+                            ck_fail()
                 live = torch.where(b_hon[t], live * dec_h.float(), live)
                 HD_["kf"] = kf_n
                 HD_["te"] = torch.from_numpy(np.concatenate([r[3]["trip_end"][0] for r in res])).to(dev)
@@ -6250,6 +6273,17 @@ def main():
                                  against_plan=round(float(PCH_[2]) / max(1.0, float(PCH_[0])), 4)))
             except Exception:
                 plan_fail()
+        if PLAN_R is not None and isinstance(PLAN_R.get("changes"), dict) and not PLAN_OFF[0]:   # (b22r) the kinds of his changes: the record's
+            if CK_OFF[0]:                                                # new keys (readouts only; the keys above unchanged)
+                PLAN_R["changes"]["kinds_off"] = True
+            else:
+                try:
+                    ck_mx_ = bool(PULL and SH_PLAY and SH_MIXED and MX_P > 0)
+                    PLAN_R["changes"].update(chgk_.summary(CK_S, CK_NB, PBK_, PCH_, T, BK, float(HD_CNT[1]) / 2400.0,
+                                                           "mixed {}".format(round(float(MX_P), 4)) if ck_mx_ else "fast"))
+                except Exception:
+                    ck_fail()
+                    PLAN_R["changes"]["kinds_off"] = True
         if SH_PLAY:                                                      # (2.1e) the slow halves as played (the dials of his network and the league's)
             C["plf"] = PLF_
             SH_R = dict(mix=MX_P, back=BK_P, pick=PK_P, mix_opp=MX_O, back_opp=BK_O, pick_opp=PK_O, opp_has=SO_ON, off=bool(SH_OFF[0]))
