@@ -84,6 +84,12 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    every 200ms I ask myself what else should I be doing" as the slow plan and its pull, 2.1c and 2.1d). Never answer a design question
    with "run a test first" in place of an idea. The other hard rules still hold.
 
+16. **In a Fable session, an Opus 5.5 subagent does the coding** (owner, 2026-11-15: "That is a standing order ... in a fable session
+   always have an opus 5.5 subagent do the coding"). Every code change (the trainer, the simulator, tools, run scripts, plugins) is
+   handed to a subagent started with the Opus model, with a full brief (the files, the exact change, the tests, what must not be
+   touched: a live run's files, its processes); the session itself designs, reviews the diff, runs and monitors. Docs and run records
+   (cards, `RUNS.md`, this file) are written by the session.
+
 ## Where things are
 
 | | |
@@ -245,7 +251,10 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - Restart only right after a save (every 10 updates), keep a copy; pass `--fade-start <minute>` on every resume.
 - `--obs-half` is retired (owner, 2026-11-15: "There's no reason to keep it"): the rollout's stored inputs at half precision made the
   learner's recomputed log-probabilities differ from the played ones (up to 0.08 to 0.12 at the worst frame at full size, 2.1d's proof);
-  the trainer refuses the flag; a new run's command built from an older one strips it.
+  the flag is retired and refused; a new run's command built from an older one strips it. Since 2026-11-15 (2.1d's restart at update 30)
+  the trainer always rounds the rollout's inputs to half precision at their source, so play and learning read the same values and the
+  stored inputs are float16 (full precision cost 12.6 GB a buffer and nearly exhausted the PC's memory). The checks, the servers and the
+  export still feed full precision and are to be moved the same way.
 - Write `.cmd` run files with the Write tool to the scratchpad and copy them over (Git Bash heredocs mangle backslashes; writing
   over an existing `.cmd` in a chain once failed silently and the old settings ran). After a patch to `sim/`, check the change is
   there (a write once failed with Errno 22 and left the file as it was).

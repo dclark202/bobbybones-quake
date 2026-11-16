@@ -1386,8 +1386,8 @@ def main():
                                                                  "from the start (--fade-start), while the two new outputs learn")
     ap.add_argument("--long-cap", type=float, default=0.5, help="... and is cut when the long count would add more than this share of the size "
                                                                 "of his credit of today (the mean of the absolute values)")
-    ap.add_argument("--obs-half", action="store_true", help="RETIRED (owner, 2026-11-15): the trainer refuses it; the learner must read the inputs as played "
-                                                                 "(was v0.2: the rollout's stored inputs at half precision)")
+    ap.add_argument("--obs-half", action="store_true", help="RETIRED (owner, 2026-11-15): the trainer refuses it; the inputs are now always rounded to half "
+                                                                 "precision at their source, played and learnt alike (was v0.2: only the stored inputs)")
     ap.add_argument("--fast-gru", type=int, default=0,
                     help="(B-237) 1: in the learning step his memory is worked out over whole sequences by the library's GRU "
                          "(gru_seq: cut at his resets, exact), not frame by frame in Python; the rollout is as before. 0 (default): as before")
@@ -1804,8 +1804,9 @@ def main():
     ap.add_argument("--dump-acts", default="", help="(checks) after each update: <this>_<update>.pt with the rollout's actions, log p, "
                                                     "values and rewards (a fixed-seed identity check of two runs)")
     a = ap.parse_args()
-    if a.obs_half:                                           # (retired 2026-11-15) refused: the learner reads the inputs as played
-        print("--obs-half is retired (owner, 2026-11-15): the learner must read the inputs as played; remove it from the command",
+    if a.obs_half:                                           # (retired 2026-11-15) refused: the inputs are always rounded at their source
+        print("--obs-half is retired (owner, 2026-11-15): the inputs are now always rounded to half precision at their source, "
+              "played and learnt alike; remove it from the command",
               flush=True)
         sys.exit(2)
     if "WIN_SHAPE_G" not in os.environ:                      # (v0.6.1, WIN_SHAPE_K) the shaping's discount is the trainer's, unless named
@@ -3738,8 +3739,8 @@ def main():
             FADE[0], a.switch_fade_step, a.switch_fade_speed, a.switch_fade_max), flush=True)
 
     def norm(o):
-        x = np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float32)
-        if HAS_CELLS:
+        x = np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float16).astype(np.float32)   # (owner, 2026-11-15) rounded to
+        if HAS_CELLS:                                           # half precision at the source: every reader, played and learnt, the same values
             x[:, -2:] = o[:, -2:]                               # cell numbers stay as they are
         return x
 
@@ -4336,7 +4337,7 @@ def main():
         print("overlap (B-266): the rollout of update n+1 plays while update n learns, with the network of before update n (one update "
               "stale); the rollout's thread {}, switch interval {:g} ms; its inputs on the host ({:.2f} GB a buffer, two)".format(
                   "on its own stream of the card" if RS is not None else "on the CPU", a.overlap_switch_ms,
-                  N * T * OBS_DIM * 4 / 1e9), flush=True)
+                  N * T * OBS_DIM * 2 / 1e9), flush=True)
     NOSYNC = bool(a.learn_nosync)                                        # (--learn-nosync) the learning step without its waits for the card
     CHK_ = [None, None]                                                  # ... the piece's players on the host, and the card's index they are
     XL_ = [None, None]                                                   # ... the card's index and the legs' inputs sent over for it
@@ -5134,9 +5135,9 @@ def main():
         if OVL:                                                          # (--overlap) on the host, a player's frames together: [players, steps,
             b_obs = OBS_POOL[upd % 2]                                    # inputs]; two buffers in turn (the learning step reads the other)
             if b_obs is None:
-                b_obs = OBS_POOL[upd % 2] = torch.empty(N, T, OBS_DIM, dtype=torch.float32)
-        else:
-            b_obs = torch.zeros(T, N, OBS_DIM, device=dev, dtype=torch.float32)
+                b_obs = OBS_POOL[upd % 2] = torch.empty(N, T, OBS_DIM, dtype=torch.float16)   # (lossless: norm() rounds at the source)
+        else:                                                            # (the map cells' whole numbers stay full: half is exact only to 2048)
+            b_obs = torch.zeros(T, N, OBS_DIM, device=dev, dtype=torch.float32 if HAS_CELLS else torch.float16)
         b_hq = torch.zeros(T, N, H, dtype=torch.float16) if ATT_MEM else None   # (--attn-mem-query) his memory of the frame before, as played
         TOK_ = C.get("tok")                                              # (v0.4.1) the brain token: its state, the numbers each frame as played
         b_btok, btg_ = None, float(C.get("btg", 0.0))
@@ -5309,7 +5310,7 @@ def main():
             if PULL:
                 b_pull = torch.zeros(T, N, NI_H, dtype=torch.float16, device=dev)    # the pull on his seats' target logits a frame, as played
                 PRF_ = torch.arange(0, N, max(1, a.minibatches), device=dev)  # (the pull's proof: these players' inputs at full precision as
-                b_xp = torch.zeros(T, len(PRF_), OBS_DIM, device=dev)          # played; since --obs-half's retirement the rest are too)
+                b_xp = torch.zeros(T, len(PRF_), OBS_DIM, device=dev)          # played; the stored float16 rest equal them: rounded at the source)
         if PLAN is not None and not PLAN_OFF[0]:                                             # (2.1c, --plan) the slow plan in shadow: at each keep reading the head's
             try:
                 JP_ = T // BK                                                # state and his fast target odds (all seats; his rows marked), the rows
@@ -7025,7 +7026,7 @@ def main():
                         pol.load_state_dict(psd_)
                         played_at()                                      # (the gates and the mix as played: they are in the state too)
                     try:                                                 # (the inputs as played, at full precision: R["b_xp"]; and as the learner
-                        wpm_ = (b_w[:, ch_d_] > 0).float()               # trains on them, now the same: --obs-half is retired;
+                        wpm_ = (b_w[:, ch_d_] > 0).float()               # trains on them, the same: rounded to half at the source;
                         for k_, xo_ in ((0, R.get("b_xp")), (1, None)):  # not the pull's)
                             if k_ == 0 and xo_ is None:
                                 continue
