@@ -171,19 +171,21 @@ def play(a):
                 p_.set_pull_g(pg_)
                 p_.held_g = hg_
         hg, hs = pg0.zeros(n), ps.zeros(n)
-        dd = 0
+        dd, dh, mh = 0, 0, 0.0
         for t in range(a.frames):
             o_ = rec["obs"][t][:, idx]
             kw = dict(xl=rec["xl"][t], pose=rec["pose"][t], zmap=rec["zmap"][t])
             a1, hg = pg0.act(o_, hg, kf=rec["kf"][t], **kw)
             a2, hs = ps.act(o_, hs, kf=rec["kf"][t], **kw)
-            dd += int(not np.array_equal(a1, a2)) + int(not np.array_equal(hg, hs))
+            dd += int(not np.array_equal(a1, a2))
+            dh += int(not np.array_equal(hg, hs))
+            mh = max(mh, float(np.abs(hg - hs).max()))
             if rec["clr"][t].any():
                 pg0.clear(hg, rec["clr"][t])
                 ps.clear(hs, rec["clr"][t])
-        print("d. MIX 0, BACK 0 = THE SOURCE FILE ({}) over {} frames: frames with a difference in the actions, the keep column or the memory: {}: {}".format(
-            nm_, a.frames, dd, "PASS" if dd == 0 else "FAIL"), flush=True)
-        okd = okd and dd == 0
+        print("d. MIX 0, BACK 0 = THE SOURCE FILE ({}) over {} frames: frames with a difference in the actions or the keep column {}, in the memory "
+              "{} (largest {:.2e}): {}".format(nm_, a.frames, dd, dh, mh, "PASS" if dd == 0 and dh == 0 else "FAIL"), flush=True)
+        okd = okd and dd == 0 and dh == 0
     return okb and okc and okd
 
 

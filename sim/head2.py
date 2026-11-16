@@ -486,6 +486,8 @@ def make_module(L, seed=4044):
             if L.get("slowhalf"):                            # (2.1e) the slow halves: sim/slowhalf.py's (each its own random stream: every older
                 import slowhalf as slowhalf_                 # layer's draw as before; its plan's last layer at zero); the pull's source mix, the
                 self.slow = slowhalf_.make_halves(slowhalf_layout(L))    # read-back's gate, the half that plays (0, 0, 1)
+            if int(L["widths"].get("slowback", 0)):          # (2.1e) where the read-back's columns are in u (pre(): their own term)
+                self.sb_at = tuple(int(x_) for x_ in _offs(L)["slowback"])
                 self.register_buffer("slow_mix", torch.zeros(()))
                 self.register_buffer("slow_back", torch.zeros(()))
                 self.register_buffer("slow_pick", torch.ones(()))
@@ -560,6 +562,15 @@ def has_weapon(mod):
 def pre(mod, u):
     """the GRU's input from u: tanh(inp(u)); (1.5a) with the weapon part tanh(inp(u before wobs) + winp(wobs))"""
     import torch
+    sb = getattr(mod, "sb_at", None)
+    if sb is not None:                                       # (2.1e) the read-back's columns as a term of their own: the other columns' product is
+        F_ = torch.nn.functional                             # the sum it was before the widening, and the read-back's term is exactly 0 at back 0
+        a_, b_ = sb                                          # or with its weights at zero: the head answers to the bit as before
+        W_ = mod.inp.weight
+        z_ = F_.linear(u[..., :a_].contiguous(), W_[:, :a_].contiguous(), mod.inp.bias) + F_.linear(u[..., a_:b_].contiguous(), W_[:, a_:b_].contiguous())
+        if has_weapon(mod):
+            z_ = z_ + mod.winp(u[..., int(mod.inp.in_features):].contiguous())
+        return torch.tanh(z_)
     if not has_weapon(mod):
         return torch.tanh(mod.inp(u))
     n0 = int(mod.inp.in_features)
@@ -1179,7 +1190,18 @@ def np_tick(W, L, u, hs):
     S = int(L["size"])
     s = hs[:, :S]
     n0 = int(W["inp.weight"].shape[1])                      # (1.5a) with the weapon part: inp on u before wobs, winp on wobs
-    if "winp.weight" in W and u.shape[1] > n0:
+    sb_ = _offs(L)["slowback"] if int(L["widths"].get("slowback", 0)) else None
+    if sb_ is not None:                                      # (2.1e) the read-back's columns as a term of their own (pre()'s sums: the head answers
+        a_, b_ = sb_                                         # to the bit as before at back 0 or with its weights at zero); the weights' two parts
+        if "_inp_a" not in W or W["_inp_a"].shape[1] != a_ or W.get("_inp_src") is not W["inp.weight"]:   # kept contiguous beside the arrays
+            W["_inp_a"] = np.ascontiguousarray(W["inp.weight"][:, :a_])
+            W["_inp_sb"] = np.ascontiguousarray(W["inp.weight"][:, a_:b_])
+            W["_inp_src"] = W["inp.weight"]
+        z_ = (np.ascontiguousarray(u[:, :a_]) @ W["_inp_a"].T + W["inp.bias"]) + np.ascontiguousarray(u[:, a_:b_]) @ W["_inp_sb"].T
+        if "winp.weight" in W and u.shape[1] > n0:
+            z_ = z_ + (np.ascontiguousarray(u[:, n0:]) @ W["winp.weight"].T + W["winp.bias"])
+        p = np.tanh(z_)
+    elif "winp.weight" in W and u.shape[1] > n0:
         p = np.tanh(np.ascontiguousarray(u[:, :n0]) @ W["inp.weight"].T + W["inp.bias"] +
                     (np.ascontiguousarray(u[:, n0:]) @ W["winp.weight"].T + W["winp.bias"]))
     else:
