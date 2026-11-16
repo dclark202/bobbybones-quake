@@ -49,6 +49,8 @@ class Hands:
         sd = ck["model"]
         self.mean = torch.tensor(np.asarray(ck["obs_mean"], np.float32))
         self.std = torch.tensor(np.sqrt(np.asarray(ck["obs_var"], np.float64) + 1e-8).astype(np.float32))
+        self.mean64 = np.asarray(ck["obs_mean"], np.float64)
+        self.sd64 = np.sqrt(np.asarray(ck["obs_var"], np.float64) + 1e-8)
         D = int(self.mean.shape[0])
         H = int(sd["gru.weight_hh"].shape[1])
         assert "cell.weight" not in sd, "a network with map cells (v8) is not handled here"
@@ -84,8 +86,8 @@ class Hands:
         out = []
         with torch.no_grad():
             for i in range(0, len(obs), chunk):
-                x = torch.as_tensor(np.asarray(obs[i:i + chunk], np.float32))
-                x = ((x - self.mean) / self.std).clamp(-10, 10)
+                x = np.asarray(obs[i:i + chunk], np.float32)      # (owner 2026-11-15: the trainer's norm(), half precision at the source)
+                x = torch.as_tensor(np.clip((x - self.mean64) / self.sd64, -10, 10).astype(np.float16).astype(np.float32))
                 e = self.enc(x)
                 if self.attn is not None:
                     e = e + self.attn(x)

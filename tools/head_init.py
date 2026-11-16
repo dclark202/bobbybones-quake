@@ -147,7 +147,7 @@ def same(a, b, frames=2400, players=16, obs_file=None, seed=1):
     dev = torch.device("cpu")
 
     def norm(ck, o):
-        return np.clip((o - ck["obs_mean"]) / np.sqrt(ck["obs_var"] + 1e-8), -10, 10).astype(np.float32)
+        return np.clip((o - ck["obs_mean"]) / np.sqrt(ck["obs_var"] + 1e-8), -10, 10).astype(np.float16).astype(np.float32)
 
     sts = [H_.State(players, n.lay, dev) if n.head is not None else None for n in (na, nb)]
     hs = [torch.zeros(players, int(c["hidden"])) for c in (cka, ckb)]

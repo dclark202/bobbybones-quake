@@ -166,7 +166,7 @@ def main():
         p.recv()
 
     def norm(o):
-        return np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float32)
+        return np.clip((o - obs_mean) / np.sqrt(obs_var + 1e-8), -10, 10).astype(np.float16).astype(np.float32)   # (owner 2026-11-15: half precision at the source, as train_duel_rnn)
 
     T = a.steps
     gamma, lam, clip, ent_coef = 0.99, 0.95, 0.2, 0.01
