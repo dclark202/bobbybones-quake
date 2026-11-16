@@ -174,6 +174,36 @@ about 07:52); about a minute without training.
 | The dip after each restart | frags 1.18, 1.39, 1.67 a match-minute at updates 31 to 33 (after the update-10 restart: 1.83 by its third update): every game starts anew at a restart |
 | The checks, the servers, the export | still feed full precision tonight; rounded the same way on branch `bhalf` (`04fff00`: bit-identical inputs on 40,000 real rows, the plugin against the checks' player 0 of 2,400 frames differing), to be merged after this run; the `qlbot` image is to be rebuilt before a server plays |
 
+## The end (11-16 07:54, update 158) and the result
+
+The trainer ended itself on the clock (exit 0); the end kept as `keep/policy_end_21d.pt` + `opt_end_21d.pt` (update 158; pull 2.0, held share
+1.0: the lock out on his seats), backed up to T: (SHA-256 read back). **Result: the lock is out and he holds his level.**
+
+| Check (200 games, seats swapped, ten maps) | Off the lock | Against | Result | Frag share |
+|---|---|---|---|---|
+| update 10 | 25% | 2.1c's end | 102-98 = 51.0% | 50.7% |
+| update 30 | 25% | 2.1c's end | 119-81 = 59.5% | 52.9% |
+| update 50 | 25% | 2.1c's end | 117-83 = 58.5% | 54.4% |
+| update 70 | 46% | 2.0e's end | 117-83 = 58.5% | 53.8% |
+| update 90 | 71% | 2.1c's end | 109-91 = 54.5% | 51.9% |
+| update 110 | 96% | 2.1c's end | 122-78 = 61.0% | 55.0% |
+| update 130 | 100% | 2.1c's end | 95-105 = 47.5% | 50.8% |
+| update 150 | 100% | 2.0e's end | 111-89 = 55.5% | 54.4% |
+| **the end (u158)** | 100% | 2.1c's end | **104-96 = 52.0%** | 52.5% |
+| **the end (u158)** | 100% | 2.0e's end | **110-90 = 55.0%** | 51.6% |
+| **the end with the pull set to 0** | 100% | 2.1c's end | **63-137 = 31.5%** | 41.4% |
+
+- **The pull is what holds him.** The same network with the pull at 0 and no lock loses 63-137, no map above 9-11. The end checks: `tools/run/head2head.py`,
+  the checks' settings and seed, on the freed trainer cores (owner's go 11-16); logs `watch/h2h_end_*.log`.
+- Against 2.1c's end (which still plays three quarters on the lock) with the lock out: 61.0%, 47.5%, 52.0%: level to slightly ahead. Against
+  2.0e's end: 55.5% and 55.0% (2.1c stood at 52.0% and 48.0% against it). Owner, 11-16: "Level or slightly up with the lock out is good enough for me."
+- Single maps swing by more than they tell: Campgrounds read 6-14, 6-14, then 14-6. Aerowalk was under level in the last three readings (8-12, 7-13, 6-14): not looked at yet.
+- Behaviour: frags 1.8 to 2.2 a match-minute all night; targets reached a minute level at 5.5 to 6.0; mid-trip changes 24 a seat-minute at update 50 → 40
+  to 43 with the lock out; the share taken back within 2 s 55% → 45%. The pull at full strength steadies him only in part: 2.1e (the head's slow half).
+- The ramp's "targets reached" flag fired from update 99: the share of trips reached fell because he makes more trips off the lock (owner: more trips is
+  the point; fewer trips is never read as progress); the targets reached a minute did not fall.
+- The league table by opponent was not written by this run (the table file dates from 11-04): open.
+
 ## Before the go
 
 | | |
