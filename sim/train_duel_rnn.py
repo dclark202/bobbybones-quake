@@ -55,6 +55,33 @@ def target_ok(env, E_):
     return ok_
 
 
+def o22_pack(env):
+    """(2.2a, --out22) per seat after a step [n, 8] float32 (sim/tracker.py O22): his health and armor (the truth: the facts' and the
+    tracker's labels, and the enemy's from his row), the enemy's stack as the simulator's rule believes it (EN_STACK's es_h, es_a: the
+    yardstick), the seconds since he last saw or heard the enemy, his target reached or taken, the judge's change in his win chance without
+    the items (the hands' win part) and with them (JUDGE_ITEMS: the head's win_raw). A read of the simulator's own numbers: nothing changes"""
+    n = env.n
+    ar = np.arange(n)
+    out = np.zeros((n, 8), np.float32)
+    out[:, 0], out[:, 1] = np.asarray(env.hp[:n], np.float32), np.asarray(env.armor[:n], np.float32)
+    es_h, es_a = getattr(env, "es_h", None), getattr(env, "es_a", None)
+    if es_h is not None and es_h.ndim == 2 and es_h.shape[0] >= n:
+        so_ = (ar ^ 1) % es_h.shape[1]
+        out[:, 2], out[:, 3] = es_h[ar, so_], es_a[ar, so_]
+    st_ = getattr(env, "seen_t", None)
+    if st_ is not None:
+        out[:, 4] = np.asarray(st_[:n], np.float32)
+    if hasattr(env, "intent_arr"):
+        out[:, 5] = (env.intent_done[:n] | env.intent_arr[:n]).astype(np.float32)
+    wb_ = getattr(env, "wb_raw", None)
+    wh_ = getattr(env, "wh_raw", None) if getattr(env, "ji_P", None) is not None else wb_
+    if wb_ is not None and len(wb_) >= n:
+        out[:, 6] = np.asarray(wb_, np.float32)[:n]
+    if wh_ is not None and len(wh_) >= n:
+        out[:, 7] = np.asarray(wh_, np.float32)[:n]
+    return out
+
+
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
            teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5,
            env_module="duel_env", group=2, intent_seek=0.0, item_loss=0.5, stack_p=0.0, near_item_p=0.0, move_only=False):
@@ -124,6 +151,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                             if l_ in E_.INTENTS and 1 <= E_.INTENTS.index(l_) <= 7)),                     # as intentions (MH .. YA2)
                  target_ok(env, E_)))                                                                   # (2.1f) the targets this map has
     OUT_WR = os.environ.get("OUT_WINRAW") == "1"             # (2.1f, --outlook) each seat's win_raw a frame (the stream --head2-pay win pays)
+    O22_ = os.environ.get("O22") == "1"                      # (2.2a, --out22) each seat's o22_pack() a frame; the description's numbers at a tick
+    if O22_:
+        import desc22 as desc22_w
     last = {k: np.copy(v) for k, v in env.stats.items()}
     tw_ = dict(step=0.0, legs_prep=0.0, send=0.0, idle=0.0, frames=0)      # (time.rollout_parts) this worker's seconds, since the last "times"
     t_idle = time.perf_counter()
@@ -165,6 +195,8 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                 n_ = env.n                                   # the simulator's aux column win_raw makes it (a list: per seat, not summed; zeros
                 wsrc_ = getattr(env, "wh_raw", None) if getattr(env, "ji_P", None) is not None else getattr(env, "wb_raw", None)   # without a judge)
                 delta["win_raw"] = [np.asarray(wsrc_, np.float32)[:n_].copy() if wsrc_ is not None and len(wsrc_) >= n_ else np.zeros(n_, np.float32)]
+            if O22_:                                         # (2.2a) per seat (a list: not summed)
+                delta["o22"] = [o22_pack(env)]
             delta["way_trips"] = list(getattr(env, "way_trips", ()))      # (WAYS) this step's trips between two places: [from, to, 16 points]
             # frags scored by even (learner) players and by odd players, for learner-vs-snapshot win tracking
             ev = info["events"]
@@ -233,7 +265,10 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                          (env.keep_feat() if hasattr(env, "keep_feat") else None),                          # (1.4c) what it reads on the next frame
                          ((env.cmb_live.astype(np.int8) + env.cmb_over.astype(np.int8))                       # (1.7) the readings the combat order counted
                           if getattr(env, "cmb_live", None) is not None else None),                          # at: 1 the target as chosen, 2 a new kind
-                         (tuple(v_.astype(np.float16) for v_ in env.order_feat()) if want_ else None),     # (1.7) the candidates for the next reading
+                         ((tuple(v_.astype(np.float16) for v_ in env.order_feat()) if not O22_ else
+                           (tuple(v_.astype(np.float16) for v_ in env.order_feat()) + (np.asarray(env.has[:env.n, :len(desc22_w.WEAPONS)], bool).copy(),
+                                                                         np.asarray(env.weapon[:env.n], np.int64).copy()) if getattr(E_, "COMBAT", False)
+                            else desc22_w.env_ox(env))) if want_ else None),     # (1.7) the candidates for the next reading (2.2a: + his weapons, his weapon)
                          (env.way_live.copy() if getattr(env, "way_live", None) is not None else None))     # (1.7, WAYS) the readings his way counted at
                         + ((branch_i.worker_feat(env),) if IW_ else ()))                                   # (2.1, --ins) the next reading's candidates (the last field)
             IW_ = False
@@ -351,9 +386,12 @@ LIVE_RANGE["SLOW_PICK"] = (0.0, 2.0)
 LIVE_INT = ("SLOW_PICK",)                                    # (live names whose value must be a whole number: anything else refuses the file)
 LIVE_TRAINER = LIVE_TRAINER + ("OUT_G", "OUT_PICK", "OUT_TRIAL")     # (2.1f, --outlook) the outlook's term's strength, the kind that plays (a whole
 LIVE_RANGE["OUT_G"] = (0.0, 20.0)                                    # number: an index of the file's kinds), the share of his new draws on a held
-LIVE_RANGE["OUT_PICK"] = (0.0, 4.0)                                  # trip that are trial trips
+LIVE_RANGE["OUT_PICK"] = (0.0, 6.0)                                  # trip that are trial trips (2.2a: seven kinds, 0 .. 6)
 LIVE_RANGE["OUT_TRIAL"] = (0.0, 0.2)
 LIVE_INT = LIVE_INT + ("OUT_PICK",)
+LIVE_TRAINER = LIVE_TRAINER + ("OUT_SRC",)                           # (2.2a, --out22) which outlook's term plays: 0 the built one (17 outputs), 1 "desc"
+LIVE_RANGE["OUT_SRC"] = (0.0, 1.0)
+LIVE_INT = LIVE_INT + ("OUT_SRC",)
 LIVE_RANGE["KEEPQ_G"] = (0.0, 1.0)                         # his quiet seconds the keep choice's quiet layer decides (with KEEP_ZONE=1; the
 LIVE_RANGE["KEEP_TEACH"] = (0.0, 100.0)                      # rest: the lock rule); the weight of the keep choice's lesson toward the stay
 LIVE_RANGE["STAY_W"] = (0.0, 100.0)                          # value's sign (both layers, all run); a factor on the stay value's own lesson
@@ -1232,6 +1270,12 @@ def main():
                     "share of his new draws on a held trip to a target drawn evenly among those his map has, held to the trip's end, off-policy: out "
                     "of every target lesson, in the outlook's). Readouts rec['outlook']. 0: not taught or played (a file's out_g set to 0)")
     ap.add_argument("--out-kinds", type=str, default="seg,ret,all8,win8,win5", help="(--outlook) the label kinds, as the file's layout names them (in its order)")
+    ap.add_argument("--out22", type=int, default=0, help="(2.2a, docs/runs/2.2/DESIGN.md; needs --outlook 1, --control, --map-sense, DESC_OX=1, "
+                    "FIGHT_TRUTH=1, CONTROL_TRUTH=1 and a network with 2.2a's parts inside its head: tools/out22_init.py add) 1: the tracker "
+                    "(sim/tracker.py), the desc outlooks (sim/desc22.py), the facts of both outlooks and the head's second value (the win chance with "
+                    "the items) learn silently, each with its own Adam; the attack readouts; live OUT_SRC (0 the built outlook's term plays, 1 desc's). "
+                    "Readouts rec['out22']. 0: none of it (a file's out_src set to 0)")
+    ap.add_argument("--out22-lr", type=float, default=1e-3, help="(--out22) the tracker's rate (the desc outlooks and the second value: --plan-lr)")
     ap.add_argument("--keep-g", type=float, default=-1.0, help="(1.4c, a network with the keep choice: sim/head2.py, tools/keep_init.py) the share of his "
                                                                "readings it decides at the start (live KEEP_G; -1: the file's own); the rest the lock rule. "
                                                                "Each league network plays at the share in its own file (none: 0)")
@@ -1856,6 +1900,8 @@ def main():
     a = ap.parse_args()
     if a.outlook:                                            # (2.1f) the simulators send each seat's win_raw a frame (the outlook's win labels;
         os.environ["OUT_WINRAW"] = "1"                       # nothing of the game or the pay changes)
+    if a.out22:                                              # (2.2a) ... and o22_pack() a frame, the description's numbers at a tick (reads only)
+        os.environ["O22"] = "1"
     if a.obs_half:                                         # (retired 2026-11-15) refused: the inputs are always rounded at their source
         print("--obs-half is retired (owner, 2026-11-15): the inputs are now always rounded to half precision at their source, "
               "played and learnt alike; remove it from the command",
@@ -2101,6 +2147,7 @@ def main():
     PLAN_OPT_CK = None                                       # (2.1d) the slow plan inside the head: its Adam (top-level "plan_opt"; its weights in "model")
     SLOW_OPT_CK = None                                       # (2.1e) the slow halves inside the head: their Adam (top-level "slow_opt"; weights in "model")
     OUT_OPT_CK = OUT_STATS_CK = None                         # (2.1f) the outlook inside the head: its Adam ("out_opt"), its labels' statistics ("out_stats")
+    O22_CK = None                                            # (2.2a) the tracker's, the desc outlooks', the second value's Adam, the facts' statistics ("out22")
     INS_CK = KN_CK = SPW_CK = None
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
@@ -2133,6 +2180,7 @@ def main():
         PLAN_OPT_CK = ck0_.get("plan_opt")                   # (2.1d) the slow plan inside the head: its Adam
         SLOW_OPT_CK = ck0_.get("slow_opt")                   # (2.1e) the slow halves inside the head: their Adam
         OUT_OPT_CK, OUT_STATS_CK = ck0_.get("out_opt"), ck0_.get("out_stats")   # (2.1f) the outlook inside the head: its Adam, its labels' statistics
+        O22_CK = ck0_.get("out22")                           # (2.2a)
         INS_CK = ck0_.get("ins")                          # (2.1, --ins) the instruction's scorer: the same
         KN_CK, SPW_CK = ck0_.get("known"), ck0_.get("spawn")  # (2.1, --known-odds, --spawn-odds) the brain's two new readouts: the same
         del ck0_
@@ -2891,7 +2939,17 @@ def main():
                 sd = dict(sd)                                # league file of before, the control): the network's own layers, the last at zero, no
                 for k_, v_ in net.head2.state_dict().items():    # term (out_g 0), the first kind: it plays as it did
                     if k_.startswith("out.") or k_ in ("out_g", "out_pick"):
-                        sd["head2." + k_] = torch.zeros_like(v_) if (k_.startswith("out.l3.") or k_ in ("out_g", "out_pick")) else v_
+                        sd["head2." + k_] = torch.zeros_like(v_) if (k_.startswith(("out.l3.", "out.l3f.")) or k_ in ("out_g", "out_pick")) else v_
+            if getattr(getattr(net, "head2", None), "trk", None) is not None and "head2.trk.l3.weight" not in sd:   # (2.2a) a file without 2.2a's
+                sd = dict(sd)                                # parts: the network's own layers, the last ones at zero, out_src 0 (the built outlook):
+                for k_, v_ in net.head2.state_dict().items():    # it plays as it did
+                    if k_.startswith(("trk.", "dsc.", "vw.")) or k_ == "out_src":
+                        last_ = k_.startswith("trk.l3.") or (k_.startswith("dsc.") and ".l3." in k_) or k_.startswith("vw.l2.") or k_ == "out_src"
+                        sd["head2." + k_] = torch.zeros_like(v_) if last_ else v_
+            if getattr(getattr(net, "head2", None), "out", None) is not None and getattr(net.head2.out, "nf", 0) and "head2.out.l3f.weight" not in sd:
+                sd = dict(sd)                                # (2.2a) a 2.1f file: the facts' last layer at zero (silent)
+                for k_ in ("out.l3f.weight", "out.l3f.bias"):
+                    sd["head2." + k_] = torch.zeros_like(net.head2.state_dict()[k_])
             if getattr(net, "head2", None) is not None and "head2.gate" not in sd:
                 sd = dict(sd)
                 for k_, v_ in net.head2.state_dict().items():
@@ -3091,7 +3149,7 @@ def main():
         """(--head2) the strategy head in a group of its own after all the others: an optimizer saved without it loads into the
         groups before it"""
         if H2 and not H2_GROUP[0]:
-            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "keepq.", "winp.", "wsc.", "ok_", "op_", "fsc.", "ins_", "plan.", "slow.", "out."))],
+            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "keepq.", "winp.", "wsc.", "ok_", "op_", "fsc.", "ins_", "plan.", "slow.", "out.", "trk.", "dsc.", "vw."))],
                                  "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})     # (1.4c: the keep choice in its own; 1.5a: the weapon part too;
             #                                                  2.1d: the slow plan inside the head in NO group: its own Adam steps it, the main loss never reaches it;
             #                                                  2.1e: the slow halves the same; the read-back's columns are head2.inp's: in this group;
@@ -3878,6 +3936,7 @@ def main():
                            if STAY is not None else ({"stay": STAY_CK} if STAY_CK is not None else {})),   # (2.1, --stay: never in "model"; its Adam with it)
                         **({"plan": plan_save()} if (PLAN is not None and not PIH) else ({"plan": PLAN_CK} if PLAN_CK is not None else {})),   # (2.1c, --plan: the same)
                         **({"slow_opt": slow_save()} if SHALF else ({"slow_opt": SLOW_OPT_CK} if SLOW_OPT_CK is not None else {})),   # (2.1e: their Adam)
+                        **({"out22": o22_save()} if O22 else ({"out22": O22_CK} if O22_CK is not None else {})),   # (2.2a)
                         **({"out_opt": out_save(), "out_stats": OUT_STATS.to_dict()} if OUTL else
                            dict(**({"out_opt": OUT_OPT_CK} if OUT_OPT_CK is not None else {}),
                                 **({"out_stats": OUT_STATS_CK} if OUT_STATS_CK is not None else {}))),   # (2.1f: its Adam and its labels' statistics)
@@ -4271,6 +4330,301 @@ def main():
         """(2.1f) the checkpoint's top-level "out_opt": the outlook's Adam (its weights are the head's, in "model")"""
         with PLAN_LOCK:
             return copy.deepcopy(OUT_OPT.state_dict())
+    import tracker as tracker_                               # (2.2a, --out22) the tracker, the desc outlooks, the facts, the second value
+    import desc22 as desc22_
+    O22 = bool(a.out22)
+    O22_HAS = bool(H2 and head2_.has_parts22(H2L))
+    TRK_L = DSC_L = TRK_OPT = DSC_OPT = VW_OPT = FSTATS = TRK_GEN = DSC_GEN = None
+    O22_OFF = [False]                                        # ... a failure in its lessons or readouts: off for the rest of the run (a desc term plays on)
+    O22_ST = [None]                                          # ... the update's readouts, for the record
+    OUT_SR = [0]                                             # ... live OUT_SRC
+    TRK_RING, TRKC_RING, TRK_HIST, TRK_G, TRK_G0 = [None], [None], [None], [0], {}   # ... the near ring, the in-control ring (his columns), the history
+    TRK_PEND = {}                                            # ... near rows scored, waiting for their in-control truth (by frame)
+    TRK_CTLT = {}                                            # ... the in-control truths come in (by frame)
+    MS_ACT = [None]                                          # ... the map sense the rollout reads (a copy: it learns while the rollout plays)
+    if O22_HAS and not O22:
+        with torch.no_grad():
+            pol.head2.out_src.fill_(0.0)
+        print("2.2a's parts inside the head: --out22 0: not taught; the built outlook's term (out_src 0)", flush=True)
+    if O22:
+        assert OUTL and O22_HAS, "--out22 1: with --outlook 1 and a network with 2.2a's parts inside its head (tools/out22_init.py add)"
+        assert CTL_ON, "--out22: with --control (the in-control labels' ring)"
+        assert MS_ON, "--out22: with --map-sense (the desc outlook's map-sense numbers)"
+        assert BEL and BTOK_ON and TRK_ON and set(groups) == {2}, "--out22: duels, the brain and its token, the simulator's truth"
+        assert getattr(E_, "DESC_OX", False), "--out22: the simulator with DESC_OX=1 (order_feat()'s targets' numbers)"
+        miss_ = [c_ for c_ in ("died", "en_in_view", "en_alive", "fo_win", "fo_lose", "ctl_lab") if c_ not in E_.AUX_COLS]
+        assert not miss_, "--out22: the simulator's truth lacks {} (FIGHT_TRUTH=1, CONTROL_TRUTH=1, TRACK_TRUTH=1)".format(miss_)
+        TRK_L, DSC_L = H2L["trk22"], H2L["desc22"]
+        assert int(TRK_L["ctl_d"]) == int(E_.CONTROL_D) and int(TRK_L["fight_d"]) == int(E_.FIGHT_D) and int(TRK_L["tick"]) == BK, \
+            "the tracker's layout: its horizons or tick are not the simulator's"
+        assert int(TRK_L["every_ctl"]) == int(CTL_L["every"]) and int(CTL_L["horizon"]) == int(TRK_L["ctl_d"]), \
+            "the tracker's in-control rows ride on the control ring's: the same every and horizon"
+        assert list(DSC_L["kinds"]) == list(OUT_L["kinds"]) and list(DSC_L["facts"]) == list(OUT_L.get("facts") or ()), \
+            "the desc outlooks and the built one: the same kinds and facts"
+        assert "segw" in OUT_L["kinds"] and "winit8" in OUT_L["kinds"], "--out22: the outlook's kinds include segw and winit8"
+        TRK_OPT = torch.optim.Adam(pol.head2.trk.parameters(), lr=a.out22_lr)
+        DSC_OPT = {s_: torch.optim.Adam(pol.head2.dsc[s_].parameters(), lr=a.plan_lr) for s_ in DSC_L["sibs"]}
+        VW_OPT = torch.optim.Adam(pol.head2.vw.parameters(), lr=a.plan_lr)
+        o22f_ = "new"
+        if O22_CK is not None:
+            TRK_OPT.load_state_dict(O22_CK["trk_opt"])
+            for s_ in DSC_L["sibs"]:
+                DSC_OPT[s_].load_state_dict(O22_CK["dsc_opt"][s_])
+            VW_OPT.load_state_dict(O22_CK["vw_opt"])
+            o22f_ = "from the checkpoint"
+        FSTATS = outlook_.FactStats((O22_CK or {}).get("fstats"))
+        TRK_GEN = torch.Generator().manual_seed(2203)
+        DSC_GEN = torch.Generator().manual_seed(2204)
+        OUT_SR[0] = int(round(float(pol.head2.out_src)))
+        print("2.2a (--out22): the tracker {} -> {} -> {} -> {} outputs (brain + {} of his columns), the near rows every {} ticks, the "
+              "in-control rows on the control ring's; the desc outlooks {} ({} situation + {} per target; norm measured: {}); the facts {}; the second "
+              "value; their Adams {}; the map sense read by a copy at each rollout; out_src {} (live OUT_SRC)".format(
+                  TRK_L["width"], TRK_L["hid"], TRK_L["hid"], len(TRK_L["outs"]), len(TRK_L["obs_cols"]), TRK_L["every_near"], DSC_L["sibs"],
+                  len(DSC_L["sit"]), len(DSC_L["tgt"]), bool(DSC_L["norm"].get("measured")), DSC_L["facts"], o22f_, OUT_SR[0]), flush=True)
+
+    def o22_fail():
+        import traceback
+        O22_OFF[0] = True
+        print("MAJOR PROBLEM: 2.2a's silent lessons or readouts failed and are off for the rest of the run (a desc term plays on with its "
+              "weights as they are); the run goes on: " + traceback.format_exc().replace(chr(10), " | ")[-1500:], flush=True)
+
+    def o22_save():
+        """(2.2a) the checkpoint's top-level "out22": the Adams of the tracker, the desc outlooks, the second value; the facts' statistics"""
+        with PLAN_LOCK:
+            return dict(trk_opt=copy.deepcopy(TRK_OPT.state_dict()), dsc_opt={s_: copy.deepcopy(o_.state_dict()) for s_, o_ in DSC_OPT.items()},
+                        vw_opt=copy.deepcopy(VW_OPT.state_dict()), fstats=FSTATS.to_dict())
+
+    TRK_IXD = {c_: list(E_.AUX_COLS).index(c_) for c_ in ("died", "en_in_view", "en_alive", "fo_win", "fo_lose", "ctl_lab", "ctl_one", "ctl_mh", "ctl_ra")
+               if c_ in E_.AUX_COLS}
+    EB_EDGES = np.array([-75.0, -25.0, 25.0, 75.0])          # (2.2a, the attack readouts) the stack edge's bins: under -75, -75..-25, -25..25, 25..75, over 75
+    EB_NAMES = ("<-75", "-75..-25", "-25..25", "25..75", ">75")
+
+    def o22_edge_bin(o22, foe):
+        """(2.2a) each seat's bin of his effective stack less the enemy's TRUE effective stack (effective: min(health + armor, 3 x health))"""
+        h_, a_ = np.maximum(o22[:, 0], 0.0), np.maximum(o22[:, 1], 0.0)
+        eff_ = np.minimum(h_ + a_, 3.0 * h_)
+        return np.digitize(eff_ - eff_[foe], EB_EDGES).astype(np.int64)
+
+    def o22_inputs(net_, sb_, x_, tok_, dox_):
+        """(2.2a) at a keep reading, every seat: the desc outlooks' inputs (normalised, rounded at their source) and the tracker's readable
+        outputs: the tracker on the brain's state and his inputs of this frame; the brain's chances of the enemy's weapons; the map sense (the
+        rollout's copy) at each target's place and his own against where the brain believes the enemy"""
+        trr_ = tracker_.readable(net_.head2.trk(tracker_.inp(TRK_L, sb_, x_)))
+        eo_ = torch.sigmoid(net_.track(sb_)[:, desc22_.TRK_OWN].float())
+        sr_, tr_ = desc22_.raw_inputs(DSC_L, dox_[0], dox_[1], dox_[2], dox_[3], dox_[4], eo_.cpu().numpy(), trr_.cpu().numpy(),
+                                      np.asarray(tok_.P, np.float32), np.asarray(tok_.valid, bool), np.asarray(tok_.hand).argmax(1),
+                                      mapsense_.torch_fwd(MS_ACT[0], dev), MS_L, MS_TAB, SEAT_MAP)
+        si_, tg_ = desc22_.inputs(DSC_L, torch.from_numpy(sr_).to(dev), torch.from_numpy(tr_).to(dev))
+        return si_, tg_, trr_
+
+    def o22_league_sit(onet_, sb_, x_, sit_, dox_):
+        """(2.2a) a league network's own situation: its tracker's outputs in place of the learner's (the rest is the same seats' numbers)"""
+        trr_ = tracker_.readable(onet_.head2.trk(tracker_.inp(TRK_L, sb_, x_)))
+        c_ = [i_ for i_, n_ in enumerate(DSC_L["sit"]) if n_.startswith("trk ")]
+        N_ = DSC_L["norm"]
+        mu_ = torch.as_tensor([N_["sit_mean"][i_] for i_ in c_], dtype=torch.float32, device=dev)
+        sd_ = torch.as_tensor([N_["sit_sd"][i_] for i_ in c_], dtype=torch.float32, device=dev)
+        out_ = sit_.clone()
+        out_[:, c_] = ((trr_.float() - mu_) / sd_).half().float()
+        return out_
+
+    def o22_tracker_rows(g0, b_aux_, b_done_, T_, IX):
+        """(2.2a, the rollout's end) this rollout's frames into the history; the near rows whose 10 s window closed in it (labels from the
+        history, the stack's truth kept with the row); the in-control rows whose label came in (the brain's state from the control ring, his
+        columns from the tracker's own); the in-control truths of the near rows' frames, for the split"""
+        H_ = TRK_HIST[0]
+        W_ = int(TRK_L["width"])
+        foe_ = torch.from_numpy(np.arange(N) ^ 1)
+        dn_ = (b_done_[:T_].cpu() > 0)
+        died_ = b_aux_[1:T_ + 1, :, IX["died"]].float() > 0.5
+        con_ = b_aux_[1:T_ + 1, :, IX["en_in_view"]].float() > 0.5
+        ev_ = died_.to(torch.uint8) | (died_[:, foe_].to(torch.uint8) << 1) | (con_.to(torch.uint8) << 2) | ((dn_ & ~died_).to(torch.uint8) << 3)
+        fo_ = torch.stack([b_aux_[:T_, :, IX["fo_win"]], b_aux_[:T_, :, IX["fo_lose"]]], -1).float().round().clamp(-1, 1).to(torch.int8)
+        ct_ = b_aux_[:T_, :, IX["ctl_lab"]].half()
+        for t_ in range(T_):
+            H_.put(g0 + t_, ev_[t_], fo_[t_], ct_[t_])
+        hn_ = int(TRK_L["h_near"])
+        X_, Y_, M_, RU_, SE_, Q_, I_ = [], [], [], [], [], [], []
+        for q_ in range(g0 - hn_, g0 + T_ - hn_):
+            if not TRK_RING[0].kept(q_) or q_ < 0 or not H_.has(q_, q_ + hn_):
+                continue
+            row_ = TRK_RING[0].get(q_)
+            if row_ is None:
+                continue
+            row_ = row_.float()
+            yb_, mb_ = tracker_.near_labels(H_, q_, TRK_L["win_f"], int(TRK_L["fight_d"]))
+            me_al_, en_al_ = row_[:, W_ + 5] > 0.5, row_[:, W_ + 6] > 0.5
+            y_ = torch.zeros(N, len(tracker_.OUTS))
+            m_ = torch.zeros(N, len(tracker_.OUTS), dtype=torch.bool)
+            y_[:, :tracker_.NB] = yb_
+            m_[:, :tracker_.NB] = mb_ & me_al_[:, None]
+            y_[:, tracker_.ENH] = row_[:, W_:W_ + 1]
+            y_[:, tracker_.ENA] = row_[:, W_ + 1:W_ + 2]
+            m_[:, tracker_.ENH] = (me_al_ & en_al_)[:, None]
+            m_[:, tracker_.ENA] = (me_al_ & en_al_)[:, None]
+            k_ = m_.any(1)
+            if not bool(k_.any()):
+                continue
+            X_.append(row_[k_, :W_].half())
+            Y_.append(y_[k_])
+            M_.append(m_[k_])
+            RU_.append(row_[k_, W_ + 2:W_ + 4])
+            SE_.append(row_[k_, W_ + 4])
+            Q_.append(torch.full((int(k_.sum()),), q_, dtype=torch.long))
+            I_.append(torch.nonzero(k_, as_tuple=True)[0])
+        nb_ = dict(X=torch.cat(X_), Y=torch.cat(Y_), M=torch.cat(M_), rule=torch.cat(RU_), seen=torch.cat(SE_), q=torch.cat(Q_), i=torch.cat(I_)) if X_ else None
+        cd_ = int(TRK_L["ctl_d"])
+        XC_, YC_, MC_ = [], [], []
+        ctt_ = {}
+        for t_ in range(T_):
+            g_ = g0 + t_ - cd_
+            if g_ < 0:
+                continue
+            if TRK_RING[0].kept(g_):
+                ctt_[g_] = b_aux_[t_, :, IX["ctl_lab"]].half().clone()
+            oc_ = TRKC_RING[0].get(g_)
+            br_ = CTL_RING[0].get(g_) if CTL_RING[0] is not None else None
+            if oc_ is None or br_ is None:
+                continue
+            yc_ = torch.stack([b_aux_[t_, :, IX[c_]] for c_ in ("ctl_lab", "ctl_one", "ctl_mh", "ctl_ra")], -1).float()
+            k_ = (yc_ >= 0).any(1)
+            if not bool(k_.any()):
+                continue
+            y_ = torch.zeros(N, len(tracker_.OUTS))
+            m_ = torch.zeros(N, len(tracker_.OUTS), dtype=torch.bool)
+            y_[:, tracker_.CTL] = yc_.clamp(min=0.0)
+            m_[:, tracker_.CTL] = yc_ >= 0
+            XC_.append(torch.cat([br_[k_, :int(TRK_L["bel"])].float(), oc_[k_].float()], 1).half())
+            YC_.append(y_[k_])
+            MC_.append(m_[k_])
+        cb_ = dict(X=torch.cat(XC_), Y=torch.cat(YC_), M=torch.cat(MC_)) if XC_ else None
+        return nb_, cb_, ctt_
+
+    def o22_learn(R, T_o, I_o, S_o, G_o, B_o, D_o, TR_o, C_o, Zp_, Zn_, OK_o, FZp_, FZn_, FM_o, out_now, b_done_, T_):
+        """(2.2a, the learner) the desc outlooks (scored before, then each its lesson), the head's second value, the attack readouts"""
+        t0_ = time.time()
+        st_ = O22_ST[0]
+        rw_ = R.get("o22_rows")
+        EN_ = int(E_.EN_INTENT)
+        pick_ = int((OUT_ST[0] or {}).get("pick") or 0)
+        ctrl_ = C_o if bool((OUT_ST[0] or {}).get("ctrl")) else None
+        trial_ = TR_o if bool(TR_o.any()) else None
+        st_["desc"] = {}
+        eb_ = None
+        if rw_ is not None and len(rw_["sit"]) == len(G_o):
+            SIT_, TGT_ = rw_["sit"].to(dev), rw_["tgt"].to(dev)
+            okd_ = rw_["ok"].to(dev).bool()
+            eb_ = rw_["eb"].to(dev).long()
+            OKd_ = OK_o & okd_[:, None]
+            FMd_ = (FM_o & okd_[:, None]) if FM_o is not None else None
+            for sib_ in DSC_L["sibs"]:
+                with torch.no_grad():
+                    ps_ = [desc22_.forward(pol.head2.dsc, DSC_L, sib_, S_o[i_:i_ + 4096], SIT_[i_:i_ + 4096], TGT_[i_:i_ + 4096]) for i_ in range(0, len(S_o), 4096)]
+                    od_ = torch.cat([p_[0] for p_ in ps_])
+                    fd_ = torch.cat([p_[1] for p_ in ps_])
+                    ps_ = None
+                    ro_ = outlook_.readouts(od_, G_o, Zp_, OKd_, dec=D_o, ctrl=ctrl_, trial=trial_, base=B_o, clip=float(DSC_L["clip"]))
+                    rf_ = outlook_.facts_readouts(fd_, G_o, FZp_, FMd_, dec=D_o) if FZp_ is not None else None
+                    if sib_ == "desc":
+                        st_["atk_desc"] = o22_atk_out(od_, pick_, EN_, eb_)
+                    od_ = fd_ = None
+                with PLAN_LOCK, torch.enable_grad():
+                    l_ = outlook_.learn2(list(pol.head2.dsc[sib_].parameters()), DSC_OPT[sib_],
+                                         lambda j_, s__=sib_: desc22_.forward(pol.head2.dsc, DSC_L, s__, S_o[j_.to(dev)], SIT_[j_.to(dev)], TGT_[j_.to(dev)]),
+                                         len(G_o), G_o, Zn_, OKd_, FZn_, FMd_, epochs=2, mb=4096, gen=DSC_GEN, clip=1.0, decay=H2_L2_[0],
+                                         decay_w=[pol.head2.dsc[sib_].l3.weight])
+                for p_ in pol.head2.dsc[sib_].parameters():
+                    p_.grad = None
+                st_["desc"][sib_] = dict(kind={k_: ro_[i_] for i_, k_ in enumerate(DSC_L["kinds"])}, facts=rf_,
+                                         loss=round(l_, 5) if l_ is not None else None, rows=int(okd_.sum()),
+                                         l3=round(float(pol.head2.dsc[sib_].l3.weight.norm()), 5))
+            SIT_ = TGT_ = None
+        if eb_ is not None:
+            st_["atk_built"] = o22_atk_out(out_now, pick_, EN_, eb_)
+        bowi_, bvwi_ = R.get("b_owi"), R.get("b_vwi")             # the head's second value: the return of the win chance with the items
+        if bowi_ is not None and bvwi_ is not None:
+            _, rw2_ = head2_.gae(bowi_, bvwi_, b_done_[:T_].float(), float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else a.lam)
+            with PLAN_LOCK, torch.enable_grad():
+                l0_, l1_ = outlook_.value_learn(pol.head2.vw, VW_OPT, S_o, rw2_[T_o, I_o].detach(), epochs=2, mb=4096, gen=DSC_GEN)
+            for p_ in pol.head2.vw.parameters():
+                p_.grad = None
+            yv_ = rw2_[T_o, I_o].double()
+            st_["vw"] = dict(loss_before=round(l0_, 6) if l0_ is not None else None, loss_after=round(l1_, 6) if l1_ is not None else None,
+                             ret_mean=round(float(yv_.mean()), 5), ret_sd=round(float(yv_.std()), 5), l2=round(float(pol.head2.vw.l2.weight.norm()), 5))
+        st_["secs_outlooks"] = round(time.time() - t0_, 3)
+
+    def o22_atk_out(o_, pick_, EN_, eb_):
+        """(2.2a, the attack readout 2) the played kind's centred outlook of the enemy target, by the stack edge's bin"""
+        z_ = outlook_.zed(o_[:, pick_].float(), float(OUT_L["clip"]))[:, EN_].double()
+        n_ = torch.bincount(eb_, minlength=5)[:5].double()
+        s_ = torch.zeros(5, dtype=torch.float64, device=z_.device).index_add_(0, eb_, z_)
+        return {EB_NAMES[k_]: (round(float(s_[k_] / n_[k_]), 4) if float(n_[k_]) > 0 else None) for k_ in range(5)}
+
+    def o22_tracker_learn(R):
+        """(2.2a, the learner) the tracker's rows scored (prequential), the near rows held until their in-control truth comes in (the split),
+        then its lesson"""
+        t0_ = time.time()
+        st_ = O22_ST[0] if O22_ST[0] is not None else {}
+        nb_, cb_, ct_ = R.get("trk_nb"), R.get("trk_cb"), R.get("trk_ct")
+        acc_ = tracker_.Acc()
+        if ct_:
+            TRK_CTLT.update(ct_)
+        Xs_, Ys_, Ms_ = [], [], []
+
+        def add_q(split_, P_, Y_, M_, RU_, SE_):
+            for wh_, c_, sl_ in (("health", 0, tracker_.ENH), ("armor", 1, tracker_.ENA)):
+                m_ = M_[:, sl_.start]
+                if bool(m_.any()):
+                    acc_.add_q(split_, wh_, P_[m_][:, sl_].numpy(), Y_[m_, sl_.start].numpy(), RU_[m_, c_].numpy(), SE_[m_].numpy())
+        if nb_ is not None:
+            P_ = tracker_.predict(pol.head2.trk, nb_["X"], dev)
+            acc_.add_b("all", P_[:, :tracker_.NB].numpy(), nb_["Y"][:, :tracker_.NB].numpy(), nb_["M"][:, :tracker_.NB].numpy())
+            add_q("all", P_, nb_["Y"], nb_["M"], nb_["rule"], nb_["seen"])
+            for q_ in torch.unique(nb_["q"]).tolist():
+                s_ = nb_["q"] == q_
+                TRK_PEND[int(q_)] = dict(i=nb_["i"][s_], P=P_[s_].half(), Y=nb_["Y"][s_].half(), M=nb_["M"][s_], rule=nb_["rule"][s_].half(),
+                                         seen=nb_["seen"][s_].half())     # (held until the in-control truth comes in: half precision, a readout)
+            Xs_.append(nb_["X"])
+            Ys_.append(nb_["Y"])
+            Ms_.append(nb_["M"])
+        if cb_ is not None:
+            P_ = tracker_.predict(pol.head2.trk, cb_["X"], dev)
+            acc_.add_b("all", P_[:, :tracker_.NB].numpy(), cb_["Y"][:, :tracker_.NB].numpy(), cb_["M"][:, :tracker_.NB].numpy())
+            kn_ = cb_["M"][:, 0]
+            for sp_, m_ in (("in", kn_ & (cb_["Y"][:, 0] > 0.5)), ("out", kn_ & (cb_["Y"][:, 0] < 0.5))):
+                acc_.add_b(sp_, P_[m_, :tracker_.NB].numpy(), cb_["Y"][m_, :tracker_.NB].numpy(), cb_["M"][m_, :tracker_.NB].numpy())
+            Xs_.append(cb_["X"])
+            Ys_.append(cb_["Y"])
+            Ms_.append(cb_["M"])
+        res_, gone_ = 0, 0
+        top_ = max(TRK_CTLT) if TRK_CTLT else None
+        for q_ in sorted(TRK_PEND):
+            pd_ = TRK_PEND[q_]
+            if q_ in TRK_CTLT:
+                lab_ = TRK_CTLT[q_][pd_["i"]].float()
+                kn_ = lab_ >= 0
+                for sp_, m_ in (("in", kn_ & (lab_ > 0.5)), ("out", kn_ & (lab_ < 0.5))):
+                    if bool(m_.any()):
+                        acc_.add_b(sp_, pd_["P"][m_, :tracker_.NB].float().numpy(), pd_["Y"][m_, :tracker_.NB].float().numpy(), pd_["M"][m_, :tracker_.NB].numpy())
+                        add_q(sp_, pd_["P"][m_].float(), pd_["Y"][m_].float(), pd_["M"][m_], pd_["rule"][m_].float(), pd_["seen"][m_].float())
+                del TRK_PEND[q_]
+                res_ += 1
+            elif top_ is not None and q_ < top_ - 2 * T:
+                del TRK_PEND[q_]
+                gone_ += 1
+        lo_ = min(TRK_PEND) if TRK_PEND else (top_ + 1 if top_ is not None else None)
+        for g_ in [g_ for g_ in TRK_CTLT if lo_ is not None and g_ < lo_]:
+            del TRK_CTLT[g_]
+        loss_ = None
+        if Xs_:
+            with PLAN_LOCK:
+                loss_ = tracker_.learn(pol.head2.trk, TRK_OPT, torch.cat(Xs_), torch.cat(Ys_), torch.cat(Ms_), a.out22_lr, dev, TRK_GEN)
+            for p_ in pol.head2.trk.parameters():
+                p_.grad = None
+        st_["tracker"] = dict(acc_.record(), rows_near=int(len(nb_["X"])) if nb_ is not None else 0, rows_ctl=int(len(cb_["X"])) if cb_ is not None else 0,
+                              pending=len(TRK_PEND), split_resolved=res_, split_dropped=gone_, loss=round(loss_, 5) if loss_ is not None else None,
+                              l3=round(float(pol.head2.trk.l3.weight.norm()), 5), secs=round(time.time() - t0_, 3))
+        O22_ST[0] = st_
     KEEPQ_GV = [0.0]                                         # (2.1) its quiet layer's share of his quiet seconds (live KEEPQ_G)
     CMB_GV, FADD_V = [0.0], [0.0]                            # (1.7) the combat order's share (live CMB_G), the fire push's add (live FADD)
     PADD_V = [0.0]                                           # (1.7) the pointer's adds on the targets and the way (live PADD)
@@ -4750,6 +5104,11 @@ def main():
                                           else min(1.0, max(0.0, float(lt_[n_s]))))
                             else:
                                 print("live: {} ignored (the run has no --slow-half 1)".format(n_s), flush=True)
+                    if "OUT_SRC" in lt_:                                               # (2.2a) which outlook's term plays, from the next rollout
+                        if O22:
+                            OUT_SR[0] = min(1, max(0, int(round(float(lt_["OUT_SRC"])))))
+                        else:
+                            print("live: OUT_SRC ignored (the run has no --out22 1)", flush=True)
                     for n_o, h_o in (("OUT_G", OUT_GV), ("OUT_PICK", OUT_PK), ("OUT_TRIAL", OUT_TR)):   # (2.1f) the outlook's dials, from the next rollout
                         if n_o in lt_:
                             if OUTL:
@@ -4816,6 +5175,7 @@ def main():
                                   **({"PULL_G": PULL_GV[0]} if PULL else {}),
                                   **({"SLOW_MIX": SH_MIX[0], "SLOW_BACK": SH_BACK[0], "SLOW_PICK": SH_PICK[0]} if SHALF else {}),
                                   **({"OUT_G": OUT_GV[0], "OUT_PICK": OUT_PK[0], "OUT_TRIAL": OUT_TR[0]} if OUTL else {}),
+                                  **({"OUT_SRC": OUT_SR[0]} if O22 else {}),
                                   **({"KNOWN_W":KN_LIVE[0]} if KN_ON else {}),
                                   **({"SPAWN_W": SPW_LIVE[0]} if SPW_ON else {}),
                                   **({"BRANCH_P": BR_P[0], "BRANCH_WPN_P": BR_WP[0]} if BR_ON else {}),
@@ -4868,6 +5228,13 @@ def main():
                 if OUTL:                                                 # (2.1f) the outlook's strength and kind of this rollout (the file's too)
                     pol.head2.out_g.fill_(OUT_GV[0])
                     pol.head2.out_pick.fill_(float(OUT_PK[0]))
+                if O22:                                                  # (2.2a) which outlook's term plays this rollout (the file's too); the map
+                    pol.head2.out_src.fill_(float(OUT_SR[0]))            # sense the rollout reads: a copy of it now
+                    if MS_ACT[0] is None:
+                        MS_ACT[0] = copy.deepcopy(MS).eval()
+                    with torch.no_grad():
+                        for p_, q_ in zip(MS_ACT[0].parameters(), MS.parameters()):
+                            p_.copy_(q_)
                 if SHALF:                                                # (2.1e) the slow halves' dials of this rollout (the file's too)
                     pol.head2.slow_mix.fill_(SH_MIX[0])
                     pol.head2.slow_back.fill_(SH_BACK[0])
@@ -5575,6 +5942,34 @@ def main():
                     OCT_ = torch.zeros(N, dtype=torch.bool, device=dev)
             OR_T, OR_I, OR_S, OR_G, OR_D, OR_TR, OR_C, OR_B = [], [], [], [], [], [], [], []   # (the rows: frame, seat, state, goal, decision, trial,
             OG_R, OND_R, OHFA_ = [], [], None                            # control, base scores; per reading: the goals, a new draw since the last)
+        O22_PLAY = bool(O22 and OUT_PLAY)                                # (2.2a, --out22) the description's numbers asked of the simulators at each
+        WOX_ = bool(CMB or O22_PLAY)                                     # tick's frame; the desc term (made at a keep reading, held to the next); his
+        DOX_ = DSC_ = b_o22 = b_owi = b_vwi = O22_R = O22_ROWS = TRK_NB = TRK_CB = TRK_CT = None   # seats' rows' desc inputs; the truths a frame;
+        if O22_PLAY:                                                     # the rings of the tracker; the attack readouts
+            DOX_ = C.get("dox")
+            DSC_ = C.get("dsc") or dict(term=torch.zeros(N, NI_H, device=dev), term_o=torch.zeros(N, NI_H, device=dev), sit=None, tgt=None, trk=None)
+            OS_P = head2_.out_src(net.head2)
+            OS_O = head2_.out_src(onet.head2) if OO_ON else 0
+            O22_NOW = C.get("o22now")
+            if O22_NOW is None:
+                O22_NOW = np.zeros((N, len(tracker_.O22)), np.float32)
+            b_o22 = torch.zeros(T, N, len(tracker_.O22))                 # (host: each seat's numbers after each step)
+            b_owi = torch.zeros(T, N, device=dev)                        # the win chance with the items x the gain (segw, winit8)
+            b_vwi = torch.zeros(T + 1, N, device=dev)                    # the head's second value a frame (segw's bootstrap; its own lesson's GAE)
+            DR_SIT, DR_TGT, DR_EB, DR_OK = [], [], [], []                # (aligned with OR_*: the desc inputs of each row, its stack edge's bin, inputs or not)
+            ATK_ = torch.zeros(5, 6, dtype=torch.float64, device=dev)    # by stack edge bin: his readings, on the enemy target, the tracker's he-dies-first
+            #                                                              sum, I-die-first sum, the readings with them, (spare)
+            O22_IX = {c_: list(E_.AUX_COLS).index(c_) for c_ in ("died", "en_in_view", "en_alive", "fo_win", "fo_lose", "ctl_lab", "ctl_one", "ctl_mh", "ctl_ra")}
+            FOE_ = np.arange(N) ^ 1
+            TRK_G0[upd] = TRK_G[0]
+            if TRK_RING[0] is None:
+                TRK_RING[0] = control_.Ring(dict(tick=BK, every=int(TRK_L["every_near"]), horizon=int(TRK_L["h_near"]), width=int(TRK_L["width"]) + 7), N, T)
+                TRKC_RING[0] = control_.Ring(dict(tick=BK, every=int(CTL_L["every"]), horizon=int(CTL_L["horizon"]), width=len(TRK_L["obs_cols"])), N, T)
+                TRK_HIST[0] = tracker_.History(N, int(TRK_L["h_near"]) + T + 4 * BK)
+                print("2.2a tracker: the near ring {} slots x {} x {} ({:.2f} GB), the in-control ring's own columns {} slots x {} ({:.2f} GB), the history "
+                      "{} frames ({:.2f} GB), on the host".format(TRK_RING[0].S, N, TRK_RING[0].L["width"], TRK_RING[0].nbytes() / 1e9, TRKC_RING[0].S,
+                                                                 TRKC_RING[0].L["width"], TRKC_RING[0].nbytes() / 1e9, TRK_HIST[0].F,
+                                                                 TRK_HIST[0].nbytes() / 1e9), flush=True)
         if PLAN is not None and not PLAN_OFF[0]:                                             # (2.1c, --plan) the slow plan in shadow: at each keep reading the head's
             try:
                 JP_ = T // BK                                                # state and his fast target odds (all seats; his rows marked), the rows
@@ -5679,7 +6074,16 @@ def main():
             if HEADL and (HS.g + 1) % HD_K == 0:                         # (--head) a tick: the simulators' events since the last
                 ev_ = head_events()
                 b_ev[t // HD_K] = ev_
+            O22_FR = O22_NOW if O22_PLAY else None                       # (2.2a) the truths at this frame (after the step before)
             with torch.no_grad():
+                if O22_PLAY and t % BK == 0 and DOX_ is not None:        # (2.2a) A KEEP READING: the description of every seat's 17 targets and the
+                    sit_, tgt_, trr_ = o22_inputs(net, BS_.s, x, TOK_, DOX_)     # situation (the simulators' numbers after the tick's frame, the brain's
+                    DSC_ = dict(DSC_, sit=sit_, tgt=tgt_, trk=trr_)              # state and token of that tick, his inputs of this frame), the desc term
+                    if OG_P > 0 and OS_P == 1:                                   # of the seats whose network plays it, held to the next reading
+                        DSC_["term"] = desc22_.term(net.head2.dsc, DSC_L, H2S.s, sit_, tgt_, OG_P, OK_P)
+                    if OO_ON and OS_O == 1:
+                        sio_ = o22_league_sit(onet, BS_.s, x, sit_, DOX_)
+                        DSC_["term_o"] = desc22_.term(onet.head2.dsc, DSC_L, H2O.s, sio_, tgt_, OG_O, OK_O)
                 OT_ = CMB and t % BK == 0 and OX_ is not None            # (1.7) a keep reading (the frame after the head's tick): the order made
                 if OT_:                                                  # before the frame's step from the candidates the simulators made after
                     X_ = torch.from_numpy(OX_[0]).to(dev).float()       # the tick's frame, the brain's odds written in (its state is the tick's),
@@ -5746,6 +6150,15 @@ def main():
                     FOD_RING[0].push(FOD_G0[upd] + t, torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if bt_ and SPR_ON and SPR_RING[0].kept(SPR_G0[upd] + t):  # (--space-read) the state of this tick, kept every --space-every ticks
                     SPR_RING[0].push(SPR_G0[upd] + t, torch.cat([BS_.s.float(), h[:, :H].float()], 1))
+                if bt_ and O22_PLAY and not O22_OFF[0]:                  # (2.2a) the tracker's rows: its input at this tick and the truths of this frame
+                    if TRK_RING[0].kept(TRK_G0[upd] + t):                # (the enemy's health and armor, the rule's belief of them, the seconds
+                        o_f_ = torch.from_numpy(O22_FR)                  # since he saw him, he alive, the enemy alive)
+                        al_ = torch.from_numpy(np.asarray(aux[:, O22_IX["en_alive"]], np.float32))
+                        tr_ = torch.stack([o_f_[FOE_, 0] / 100.0, o_f_[FOE_, 1] / 100.0, o_f_[:, 2] / 100.0, o_f_[:, 3] / 100.0, o_f_[:, 4],
+                                           al_[FOE_], al_], 1)
+                        TRK_RING[0].push(TRK_G0[upd] + t, torch.cat([tracker_.inp(TRK_L, BS_.s, x).cpu(), tr_], 1))
+                    if TRKC_RING[0].kept(TRK_G0[upd] + t):              # (the in-control rows: his columns; the brain's state is the control ring's)
+                        TRKC_RING[0].push(TRK_G0[upd] + t, x[:, torch.as_tensor(TRK_L["obs_cols"], dtype=torch.long, device=dev)])
                 if bt_ and CTL_ON and CTL_RING[0].kept(CTL_G0[upd] + t):  # (--control) the state of this tick, kept every --control-every ticks
                     CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if int(CTL_L["mem"]) == 0 else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if H2 and bt_:                                           # (--head2) a tick with the brain's: what it knows, his stack, the hands' memory
@@ -5809,16 +6222,19 @@ def main():
                         b_xp[t] = x[PRF_].float()
                         PVO_ = pv_ * (1.0 - MINE_P)[:, None]             # seats' on their network's logits below
                     if OUT_PLAY and OT_ON:                               # (2.1f) THE OUTLOOK'S TERM: strength x clip((the picked kind's outlook per target -
-                        ovp_ = (outlook_.term(outlook_.outlook(net.head2.out, s_keep_)[:, OK_P], OG_P, OCL_) if OG_P > 0   # their mean, +-clip),
-                                else torch.zeros(N, NI_H, device=dev))  # in the label's standardised units, rounded to half precision, from the
+                        ovp_ = ((DSC_["term"] if (O22_PLAY and OS_P == 1) else outlook_.term(outlook_.outlook(net.head2.out, s_keep_)[:, OK_P], OG_P, OCL_))
+                                if OG_P > 0 else torch.zeros(N, NI_H, device=dev))  # (2.2a: desc's, held from the keep reading, with OUT_SRC 1)
                         if OO_ON:                                        # head's state this frame's outputs read; after the pull, before anything
-                            ov_ = torch.where(MINE_O[:, None], ovp_, outlook_.term(outlook_.outlook(onet.head2.out, s_keep_o_)[:, OK_O], OG_O,
-                                                                                  OCL_))  # reads the scores; a league seat by its own network's
+                            ov_ = torch.where(MINE_O[:, None], ovp_, DSC_["term_o"] if (O22_PLAY and OS_O == 1) else
+                                              outlook_.term(outlook_.outlook(onet.head2.out, s_keep_o_)[:, OK_O], OG_O,
+                                                            OCL_))  # reads the scores; a league seat by its own network's
                         else:
                             ov_ = ovp_ * MINE_P[:, None]
                         logits = head2_.add_bias(logits, ov_ * MINE_P[:, None], HD_I0)
                         b_out[t] = (ov_ * MINE_P[:, None]).half()        # (stored as played: every pass of the learner adds it again, to the bit)
                         OVO_ = ov_ * (1.0 - MINE_P)[:, None]
+                if O22_PLAY:                                             # (2.2a) the head's second value of this frame (silent)
+                    b_vwi[t] = net.head2.vw(H2S.s).float()
                 if LONG:
                     b_val2[t] = net.v2(net.zl)
                 if ORDER:                                                # (--ordered-heads) drawn in order
@@ -6139,17 +6555,17 @@ def main():
                 RP_["legs_net"] += tp2_ - tp1_
                 for w_, p in enumerate(pipes):
                     p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], lgn_[w_off[w_]:w_off[w_ + 1]])
-                            + ((TOK_.answer_rows(w_off[w_], w_off[w_ + 1]),) if RF_READ else ((None,) if CMB else ()))
-                            + ((CMB and (t + 1) % BK == 0,) if CMB else ())))
+                            + ((TOK_.answer_rows(w_off[w_], w_off[w_ + 1]),) if RF_READ else ((None,) if WOX_ else ()))
+                            + ((WOX_ and (t + 1) % BK == 0,) if WOX_ else ())))
             elif RF_READ:                                                # (v0.4.2a, BRAIN_READ) the brain's answer goes with the actions
                 tp2_ = time.perf_counter()
                 for w_, p in enumerate(pipes):
                     p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], None, TOK_.answer_rows(w_off[w_], w_off[w_ + 1]))
-                            + ((CMB and (t + 1) % BK == 0,) if CMB else ())))
+                            + ((WOX_ and (t + 1) % BK == 0,) if WOX_ else ())))
             else:
                 tp2_ = time.perf_counter()
                 for w_, p in enumerate(pipes):
-                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], None, None, (t + 1) % BK == 0) if CMB else an[w_off[w_]:w_off[w_ + 1]]))
+                    p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], None, None, (t + 1) % BK == 0) if WOX_ else an[w_off[w_]:w_off[w_ + 1]]))
             tp3_ = time.perf_counter()
             RP_["send"] += tp3_ - tp2_
             res = [p.recv() for p in pipes]
@@ -6164,6 +6580,13 @@ def main():
             if b_ow is not None:                                         # (2.1f) the win-chance part of the pay (win_raw x the gain): the win labels
                 b_ow[t] = torch.from_numpy(np.concatenate([r[3]["win_raw"][0] if "win_raw" in r[3] else np.zeros(len(r[1]), np.float32)
                                                            for r in res])).to(dev) * OUT_WG
+            if O22_PLAY:                                                 # (2.2a) each seat's numbers after the step; the two win streams (win8 and
+                O22_NOW = np.concatenate([r[3]["o22"][0] for r in res])  # win5 on the judge without the items, segw and winit8 with them)
+                b_o22[t] = torch.from_numpy(O22_NOW)
+                b_ow[t] = torch.from_numpy(O22_NOW[:, 6]).to(dev) * OUT_WG
+                b_owi[t] = torch.from_numpy(O22_NOW[:, 7]).to(dev) * OUT_WG
+                if len(res[0]) > 25 and res[0][25] is not None and len(res[0][25]) >= 5:   # (after a tick's frame: for the coming keep reading)
+                    DOX_ = tuple(np.concatenate([r[25][i_] for r in res]) for i_ in range(5))
             if b_hr is not None:                                         # (a frame with no blend: his pay as it is)
                 b_hr[t] = torch.from_numpy(np.concatenate([r[21] if r[21] is not None else r[1] for r in res])).to(dev)
             if tpay_ is not None:                                        # (--info-pay) zero-sum over each pair of seats
@@ -6254,6 +6677,21 @@ def main():
                                 OR_TR.append(trn_now_[rw_] if trn_now_ is not None else torch.zeros(len(rw_), dtype=torch.bool, device=dev))
                                 OR_C.append(OCT_[rw_] if OCT_ is not None else torch.zeros(len(rw_), dtype=torch.bool, device=dev))
                                 OR_B.append(OBASE_[rw_].half())
+                                if O22_PLAY:                             # (2.2a) the desc inputs of the reading, the stack edge's bin
+                                    ok_d = DSC_.get("sit") is not None
+                                    DR_OK.append(torch.full((len(rw_),), ok_d, dtype=torch.bool, device=dev))
+                                    DR_SIT.append(DSC_["sit"][rw_].half().cpu() if ok_d else torch.zeros(len(rw_), len(DSC_L["sit"]), dtype=torch.float16))
+                                    DR_TGT.append(DSC_["tgt"][rw_].half().cpu() if ok_d else torch.zeros(len(rw_), NI_H, len(DSC_L["tgt"]), dtype=torch.float16))   # (on the
+                                    #                                      host as they are made: the card holds only the reading's own)
+                                    eb_ = torch.from_numpy(o22_edge_bin(O22_FR, FOE_)).to(dev)
+                                    DR_EB.append(eb_[rw_].to(torch.int8))
+                                    ATK_[:, 0] += torch.bincount(eb_[rmk_].long(), minlength=5)[:5].double()
+                                    ATK_[:, 1] += torch.bincount(eb_[rmk_ & (gon_ == int(E_.EN_INTENT))].long(), minlength=5)[:5].double()
+                                    if ok_d and DSC_.get("trk") is not None:
+                                        tk_ = DSC_["trk"]
+                                        ATK_[:, 2] += torch.zeros(5, dtype=torch.float64, device=dev).index_add_(0, eb_[rmk_].long(), tk_[rmk_, 4].double())
+                                        ATK_[:, 3] += torch.zeros(5, dtype=torch.float64, device=dev).index_add_(0, eb_[rmk_].long(), tk_[rmk_, 5].double())
+                                        ATK_[:, 4] += torch.bincount(eb_[rmk_].long(), minlength=5)[:5].double()
                             except Exception:
                                 out_fail()
                         OHFA_ = None
@@ -6420,6 +6858,17 @@ def main():
             if b_aux is not None:                                        # ... this rollout's kept rows with their own frame's truth
                 spr_b = spaceread_.batch(SPR_RING[0], SPR_G0[upd], b_aux, TRK_IX)
             SPR_G0.pop(upd, None)
+        if O22_PLAY:                                                     # (2.2a) the second value's bootstrap; the tracker's rows whose labels came in
+            with torch.no_grad():
+                b_vwi[T] = net.head2.vw(H2S.s).float()
+            TRK_G[0] = TRK_G0[upd] + T
+            if not O22_OFF[0]:
+                try:
+                    TRK_NB, TRK_CB, TRK_CT = o22_tracker_rows(TRK_G0[upd], b_aux, b_done, T, O22_IX)
+                except Exception:
+                    TRK_NB = TRK_CB = TRK_CT = None
+                    o22_fail()
+            TRK_G0.pop(upd, None)
         ctl_b = None
         if CTL_ON:
             CTL_G[0] = CTL_G0[upd] + T                                   # (--control) the next rollout's rows follow on
@@ -6548,6 +6997,16 @@ def main():
                     OUT_ROWS = None
                     out_fail()
             OR_T = OR_I = OR_S = OR_G = OR_D = OR_TR = OR_C = OR_B = OG_R = OND_R = None
+        if O22_PLAY:                                                     # (2.2a) carried to the next rollout: the description's numbers of the coming
+            C["dox"], C["dsc"], C["o22now"] = DOX_, DSC_, O22_NOW        # reading, the held desc terms, the truths
+            O22_R = dict(src=OS_P, src_opp=OS_O, atk=ATK_.cpu().numpy().tolist())
+            if not O22_OFF[0] and OUT_ROWS is not None and DR_SIT:
+                try:
+                    O22_ROWS = dict(sit=torch.cat(DR_SIT).cpu(), tgt=torch.cat(DR_TGT).cpu(), eb=torch.cat(DR_EB).cpu(), ok=torch.cat(DR_OK).cpu())
+                except Exception:
+                    O22_ROWS = None
+                    o22_fail()
+            DR_SIT = DR_TGT = DR_EB = DR_OK = None
         if KEEP:
             C["kf"] = KF_                                                # (1.4c) what the keep choice reads on the next rollout's first frame
         if CMB:
@@ -6571,6 +7030,7 @@ def main():
                     ms_bel=ms_bel, b_ws=b_ws, ins=IB_, b_hw=b_hw, b_vw=b_vw, plan=PLAN_R, held=HELD_R,
                     b_pull=b_pull, pull=PULL_R, plan_rows=PLAN_ROWS, b_xp=b_xp, slow=SH_R, slow_rows=SH_ROWS,
                     b_out=b_out, b_ow=b_ow, out=OUT_R, out_rows=OUT_ROWS,
+                    b_o22=b_o22, b_owi=b_owi, b_vwi=b_vwi, o22=O22_R, o22_rows=O22_ROWS, trk_nb=TRK_NB, trk_cb=TRK_CB, trk_ct=TRK_CT,
                     b_hfr=b_hfr if HELD else None, b_hchg=b_hchg if HELD else None, b_prf=b_prf, b_stk=b_stk)
 
     def launch(upd):
@@ -6942,7 +7402,9 @@ def main():
                 pol.belief.fade_g = BFG_R
         played_at()
         if a.dump_acts:                                                  # (--dump-acts) the rollout as played, for a fixed-seed identity check
-            torch.save(dict(act=b_act.cpu(), logp=b_logp.cpu(), val=b_val.cpu(), rew=b_rew.cpu(), done=b_done.cpu()),
+            torch.save(dict(act=b_act.cpu(), logp=b_logp.cpu(), val=b_val.cpu(), rew=b_rew.cpu(), done=b_done.cpu(),
+                            **({"vh": R["b_vh"].cpu()} if R.get("b_vh") is not None else {}), **({"lpi": R["b_lpi"].cpu()} if R.get("b_lpi") is not None else {}),
+                            **({"hr": R["b_hr"].cpu()} if R.get("b_hr") is not None else {})),   # (2.2a: the head's value, its log p, its pay if apart)
                        "{}_{}.pt".format(a.dump_acts, update))
         if HEADL:
             HD_RS0, HD_PEND, HD0, hd_secs = R["HD_RS0"], R["HD_PEND"], R["HD0"], R["hd_secs"]
@@ -8516,6 +8978,7 @@ def main():
                     slow_fail()
         if OUTL:                                                         # (2.1f) the outlook's lesson on the learner's copy (pol.head2.out): its rows (every
             OUT_ST[0] = dict(R.get("out") or {})                         # keep reading of his seats on a held trip, alive), the labels per kind from the
+            O22_ST[0] = dict(R.get("o22") or {}) if O22 else None        # (2.2a) this update's readouts
             orw_ = R.get("out_rows")                                     # head's own quantities, its readouts BEFORE the lesson (prequential), the lesson
             if orw_ is not None and not OUT_OFF[0]:                      # (its own Adam and stream, the decay of its last layer at the live H2_L2: rule 11),
                 try:                                                     # the labels' statistics after. Its gradient never comes from the main loss
@@ -8526,7 +8989,8 @@ def main():
                     with torch.no_grad():                                # (seg: the reading at which he leaves the goal he is on; J x BK = T: past the end)
                         end_o = outlook_.segment_ends(orw_["gr"].to(dev).long(), orw_["nd"].to(dev).bool())[T_o // BK, I_o] * BK
                         Y_o, OK_o, SL_o = outlook_.labels(OUT_L["kinds"], T_o, I_o, ret=RET_H, pay_all=B_HR, pay_win=R.get("b_ow"), done=b_done[:T],
-                                                          gamma=float(H2L["gamma"]), val=B_VH, seg_end=end_o)
+                                                          gamma=float(H2L["gamma"]), val=B_VH, seg_end=end_o,
+                                                          pay_wit=R.get("b_owi"), val_w=R.get("b_vwi"))      # (2.2a: segw, winit8)
                         Zp_ = Y_o.clone()                                # (standardised by the statistics BEFORE this rollout; a kind's first: its own)
                         for k_o in range(len(OUT_L["kinds"])):
                             y_k = Y_o[OK_o[:, k_o], k_o]
@@ -8537,10 +9001,26 @@ def main():
                         out_now = outlook_.forward_rows(pol.head2.out, S_o)
                         ro_ = outlook_.readouts(out_now, G_o, Zp_, OK_o, dec=D_o, ctrl=C_o if bool(OUT_ST[0].get("ctrl")) else None,
                                                 trial=TR_o if bool(TR_o.any()) else None, base=B_o, clip=float(OUT_L["clip"]))
+                        FY_o = FM_o = FZp_ = FZn_ = None
+                        if O22 and R.get("b_o22") is not None:           # (2.2a) the facts of each row's segment, scored before the lesson
+                            bo22_ = R["b_o22"].to(dev)
+                            dme_ = b_aux[1:T + 1, :, TRK_IXD["died"]].to(dev).float() > 0.5
+                            FY_o, FM_o = outlook_.fact_labels(T_o, I_o, end_o, b_done[:T], dme_, dme_[:, torch.from_numpy(np.arange(N) ^ 1).to(dev)],
+                                                              bo22_[:, :, 5] > 0.5, bo22_[:, :, 0:2], np.arange(N) ^ 1)
+                            FZp_ = FSTATS.standardise(FY_o) if int(FSTATS.n[outlook_.FBIN]) > 0 else FY_o.clone()
+                            fo_now = torch.cat([pol.head2.out.both(S_o[i_:i_ + 8192])[1] for i_ in range(0, len(S_o), 8192)])
+                            OUT_ST[0]["facts"] = outlook_.facts_readouts(fo_now, G_o, FZp_, FM_o, dec=D_o)
+                            FSTATS.update(FY_o, FM_o)
+                            FZn_ = FSTATS.standardise(FY_o)
+                            fo_now = bo22_ = None
                         raw_o = OUT_STATS.update(Y_o, OK_o)
                         Zn_ = OUT_STATS.standardise(Y_o)
                     with PLAN_LOCK, torch.enable_grad():
-                        outlook_.learn(pol.head2.out, OUT_OPT, S_o, G_o, Zn_, OK_o, epochs=2, mb=4096, gen=OUT_GEN, clip=1.0, decay=H2_L2_[0])
+                        if O22 and FZn_ is not None:                     # (2.2a) the built outlook with its facts (the term's decay on l3 only)
+                            outlook_.learn2(list(pol.head2.out.parameters()), OUT_OPT, lambda j_: pol.head2.out.both(S_o[j_.to(dev)]), len(G_o), G_o, Zn_,
+                                            OK_o, FZn_, FM_o, epochs=2, mb=4096, gen=OUT_GEN, clip=1.0, decay=H2_L2_[0], decay_w=[pol.head2.out.l3.weight])
+                        else:
+                            outlook_.learn(pol.head2.out, OUT_OPT, S_o, G_o, Zn_, OK_o, epochs=2, mb=4096, gen=OUT_GEN, clip=1.0, decay=H2_L2_[0])
                     for p_ in pol.head2.out.parameters():                # (nothing of its lesson left for any other clip or step)
                         p_.grad = None
                     loss_o = outlook_.loss_of(pol.head2.out, S_o, G_o, Zn_, OK_o)
@@ -8554,9 +9034,19 @@ def main():
                                      raw=[None if r_ is None else dict(mean=round(r_[0], 5), sd=round(r_[1], 5), n=r_[2]) for r_ in raw_o],
                                      rows=int(len(T_o)), rows_decision=int(D_o.sum()), rows_trial=int(TR_o.sum()),
                                      secs=round(time.time() - t_ol, 3))
+                    if O22 and not O22_OFF[0]:                           # (2.2a) the desc outlooks, the second value, the attack readouts
+                        try:
+                            o22_learn(R, T_o, I_o, S_o, G_o, B_o, D_o, TR_o, C_o, Zp_, Zn_, OK_o, FZp_, FZn_, FM_o, out_now, b_done, T)
+                        except Exception:
+                            o22_fail()
                     S_o = G_o = B_o = Y_o = Zp_ = Zn_ = out_now = None
                 except Exception:
                     out_fail()
+        if O22 and not O22_OFF[0]:                                       # (2.2a) the tracker: its rows scored, then learnt; the in-control split
+            try:
+                o22_tracker_learn(R)
+            except Exception:
+                o22_fail()
         if NOSYNC:                                                       # (--learn-nosync) the counters summed on the card, read once
             CHK_[:] = [None, None]
             XL_[:] = [None, None]
@@ -9166,7 +9656,21 @@ def main():
                     kind={k_: (osr_.get("lesson") or [{}] * len(OUT_L["kinds"]))[i_] for i_, k_ in enumerate(OUT_L["kinds"])},
                     raw={k_: (osr_.get("raw") or [None] * len(OUT_L["kinds"]))[i_] for i_, k_ in enumerate(OUT_L["kinds"])},
                     stats=OUT_STATS.to_dict(), seg_readings=osr_.get("seg_readings"), loss=osr_.get("loss"),
-                    l3=round(float(pol.head2.out.l3.weight.norm()), 5), decay=H2_L2_[0], lr=a.plan_lr, secs=osr_.get("secs"))
+                    l3=round(float(pol.head2.out.l3.weight.norm()), 5), decay=H2_L2_[0], lr=a.plan_lr, secs=osr_.get("secs"),
+                    facts=osr_.get("facts"))
+            if O22:                                                      # (2.2a) the tracker, the desc outlooks, the facts, the second value, the
+                o2r_ = dict(O22_ST[0] or {})                             # attack readouts (seat-time on the enemy target, the tracker's fight odds
+                atk_ = np.asarray(o2r_.pop("atk", None) or np.zeros((5, 6)))    # and the played kind's centred outlook of the enemy, by the stack edge)
+                o2r_["attack"] = dict(bins=list(EB_NAMES), readings=[int(x_) for x_ in atk_[:, 0]],
+                                      share_on_enemy=[(round(float(atk_[k_, 1] / atk_[k_, 0]), 4) if atk_[k_, 0] > 0 else None) for k_ in range(5)],
+                                      fight_he_dies_first=[(round(float(atk_[k_, 2] / atk_[k_, 4]), 4) if atk_[k_, 4] > 0 else None) for k_ in range(5)],
+                                      fight_i_die_first=[(round(float(atk_[k_, 3] / atk_[k_, 4]), 4) if atk_[k_, 4] > 0 else None) for k_ in range(5)],
+                                      outlook_built=o2r_.pop("atk_built", None), outlook_desc=o2r_.pop("atk_desc", None))
+                o2r_.update(src_next=int(OUT_SR[0]), off=bool(O22_OFF[0]),
+                            sizes=dict(out_l3=round(float(pol.head2.out.l3.weight.norm()), 5),
+                                       dsc_l3={s_: round(float(pol.head2.dsc[s_].l3.weight.norm()), 5) for s_ in DSC_L["sibs"]},
+                                       trk_l3=round(float(pol.head2.trk.l3.weight.norm()), 5), vw_l2=round(float(pol.head2.vw.l2.weight.norm()), 5)))
+                rec["out22"] = o2r_
             if SHALF:                                                    # (2.1e) the slow halves: what played (mix, back, pick as played and next, the
                 slr_ = SLOW_ST[0] or {}                                   # league's; the read-back's weight size), each half (its clock, ticks a
                 o_sb = head2_._offs(H2L)["slowback"]                     # seat-minute by cause, how far its odds move at a tick beside the fast plan's
