@@ -253,8 +253,11 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
   learner's recomputed log-probabilities differ from the played ones (up to 0.08 to 0.12 at the worst frame at full size, 2.1d's proof);
   the flag is retired and refused; a new run's command built from an older one strips it. Since 2026-11-15 (2.1d's restart at update 30)
   the trainer always rounds the rollout's inputs to half precision at their source, so play and learning read the same values and the
-  stored inputs are float16 (full precision cost 12.6 GB a buffer and nearly exhausted the PC's memory). The checks, the servers and the
-  export still feed full precision and are to be moved the same way.
+  stored inputs are float16 (full precision cost 12.6 GB a buffer and nearly exhausted the PC's memory). Every other reader now rounds
+  the same way, bit for bit, for every network (branch `bhalf`, to be merged after 2.1d ends): the checks' player (`test_suite.Policy.norm`),
+  the plugins' pass (`netpass.norm`; `movetest`), the tools that normalise on their own, the brain's lessons (`sim/obs_half.py`: torch's
+  `.half()` of a double rounds twice, so the torch paths round once in double precision). **The `qlbot` image must be rebuilt before any
+  server plays a network** (the export is unchanged: `policy.npz` keeps the mean and variance, the plugin rounds).
 - Write `.cmd` run files with the Write tool to the scratchpad and copy them over (Git Bash heredocs mangle backslashes; writing
   over an existing `.cmd` in a chain once failed silently and the old settings ran). After a patch to `sim/`, check the change is
   there (a write once failed with Errno 22 and left the file as it was).

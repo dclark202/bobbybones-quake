@@ -77,7 +77,7 @@ def step_logits(pol, obs, h, xl=None, pose=None, zmap=None):
         h = hf[:, :pol.H]
     if obs.shape[1] > len(pol.mean):
         obs = obs[:, :len(pol.mean)]
-    x = np.clip((obs - pol.mean) / np.sqrt(pol.var + 1e-8), -10, 10).astype(np.float32)
+    x = np.clip((obs - pol.mean) / np.sqrt(pol.var + 1e-8), -10, 10).astype(np.float16).astype(np.float32)
     xa = x
     bt, bst = pol.token_pre(obs, pose, zmap, hb) if hb is not None else (None, None)   # (v0.4.1) the brain's token, if its gate is open
     xh = xa

@@ -472,6 +472,15 @@ def order_due(P):
     return order_on(P) and kr_ is not None and bool(np.asarray(kr_).any())
 
 
+def norm(P, obs):
+    """the network's raw inputs [B, its list] -> what its readers read: the trainer's norm() (sim/train_duel_rnn.py) and
+    test_suite.Policy.norm, bit for bit (obs float32 as observe() gives them, the mean and variance as the checkpoint keeps them)"""
+    x = np.clip((obs - P["obs_mean"]) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float16).astype(np.float32)   # (owner, 2026-11-15)
+    if "cell" in P:                                          # rounded to half precision at the source; the cell numbers stay as they
+        x[:, -2:] = obs[:, -2:]                              # are (the trainer's HAS_CELLS)
+    return x
+
+
 def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None, mapname=None):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
@@ -517,8 +526,8 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
         obs = obs[:, P["_src"]]                              # name, out of the simulator's inputs (a caller may give them already cut)
     if obs.shape[1] > len(mean):                             # an older network in a simulator with more inputs: they are appended at the end
         obs = obs[:, :len(mean)]
-    x = np.clip((obs - mean) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
-    xa = x                                                   # (the brain reads these: unfaded)
+    x = norm(P, obs)                                         # (half precision at the source, as the trainer: owner 2026-11-15)
+    xa = x                                                 # (the brain reads these: unfaded)
     if needs_pose(P):                                        # (v0.4.1) the brain's last answer turned to his pose now (test_suite's token_pre)
         B_, bl_, bt_m, _, _ = P["_brain"]
         assert pose is not None and zmap is not None, "this network's brain token is open: give step() pose= and zmap= (netpass.pose)"

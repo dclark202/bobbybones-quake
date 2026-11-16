@@ -91,7 +91,7 @@ def main():
     finished = np.full(n, np.nan)
     traj = [[] for _ in range(n)]
     for step in range(int(30 / 0.025)):
-        x = torch.from_numpy(np.clip((obs - ck["obs_mean"]) / np.sqrt(ck["obs_var"] + 1e-8), -10, 10).astype(np.float32))
+        x = torch.from_numpy(np.clip((obs - ck["obs_mean"]) / np.sqrt(ck["obs_var"] + 1e-8), -10, 10).astype(np.float16).astype(np.float32))   # (half precision at the source, as the trainer: owner 2026-11-15)
         with torch.no_grad():
             logits = pi(body(x)).split(ACTION_DIMS, -1)
             act = torch.stack([torch.distributions.Categorical(logits=l).sample() for l in logits], -1).numpy()

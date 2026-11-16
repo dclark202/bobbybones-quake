@@ -575,6 +575,13 @@ class Policy:
         kcol += 512 * kqd_ + 1024 * kqc_
         return kcol
 
+    def norm(self, obs):
+        """the network's raw inputs [B, its list] -> what its readers read: the trainer's norm() (sim/train_duel_rnn.py), bit for bit"""
+        x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float16).astype(np.float32)   # (owner, 2026-11-15) rounded
+        if self.cell is not None:                            # to half precision at the source, as the trainer's norm(); the cell numbers
+            x[:, -2:] = obs[:, -2:]                          # stay as they are (the trainer's HAS_CELLS)
+        return x
+
     def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
         --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, KEEP_FEAT]: (1.4c,
@@ -605,8 +612,8 @@ class Policy:
             h = hf[:, :self.H]
         if obs.shape[1] > len(self.mean):                    # an older network in a simulator with more inputs: they are appended at the end
             obs = obs[:, :len(self.mean)]
-        x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
-        xa = x                                               # (the brain reads these: unfaded)
+        x = self.norm(obs)                                   # (half precision at the source, as the trainer: owner 2026-11-15)
+        xa = x                                             # (the brain reads these: unfaded)
         bt, bst = self.token_pre(obs, pose, zmap, hb)
         if self.rfg > 0 and len(self.rf_cols):               # (v0.4.2a) the hands' inputs: the rule-made columns times (1 - g)
             import rule_fade as rfade_

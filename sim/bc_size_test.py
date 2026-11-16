@@ -37,7 +37,7 @@ def main():
     files = sorted(glob.glob(os.path.join(a.dir, "*.npz")))
     files = [files[k] for k in rng.permutation(len(files))]
     ck = torch.load(a.norm, weights_only=False, map_location="cpu")
-    mean, sd = ck["obs_mean"].astype(np.float32), np.sqrt(ck["obs_var"] + 1e-8).astype(np.float32)
+    mean, sd = np.asarray(ck["obs_mean"], np.float64), np.sqrt(np.asarray(ck["obs_var"], np.float64) + 1e-8)   # (as the trainer's norm())
 
     def load(fs):
         out = []
@@ -57,7 +57,7 @@ def main():
         for b in range(B):
             ob, act = pool[int(r.integers(len(pool)))]
             s0 = int(r.integers(0, len(act) - a.len))
-            o[b] = np.clip((ob[s0:s0 + a.len].astype(np.float32) - mean) / sd, -10, 10)
+            o[b] = np.clip((ob[s0:s0 + a.len].astype(np.float32) - mean) / sd, -10, 10).astype(np.float16)   # (owner 2026-11-15: half precision at the source)
             ac[b] = act[s0:s0 + a.len]
         return torch.from_numpy(o).to(dev), torch.from_numpy(ac).to(dev)
 

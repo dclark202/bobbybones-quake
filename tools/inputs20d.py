@@ -391,6 +391,10 @@ def same1(a, half):
     if not hasattr(cls, "_init0"):
         cls._init0 = cls.__init__
     cls.__init__ = (lambda self, B, n, half=True: cls._init0(self, B, n, True)) if half else (lambda self, B, n, half=True: cls._init0(self, B, n, False))
+    if not hasattr(T.Policy, "_norm0"):                   # (owner, 2026-11-15) the inputs are rounded to half precision at the source:
+        T.Policy._norm0 = T.Policy.norm                  # the two networks' grids differ (other statistics), so with the rounding off
+    T.Policy.norm = T.Policy._norm0 if half else (       # also the inputs are taken at full precision (the networks' own sums)
+        lambda self, obs: np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32))
     L = IL.load(VERSION)
     src = np.asarray(L["src"], np.int64)
     pa, pb = T.Policy(a.a, seed=7), T.Policy(a.b, seed=7)
