@@ -10,11 +10,12 @@ Usage:
 Scenarios (each prints a PASS/FAIL line and exits 0/1):
   t1  slot lifecycle: add -> appears in LIST + SNAP (spawns, gets a team in
       TDM) -> remove -> slot freed. (scoreboard/kick covered via server log)
-  t2  scripted movement: hold forward; the best STRAIGHT ~0.5 s window rate
-      must hit run speed (~320 u/s) along the commanded yaw (boxed spawns
-      are rerolled via re-ADD, so the map geometry cannot skew it).
+  t2  scripted movement: hold forward along all four cardinal yaws (2 s
+      each); the best STRAIGHT ~0.5 s window must hit run speed (~320 u/s).
+      Only a spawn whose whole four-direction sweep misses is rerolled.
   t3  substeps: two runs (1 cmd/frame vs 4 cmds/frame, same total input
-      time), peak-window rates must match (physics is substep-driven).
+      time), each sweeping the four yaws; the best straight-window rates
+      must match (physics is substep-driven).
   t4  world state: verify items are present in the entity dump; walk into
       a reachable item (up to 6 fresh-spawn tries, stuck-aware brain_toward)
       and verify it vanishes under the bot; firing via MG ammo decrement.
@@ -238,6 +239,29 @@ def hold_and_measure(bc: Botctl, slot: int, yaw: float, hz: float,
     return best_straight if best_straight[0] > 0 else best
 
 
+def sweep_straight(bc: Botctl, slot: int, yaw0: float, hz: float,
+                   hold: float = 2.0, win: float = 0.5, min_rate: float = 260.0):
+    """hold_and_measure along the spawn probe's yaw first, then the other
+    three cardinal yaws; return ((rate, dot, dist, dt, yaw), passed) for the
+    best STRAIGHT window found, stopping early once the gate is met. This
+    removes the probe-vs-hold mismatch: the probe walks the bot ~100 u INTO
+    the corridor it just measured, so a borderline spawn (wall ~175 u, probe
+    average 283) leaves the hold only a short truncated straight window
+    (2026-11-16 T2: 254.6 u/s over 0.30 s). Scoring all four directions on
+    the same spawn keeps the spawn random (a boxed spawn still has open
+    directions) and needs no world-geometry knowledge. Turnaround transients
+    are excluded by the straight (dot) filter itself."""
+    yaws = [yaw0] + [y for y in (0.0, 90.0, 180.0, 270.0) if y != yaw0]
+    best = (0.0, 0.0, 0.0, 0.0, yaw0)
+    for y in yaws:
+        r, d, di, dt = hold_and_measure(bc, slot, y, hz, hold, win)
+        if r > best[0]:
+            best = (r, d, di, dt, y)
+        if best[0] >= min_rate and best[1] >= 0.99:
+            return best, True
+    return best, False
+
+
 def spawn_drivable(bc: Botctl, args, suffix: str, verbose: bool = False,
                    gate: float = 260.0, max_spawns: int = 4):
     """ADD + connect + team join + probe; returns (slot, yaw, probe_rate).
@@ -423,30 +447,56 @@ def t1(bc: Botctl, args) -> int:
     return result(name, ok, detail)
 
 
+def drive_best_window(bc: Botctl, args, hz: float, suffix: str = "",
+                      verbose: bool = False, max_spawns: int = 3):
+    """T2/T3 core: spawn (spawn_drivable without rerolls -- the sweep covers
+    all four directions anyway), sweep_straight over the four cardinal yaws,
+    and only if the WHOLE sweep misses the gate reroll the spawn (up to
+    max_spawns). Returns (slot, (rate, dot, dist, dt, yaw), probe, spawns);
+    slot is still live on a pass (caller removes)."""
+    slot = -1
+    probe = -1.0
+    best = (0.0, 0.0, 0.0, 0.0, 0.0)
+    used = 0
+    for s in range(max_spawns):
+        sl, yaw, pr = spawn_drivable(bc, args, suffix, verbose=verbose,
+                                    gate=-1.0, max_spawns=1)
+        if sl < 0:
+            continue
+        used = s + 1
+        probe = max(probe, pr)
+        best, passed = sweep_straight(bc, sl, yaw, hz)
+        if passed:
+            return sl, best, probe, used
+        log(f"spawn {used}: no straight window >= 260 u/s in any yaw -> reroll")
+        bc.remove(sl)
+        time.sleep(1.0)
+    return -1, best, probe, used
+
+
 def t2(bc: Botctl, args) -> int:
-    """T2: scripted movement. Hold fwd=127 at full rate; hold_and_measure scores
-    the best straight ~0.5 s window: the channel must produce straight
-    run-speed movement (~320 u/s) no matter where the random team spawn
-    faces. Boxed-in spawns are rerolled via re-ADD (spawn_drivable)."""
+    """T2: scripted movement. drive_best_window: hold fwd=127 along every
+    cardinal yaw (2 s each), hold_and_measure scores the best straight ~0.5 s
+    window -- the channel must produce straight run-speed movement (~320 u/s)
+    no matter where the random team spawn faces; only a spawn whose whole
+    four-direction sweep misses the gate is rerolled (re-ADD)."""
     name = "T2 movement"
-    hz = args.hz
-    slot, yaw, probe = spawn_drivable(bc, args, "", verbose=args.verbose)
-    if slot < 0:
-        return result(name, False, "ADD/connect/join failed")
-    rate, dot, dist, dt = hold_and_measure(bc, slot, yaw, hz)
-    bc.remove(slot)
+    slot, (rate, dot, dist, dt, yaw), probe, used = drive_best_window(bc, args, args.hz)
+    if slot >= 0:
+        bc.remove(slot)
     ok = rate >= 260.0 and dot >= 0.99
     return result(name, ok,
-                  f"peak{dt:.2f}s: rate={rate:.1f}u/s dir_dot={dot:.3f} "
-                  f"travel={dist:.1f}u (spawn probe best={probe:.0f}u/s, "
-                  f"cmd yaw={yaw:.0f})")
+                  f"best window {dt:.2f}s: rate={rate:.1f}u/s dir_dot={dot:.3f} "
+                  f"travel={dist:.1f}u yaw={yaw:.0f} (spawn probe {probe:.0f}u/s, "
+                  f"spawns={used})")
 
 
 def t3(bc: Botctl, args) -> int:
     """T3: substeps. Stage 1 vs 4 identical fwd cmds per engine frame (sidecar
-    at 24 vs 96 Hz) and compare the straight-window rates (hold_and_measure).
-    Multi-cmd replay that drops or clumps inputs shows up as a rate spread;
-    both must reach full run speed along the commanded direction."""
+    at 24 vs 96 Hz); drive_best_window sweeps the four cardinal yaws per spawn
+    and the best straight window of each run is compared. Multi-cmd replay
+    that drops or clumps inputs shows up as a rate spread; both must reach
+    full run speed along some commanded direction."""
     name = "T3 substeps"
 
     def run(substeps: int):
@@ -456,26 +506,23 @@ def t3(bc: Botctl, args) -> int:
         # stands a beat) -- that skewed sub1 peaks to 267-272 u/s on
         # 2026-11-16. The queue absorbs the surplus (identical cmds, no
         # physics difference); the 4x factor between stages is preserved.
-        slot, yaw, probe = spawn_drivable(bc, args, "", verbose=args.verbose)
-        if slot < 0:
-            return None
-        rate, dot, dist, dt = hold_and_measure(bc, slot, yaw, 24.0 * substeps)
-        bc.remove(slot)
+        slot, (rate, dot, dist, dt, yaw), probe, used = drive_best_window(
+            bc, args, 24.0 * substeps, verbose=args.verbose)
+        if slot >= 0:
+            bc.remove(slot)
         time.sleep(2.0)  # let the slot free + world settle between runs
-        return rate, dot, dist, dt, probe
+        return rate, dot, dt, yaw, used
 
-    r1 = run(1)
-    r4 = run(4)
-    if r1 is None or r4 is None:
-        return result(name, False, "run failed (spawn/add)")
-    rate1, dot1, dist1, dt1, probe1 = r1
-    rate4, dot4, dist4, dt4, probe4 = r4
-    ratio = min(rate1, rate4) / max(rate1, rate4)
+    rate1, dot1, dt1, yaw1, used1 = run(1)
+    rate4, dot4, dt4, yaw4, used4 = run(4)
+    ratio = min(rate1, rate4) / max(rate1, rate4) if max(rate1, rate4) > 0 else 0.0
     ok = (rate1 >= 260.0 and rate4 >= 260.0
           and dot1 >= 0.99 and dot4 >= 0.99
           and 0.85 <= ratio <= 1.2)
-    detail = (f"peak rate(sub1)={rate1:.1f}u/s dot={dot1:.3f} | "
-              f"rate(sub4)={rate4:.1f}u/s dot={dot4:.3f} | ratio={ratio:.2f}")
+    detail = (f"best straight rate(sub1)={rate1:.1f}u/s dot={dot1:.3f} "
+              f"yaw={yaw1:.0f} spawns={used1} | "
+              f"rate(sub4)={rate4:.1f}u/s dot={dot4:.3f} yaw={yaw4:.0f} "
+              f"spawns={used4} | ratio={ratio:.2f}")
     return result(name, ok, detail)
 
 
