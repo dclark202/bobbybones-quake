@@ -24,6 +24,35 @@ thousands of examples an update, no forks.
 **What it is not.** No new goals, no new opponents, no change of pay. "Take this fight or not" is not one of his 17 goals today (fighting
 is the hands'); that question comes when break off and engage are rows in 2.2, judged by this same outlook.
 
+## Changed after thinking it through (11-16 midday; sent to the build; these override the sections below where they differ)
+
+**The fact the first draft missed.** He decides about once a second (about 30 new draws and 40 mid-trip changes a seat-minute). So the 8 to
+12 seconds after one decision are mostly the result of the next several decisions, not of this one. Three changes follow, and a lower
+expectation.
+
+| # | Change | Why |
+|---|---|---|
+| 1 | **A fifth outlook, `seg`, and it is the one that plays by default**: the pay from this moment until he lets go of this goal, plus the head's own value of where that leaves him | it is the consequence of this commitment and nothing after it: "what did committing to this bring, and how good a place did it leave me in". The windows (8 s, 12 s) mix in later decisions. The other four still learn beside it |
+| 2 | **It learns on every reading, with the goal he is on**, not only at the moments he takes a goal | the term is used at every reading, to weigh staying against switching. Taught only at switches, it would be guessing exactly where it is used. Skill is reported for the two kinds of moment apart |
+| 3 | **The term keeps its true size.** The first draft rescaled the differences between goals to a standard size; now it is in units of the label's own spread | if goals really differ little, the rescaling would have blown noise up to full strength. A weak signal must stay weak |
+| 4 | **The ramp does not open it by itself.** At update 30 the owner sees the skill and "what share of his choices the term would change at strength 0.5, 1, 2, 4, 8", and sets the mark; until then the dial stays at 0 | with the true size kept, the right strength cannot be known before the silent stage |
+
+**What this does to the expectation.** A term built from "the value of choosing this goal over the others" is the same quantity his
+ordinary learning already climbs, a little each update. Adding it directly makes that faster and explicit; it is not new information
+about the 17 goals. So on tonight's goals, which each last a second or two, I now put a visible gain at **20 to 25%** (the first draft
+said 30 to 35%), and skill above the yardstick at about 60%. Its worth grows with how long a commitment lasts: 2.2's plays (covering an
+item for 5 to 10 seconds) are the long commitments this is the right tool for, and the silent readouts (which pay, which window, does
+knowing the goal help) are worth the night by themselves.
+
+**A risk the first draft did not name.** The outlook is read from his fast thinking and moves with it every 0.2 s. Added to his choice it
+could make him change his mind more for no reason, the opposite of the pull. The new readout of his changes (after news or quiet; stuck
+or back) is the guard: "quiet and back" rising as the dial opens is the sign.
+
+**Open for the owner: commitment trials.** What he asked for is "if I commit to X". What the outlook can learn from his own play is "if I
+choose X and then carry on re-deciding as I do". To learn the first, some trips would have to be held to their end whatever comes up: a
+small share of trial trips with his mid-trip changes shut. That is the lock on a small share of trips, used only to learn what commitment
+is worth. Not built; the owner's rule is that the lock never returns, so it is his call whether a measuring use is different.
+
 ## What happens every 0.2 s (with the outlook open)
 
 1. The head scores the 17 goals: the hands' rows + the head's scores, as now.
