@@ -16,8 +16,8 @@ Scenarios (each prints a PASS/FAIL line and exits 0/1):
   t3  substeps: two runs (1 cmd/frame vs 4 cmds/frame, same total input
       time), peak-window rates must match (physics is substep-driven).
   t4  world state: verify items are present in the entity dump; walk into
-      a reachable item (up to 5 candidates, stuck-aware brain_toward) and
-      verify it vanishes under the bot; firing via MG ammo decrement.
+      a reachable item (up to 6 fresh-spawn tries, stuck-aware brain_toward)
+      and verify it vanishes under the bot; firing via MG ammo decrement.
   t5  warmup: bot must be ready-able via TEXT "ready"; the driver checks
       the server log for the match-start line (see run_spike.sh).
   t5b real map rotation (rcon map ospdm6; TDM killBots=qfalse): managed
@@ -159,7 +159,13 @@ def choose_clear_yaw(bc: Botctl, slot: int, hz: float, verbose: bool = False):
     into a wall (spawn luck, not a channel bug; this bit us on 2026-11-16:
     rate 49-165 u/s on 1 s averages even along the probed best yaw). Probe
     0.35 s of forward walking in the four cardinal world-yaw directions and
-    return the clearest one; spawn_drivable() uses the rate as a gate."""
+    return the clearest one; spawn_drivable() gates on the rate. The 0.35 s
+    AVERAGE is a close-wall detector: from standing, an unobstructed bot
+    covers ~90 u by 0.35 s (~260-300 u/s); a wall at 120 u truncates the
+    average to ~230 -> reroll. (Do NOT lengthen the probe: at 0.5 s the
+    four-direction turnaround momentum dominates -- 2026-11-16 measured
+    293 u/s on EVERY spawn regardless of geometry, making any gate ~300
+    unpassable.)"""
     best_yaw, best_rate = 0.0, -1.0
     for yaw in (0.0, 90.0, 180.0, 270.0):
         p0 = bc.snap().player(slot)
@@ -235,13 +241,16 @@ def hold_and_measure(bc: Botctl, slot: int, yaw: float, hz: float,
 def spawn_drivable(bc: Botctl, args, suffix: str, verbose: bool = False,
                    gate: float = 260.0, max_spawns: int = 4):
     """ADD + connect + team join + probe; returns (slot, yaw, probe_rate).
-    If every cardinal probe stays below `gate` u/s the spawn is boxed in:
-    REMOVE + re-ADD rerolls the team spawn point (random pick) and probes
-    again, up to max_spawns tries. Always returns the last live slot (even
-    a boxed spawn still has a peak window before the wall) -- except when
-    ADD/connect/join itself failed, then slot is -1. Gate 260 (probe ~ peak
-    correlation, 2026-11-16: probe-gated spawns give peak >= ~280 u/s; a
-    200-gate spawn measured peak 271.9 and skewed the T3 ratio to 0.84)."""
+    If every cardinal probe stays below `gate` u/s (0.35 s average -> see
+    choose_clear_yaw) the spawn is boxed in: REMOVE + re-ADD rerolls the team
+    spawn point (random pick) and probes again, up to max_spawns tries. If all
+    tries stay boxed, one final fresh ADD is returned best-effort (never a
+    REMOVED slot -- a hold on a removed client measures 0.0 and looks like an
+    engine bug; that is exactly what the 2026-11-16 gate-300 experiment
+    produced). Slot -1 only when ADD/connect/join itself failed. No pre-hold:
+    the probe already walks the bot ~90 u toward the corridor; an extra hold
+    along the chosen yaw just presses the bot into the far wall early
+    (2026-11-16: straight window 0.0 u/s on a gate-passing spawn)."""
     slot, yaw, rate = -1, 0.0, -1.0
     for attempt in range(1, max_spawns + 1):
         slot = bc.add(args.botname + suffix, args.team)
@@ -255,11 +264,15 @@ def spawn_drivable(bc: Botctl, args, suffix: str, verbose: bool = False,
         yaw, rate = choose_clear_yaw(bc, slot, 20.0, verbose=verbose)
         if rate >= gate:
             return slot, yaw, rate
-        log(f"spawn {attempt} boxed in (best probe {rate:.0f}u/s) -> reroll",
-            verbose_only=True, verbose=verbose)
+        log(f"spawn {attempt} boxed in (best probe {rate:.0f}u/s) -> reroll")
         bc.remove(slot)
         time.sleep(1.0)
-    return slot, yaw, rate
+    # best-effort fresh spawn so the caller always gets a live slot
+    slot = bc.add(args.botname + suffix, args.team)
+    if slot >= 0 and (wait_for_connect(bc, slot, 20.0) and join_team(bc, slot, args.team or "red")):
+        time.sleep(1.0)
+        return slot, yaw, rate
+    return -1, 0.0, -1.0
 
 
 def result(name: str, ok: bool, detail: str = "") -> int:
@@ -289,12 +302,18 @@ def brain_hold(bc: Botctl, slot: int, dur: float, hz: float,
 
 
 def brain_toward(bc: Botctl, slot: int, target_xy, hz: float, max_time: float,
-                 yaw_step=0.0, verbose=False):
-    """Steer toward a 2-D point. Returns (reached: bool, start, end).
+                 yaw_step=0.0, verbose=False, target_z=None):
+    """Steer toward a 2-D point (optional z for the sanity checks). Returns
+    (reached: bool, start, end).
     Stuck handling (2026-11-16 T4): if less than 24 u of 2-D progress in 2 s
-    of walking, back up for 0.6 s and retry; after 3 stuck events give up on
-    this target (railing/ledge above the spawn -- some q3dm7 items are not
-    walk-reachable from a random spawn at all)."""
+    of walking, alternate back-up (odd events) / sidestep (even) for 0.8 s;
+    give up after 5 stuck events (railing/ledge -- some q3dm7 items are not
+    walk-reachable from a random spawn at all).
+    Z guard (2026-11-16 T4: the bot walked off the red-base ledge ~450 u down
+    into the pit and every later candidate was judged from there): give up on
+    this candidate as soon as the bot is > 80 u BELOW the target z -- a
+    walking bot cannot climb that back out. 'reached' also requires |dz| <= 40
+    (standing 2-D above an item on a lower/upper level is not a pickup)."""
     snap = bc.snap()
     p0 = snap.player(slot)
     start = p0["origin"]
@@ -314,9 +333,17 @@ def brain_toward(bc: Botctl, slot: int, target_xy, hz: float, max_time: float,
         ox, oy, oz = p["origin"]
         yaw = p["viewangles"][1]
         now = time.time()
+        if target_z is not None and oz < target_z - 80.0:
+            log(f"brain_toward: bot at z {oz:.0f}, target z {target_z:.0f} "
+                f"-> fell off, abort")
+            return False, start, last
         if unstick_until > now:
-            # walk straight away from the target for a moment
-            bc.cmd(slot, -127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
+            # alternate: back up, then sidestep around the obstacle
+            if stuck % 2 == 1:
+                bc.cmd(slot, -127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
+            else:
+                side = 127 if (stuck // 2) % 2 == 1 else -127
+                bc.cmd(slot, 30, side, 0, 0, WP_MACHINEGUN, 0.0, yaw)
         else:
             fx, fy = norm2d(target_xy[0] - ox, target_xy[1] - oy)
             # project the world target direction onto the view's fwd/right
@@ -329,14 +356,15 @@ def brain_toward(bc: Botctl, slot: int, target_xy, hz: float, max_time: float,
             if now - anchor_t >= 2.0:
                 if dist2d((ox, oy), anchor_pos) < 24.0:
                     stuck += 1
-                    log(f"brain_toward stuck event {stuck} at ({ox:.0f},{oy:.0f})",
-                        verbose_only=True, verbose=verbose)
-                    if stuck >= 3:
+                    log(f"brain_toward stuck event {stuck} at ({ox:.0f},{oy:.0f}) "
+                        f"-> {'back up' if stuck % 2 == 1 else 'sidestep'}")
+                    if stuck >= 5:
                         return False, start, last
-                    unstick_until = now + 0.6
+                    unstick_until = now + 0.8
                 anchor_t, anchor_pos = now, (ox, oy)
         last = p["origin"]
-        if dist2d((ox, oy), target_xy) < 24.0:
+        if dist2d((ox, oy), target_xy) < 24.0 and (target_z is None
+                                                   or abs(oz - target_z) <= 40.0):
             return True, start, last
         t_next += 1.0 / hz
         if t_next > time.time():          # deadline pacing, see choose_clear_yaw
@@ -473,12 +501,19 @@ def t4(bc: Botctl, args) -> int:
         return result(name, False, "no ET_ITEM entities in dump")
 
     # 2) walk into an item and watch it vanish under the bot. The nearest
-    #    item is not always walk-reachable from a random spawn (ledge/railing,
-    #    2026-11-16 runs), so walk attempts cycle through up to 5 reachable-
-    #    distance candidates (2-D distance + height penalty), each with a
-    #    stuck-aware brain_toward. Pickup (not a health rise) is the signal:
-    #    the item may be armor, and DoT near the q3dm7 red spawn can lower
-    #    health regardless.
+    #    item is not always walk-reachable from a random spawn (ledge/railing/
+    #    pit around the q3dm7 red base, 2026-11-16 runs), so EVERY attempt
+    #    re-ADDs the bot (a re-ADD rerolls a fresh team spawn), ranks the
+    #    items from that fresh position (2-D distance + 1.5x |dz| penalty,
+    #    no radius filter -- filters emptied the list after a failed walk and
+    #    ended the loop at tries=1), walks to the top candidate with
+    #    brain_toward (stuck handling + z guard: abort when the bot is > 80 u
+    #    below the item -- a walking bot cannot climb the red-base pit back
+    #    out), then does a short GRAZE SWEEP over the spot: "within 24 u in
+    #    XY" alone does not touch the item (railings, items a level up/down --
+    #    attempts once logged reached=True at dz +148). Pickup (not a health
+    #    rise) is the signal: the item may be armor, and DoT near the q3dm7
+    #    red spawn can lower health regardless.
     p = snap.player(slot)
     if not p:
         bc.remove(slot)
@@ -487,38 +522,72 @@ def t4(bc: Botctl, args) -> int:
     reached = pickup_ok = False
     target = None
     d0 = -1.0
+    tries = 0
     tried = set()
-    for cand_no in range(5):
+    for attempt in range(6):
+        bc.remove(slot)
+        time.sleep(0.5)
+        slot = bc.add(args.botname, args.team)
+        if slot < 0 or not wait_for_connect(bc, slot, 20.0) \
+                or not join_team(bc, slot, args.team or "red"):
+            continue
+        time.sleep(1.0)  # spawn settle (knockback + DoT)
         snap = bc.snap()
         p = snap.player(slot)
         if not p:
-            break
+            continue
         po = p["origin"]
-        # rank by walking distance with a penalty for height difference
-        # (a hard +/-48 z filter hid the reachable ground items behind the
-        # ledge items on 2026-11-16: last candidate was 574 u away)
-        cand = [e for e in snap.items() if dist2d(po[:2], e["origin"][:2]) <= 420.0]
+        tries = attempt + 1
+        cand = list(snap.items())
         cand.sort(key=lambda e: dist2d(po[:2], e["origin"][:2])
                   + 1.5 * abs(e["origin"][2] - po[2]))
-        nearest = None
-        for e in cand:
+        if not cand:
+            continue
+        nearest = cand[0]
+        for e in cand:  # prefer a candidate not already tried from a prior spawn
             key = (round(e["origin"][0]), round(e["origin"][1]))
             if key not in tried:
                 nearest = e
                 break
-        if nearest is None:
-            break
         tried.add((round(nearest["origin"][0]), round(nearest["origin"][1])))
         target = nearest
         d0 = dist2d(po[:2], nearest["origin"][:2])
+        log(f"T4 attempt {tries}: fresh spawn, target "
+            f"({nearest['origin'][0]:.0f},{nearest['origin'][1]:.0f}) "
+            f"dist {d0:.0f}u dz {nearest['origin'][2] - po[2]:+.0f}u")
         reached, start, end = brain_toward(bc, slot,
                                            (nearest["origin"][0], nearest["origin"][1]),
-                                           args.hz, 30.0, verbose=args.verbose)
-        if not reached:
-            continue
+                                           args.hz, 30.0, verbose=args.verbose,
+                                           target_z=nearest["origin"][2])
         snap = bc.snap()
         still_there = any(dist2d(e["origin"][:2], nearest["origin"][:2]) < 8.0
+                          and abs(e["origin"][2] - nearest["origin"][2]) < 24.0
                           for e in snap.items())
+        if not still_there:
+            # picked up during the walk itself (checked IMMEDIATELY: items
+            # respawn after ~20-30 s, a later re-check could see the respawn)
+            log(f"T4 attempt {tries}: reached={reached} item_gone=True (during walk)")
+            pickup_ok = True
+            break
+        if reached:
+            # graze sweep: turn while walking forward -> the bot radiates
+            # across the item spot from all directions
+            g0 = time.time()
+            t_next = g0
+            while time.time() - g0 < 3.0:
+                p = bc.snap().player(slot)
+                if not p:
+                    break
+                bc.cmd(slot, 127, 0, 0, 0, WP_MACHINEGUN, 0.0,
+                       p["viewangles"][1] + (time.time() - g0) * 120.0)
+                t_next += 1.0 / args.hz
+                if t_next > time.time():
+                    time.sleep(t_next - time.time())
+            snap = bc.snap()
+            still_there = any(dist2d(e["origin"][:2], nearest["origin"][:2]) < 8.0
+                              and abs(e["origin"][2] - nearest["origin"][2]) < 24.0
+                              for e in snap.items())
+        log(f"T4 attempt {tries}: reached={reached} item_gone={not still_there}")
         if not still_there:
             pickup_ok = True
             break
@@ -527,7 +596,8 @@ def t4(bc: Botctl, args) -> int:
     p1 = snap.player(slot)
     h1 = p1["health"] if p1 else 0
     still_there = target is not None and any(
-        dist2d(e["origin"][:2], target["origin"][:2]) < 8.0 for e in snap.items())
+        dist2d(e["origin"][:2], target["origin"][:2]) < 8.0
+        and abs(e["origin"][2] - target["origin"][2]) < 24.0 for e in snap.items())
 
     # 3) firing: the spawn weapon is the hitscan MACHINEGUN (this OSP build
     #    has no blaster; slot 1 is the GAUNTLET, which only fires on a
@@ -565,9 +635,11 @@ def t4(bc: Botctl, args) -> int:
     # pickup verdict was computed in the walk loop (item vanished under the
     # bot on one of the attempts); h0->h1 stays in the detail only -- the
     # item may be armor, and DoT near the q3dm7 red spawn lowers health
-    # regardless.
-    ok = reached and pickup_ok and fired
-    detail = (f"items0={len(items0)} tries={len(tried)} dist={d0:.0f} "
+    # regardless. reached is a detail too: the claim is "the guided walk made
+    # the item vanish under the bot" -- a stuck abort can still cross the
+    # item on the way (2026-11-16: dist 285, stuck abort, item_gone True).
+    ok = pickup_ok and fired
+    detail = (f"items0={len(items0)} tries={tries} dist={d0:.0f} "
               f"reached={reached} health {h0}->{h1} item_gone={not still_there} "
               f"fire_ok={fired} (MG ammo {ammo0}->{ammo1} "
               f"firing_state_seen={saw_firing_state}) missiles_now={missiles_seen}")
