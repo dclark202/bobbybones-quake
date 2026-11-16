@@ -22,7 +22,8 @@ needs the engine to let an **external process** (a Python "sidecar")
    ammo, plus interesting entities: items, missiles, ...) —
 
 without embedded scripting in the engine itself. Goals: keep the engine clean
-(no GPL coupling into the engine binary), keep ops simple (one Unix socket,
+(the sidecar is a separate, unlinked process — nothing but the engine's own
+GPLv2+ sources is linked into the binary), keep ops simple (one Unix socket,
 one cvar), and keep everything **off by default** so a stock build behaves
 exactly as today.
 
@@ -31,10 +32,12 @@ process can drive a bot client slot per-frame on a TDM server, end to end.
 
 ## What the patch does
 
-Branch `botctl-spike` (single commit, off `dwc` tip `8fa5549e`), 6 files:
+Branch `botctl-spike` (off `dwc` tip `8fa5549e`; original commit + two
+review-rework commits), 7 files:
 
-- `code/server/botctl.c` (new, ~1000 lines): a listener thread on the Unix
-  socket `/tmp/q3e-botctl-<port>.sock` speaking a small binary protocol
+- `code/server/botctl.c` (new, ~1500 lines): a listener thread on the Unix
+  socket `fs_homepath/botctl-<net_port>.sock` (chmod 0600; the
+  `botctl_sockpath` cvar overrides) speaking a small binary protocol
   (PING / ADD / REMOVE / TEXT / CMD / SNAP / LIST). `ADD` creates a real
   client slot (NA_BOT netchan, `isBot=qfalse` in the game connect, so the
   game module treats the client as a regular player). Staged usercmds are
@@ -55,7 +58,9 @@ Branch `botctl-spike` (single commit, off `dwc` tip `8fa5549e`), 6 files:
   which rejects the client when `bot_enable` is 0 — i.e. every in-place
   `map_restart` (warmup expiry, round rotation) would silently drop the
   external bots.
-- `Makefile`: `-lpthread` + `botctl.o` in the dedicated target.
+- `Makefile`: `USE_BOTCTL` gate (default **0**): only `USE_BOTCTL=1` (and
+  never on mingw/Windows builds) adds `-DUSE_BOTCTL`, `botctl.o` and
+  `-lpthread` to the dedicated target.
 
 Packetless-client mechanics (the part that needs a second look in review):
 botctl slots exchange no network packets, so nothing would ever acknowledge
@@ -71,6 +76,11 @@ UDS channel, so discarding the client-protocol stream is correct.
 
 - **Off/stock by default**: `botctl_enable 0` (default) → the whole code
   path is a no-op (early returns; the socket is only bound when enabled).
+- **Gated at compile time**: `USE_BOTCTL = 0` (Makefile default) → no
+  `botctl.o`, no `-lpthread`, no `-DUSE_BOTCTL`; the `server.h` hooks only
+  exist for `USE_BOTCTL && DEDICATED` and are no-op macros otherwise. The
+  default-build binaries were byte-compared against the parent commit:
+  identical (see SPIKE_ENGINE.md).
 - **Dedicated server only**; clients stay stock (no protocol/cgame/ui
   changes).
 - **No syscall-enum changes** (nothing appended/inserted in `gameImport_t`).
