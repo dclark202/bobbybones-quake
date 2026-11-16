@@ -164,6 +164,11 @@ if ck.get("head2") is not None:                              # (its value is the
         print("the slow plan inside the head (2.1d): horizons {}, the pull's strength {:.4f} on horizon {}, floor {}, refresh every {}".format(   # names
             ck["head2"]["slowplan"]["horizons"], float(head2["head2.pull_g"]), int(round(float(head2["head2.pull_h"]))),                         # its settings)
             ck["head2"]["slowplan"]["floor"], ck["head2"]["slowplan"]["every"]))
+    if ck["head2"].get("outlook"):                           # (2.1f) the outlook inside the head: its layers, strength and kind go with the head's
+        assert all("head2.out.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")) and "head2.out_g" in head2             and "head2.out_pick" in head2, "the head names the outlook and the checkpoint has not its weights or its dials"
+        print("the outlook inside the head (2.1f): kinds {}, the term's strength {:.4f}, the kind that plays {} ({})".format(
+            ck["head2"]["outlook"]["kinds"], float(head2["head2.out_g"]), int(round(float(head2["head2.out_pick"]))),
+            ck["head2"]["outlook"]["kinds"][int(round(float(head2["head2.out_pick"])))]))
     if ck["head2"].get("slowhalf"):                          # (2.1e) the slow halves inside the head: every half's layers and the three dials go
         nk_ = len(ck["head2"]["slowhalf"]["clocks"])         # with the head's (the layout names their clocks; the read-back is the inp's columns)
         assert all("head2.slow.{}.{}.{}".format(k_, l_, w_) in head2 for k_ in range(nk_) for l_ in ("inp", "l2", "l3") for w_ in ("weight", "bias")) \

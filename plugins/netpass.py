@@ -107,6 +107,17 @@ def load(path):
                 W2["pull_g"] = np.array(np.float32(float(os.environ["NET_PULL_G"])))
             P["_plan"] = dict(W=pw_, g=float(np.asarray(W2.get("pull_g", 0.0))), h=int(round(float(np.asarray(W2.get("pull_h", 0.0))))),
                               floor=float(lay2["slowplan"]["floor"]), every=int(lay2["slowplan"]["every"]), odds=None, cnt=None)
+        P["_out"] = None                                     # (2.1f) the outlook inside the head: its arrays, its strength, the kind that plays;
+        if head2_.has_outlook(lay2):                         # NET_OUT_G, NET_OUT_PICK override the file's
+            import outlook as outlook_
+            for e_, k_ in (("NET_OUT_G", "out_g"), ("NET_OUT_PICK", "out_pick")):
+                if os.environ.get(e_, "") != "":
+                    W2[k_] = np.array(np.float32(float(os.environ[e_])))
+            ow_ = outlook_.np_params(W2)
+            assert ow_ is not None, "the layout names the outlook and the file has no head2.out.* weights"
+            ok_ = int(round(float(np.asarray(W2.get("out_pick", 0.0)))))
+            assert 0 <= ok_ < len(lay2["outlook"]["kinds"]), "out_pick {}: the layout has {} kinds".format(ok_, len(lay2["outlook"]["kinds"]))
+            P["_out"] = dict(W=ow_, g=float(np.asarray(W2.get("out_g", 0.0))), pick=ok_)
         P["_shalf"] = None                                   # (2.1e) the slow halves inside the head: the picked half (its arrays, its per-seat
         if head2_.has_slowhalf(lay2):                        # state: sim/slowhalf.py NpState), the pull's source mix, the read-back's gate;
             import slowhalf as slowhalf_                     # NET_SLOW_MIX, NET_SLOW_BACK, NET_SLOW_PICK override the file's
@@ -449,6 +460,16 @@ def _pull(P, logits, si_, h2s, fr_):
     return logits
 
 
+def out_g(P):
+    """(2.1f) the outlook's strength in this file (0: none; sim/head2.py out_g; NET_OUT_G overrides it)"""
+    return float(P["_out"]["g"]) if P.get("_out") is not None else 0.0
+
+
+def out_on(P):
+    """(2.1f) the outlook's term plays: the outlook inside the head and its strength above 0 (with the held draw's rows: kf_rows)"""
+    return out_g(P) > 0
+
+
 def slow_on(P):
     """(2.1e) the picked slow half plays: its read-back's gate above 0, or the pull plays with its source's mix above 0 (test_suite.Policy.sh_on)"""
     sh_ = P.get("_shalf")
@@ -658,6 +679,7 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
         kf = np.asarray(kf, np.float32)
         if kf.shape[1] in (hmk_.KEEP_FEAT + 1, hmk_.KEEP_FEAT + hmk_.KSIG + 1):
             te_, kf = kf[:, -1] > 0, kf[:, :-1]
+    assert not out_on(P) or (kf is not None and h2s is not None and (held_g(P) > 0 or goal_on(P))),         "(2.1f) the outlook plays with the held draw's rows: give step() kf=kf_rows(P, env)"
     assert not pull_on(P) or (kf is not None and h2s is not None and (held_g(P) > 0 or goal_on(P))), \
         "(2.1d) the pull plays with the held draw's rows: give step() kf=kf_rows(P, env)"
     if (held_g(P) > 0 or goal_on(P)) and kf is not None and h2s is not None:   # (2.1c) the held draw (test_suite.Policy's, the trainer's): a
@@ -676,6 +698,9 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
                                    P["_head2"][2].np_goal_u(P["_head2"][0], kf, HD_["on"]))
         if pull_on(P):                                                        # (2.1d) the pull on his target scores before the held
             logits = _pull(P, logits, si_, h2s, fr_)                            # draw's pick and the draw
+        if out_on(P):                                                         # (2.1f) the outlook's term after the pull (test_suite.Policy's sums)
+            logits = logits.copy()
+            logits[:, si_] += P["_head2"][2].np_out_vec(P["_out"]["W"], P["_head2"][0], h2s, P["_out"]["g"], P["_out"]["pick"])
         li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
         lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
         HD_["t"] += 1

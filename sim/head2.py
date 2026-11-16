@@ -325,6 +325,59 @@ def slow_dials(mod):
     return float(mod.slow_mix), float(mod.slow_back), int(round(float(mod.slow_pick)))
 
 
+def add_outlook(L, kinds=("seg", "ret", "all8", "win8", "win5"), hid=128):
+    """(2.1f, the outlook; docs/runs/2.1/2.1f) a layout with the outlook INSIDE the head (sim/outlook.py: head2.out.*, from the head's state to
+    kinds x (n_target + 1): an outlook per target and one goal-blind, per label kind; its last layer at zero), the buffers out_g (its term's
+    strength on his target scores) and out_pick (which kind plays: 0, the first: "seg" by default), its settings under the key "outlook". Needs the slow plan inside (its term rides on the pull's place in every reader)"""
+    assert not has_outlook(L), "the head has the outlook already"
+    assert has_slowplan(L), "the outlook plays where the pull plays: a 2.1d network (the slow plan inside the head)"
+    import outlook as outlook_
+    ol_ = outlook_.layout(head=int(L["size"]), n_target=int(L["n_target"]), kinds=kinds, hid=int(hid))
+    return dict(L, outlook=dict(version=ol_["version"], kinds=list(ol_["kinds"]), hid=int(ol_["hid"]), clip=float(ol_["clip"])))
+
+
+def has_outlook(L):
+    """(2.1f) the layout has the outlook inside the head"""
+    return bool(L is not None and L.get("outlook"))
+
+
+def outlook_layout(L):
+    """(2.1f) sim/outlook.py's layout of the head's outlook"""
+    import outlook as outlook_
+    P = L["outlook"]
+    return outlook_.layout(head=int(L["size"]), n_target=int(L["n_target"]), kinds=tuple(P["kinds"]), hid=int(P["hid"]),
+                           clip=float(P.get("clip", outlook_.CLIP)))
+
+
+def has_out(mod):
+    """(2.1f) the module has the outlook inside (head2.out.*, the buffers out_g, out_pick)"""
+    return mod is not None and hasattr(mod, "out") and hasattr(mod, "out_g")
+
+
+def out_dials(mod):
+    """(2.1f) (g, pick) of a module with the outlook (python numbers), (0, 0) without"""
+    if not has_out(mod):
+        return 0.0, 0
+    return float(mod.out_g), int(round(float(mod.out_pick)))
+
+
+def out_vec(mod, s, L):
+    """(2.1f) the outlook's term on the target's logits [B, n_target] from the head's states s [B, size] (no gradient): out_g x clip(the picked
+    kind's outlook per target - their mean, +-clip) in the label's standardised units, rounded to half precision (sim/outlook.py term)"""
+    import torch
+    import outlook as outlook_
+    g_, k_ = out_dials(mod)
+    with torch.no_grad():
+        return outlook_.term(outlook_.outlook(mod.out, s)[:, k_], g_, float(L["outlook"]["clip"]))
+
+
+def np_out_vec(PW, L, hs, g, pick):
+    """(2.1f) out_vec() in numpy: PW from outlook.np_params(the head's weights), L the head's layout, hs [B, np_state_width] -> [B, n_target]"""
+    import outlook as outlook_
+    o_ = outlook_.np_outlook(PW, outlook_layout(L), hs)[:, int(pick)]
+    return outlook_.np_term(o_, g, float(L["outlook"]["clip"]))
+
+
 def np_kf_end(env):
     """(2.1c) the simulator's keep_feat() rows with one more column: his target ended (reached and not an arrival, gone, a spawn):
     what the held draw's players read (test_suite.Policy.act, plugins/netpass.py)"""
@@ -357,7 +410,9 @@ def n_weights(L):
         ((lambda I_: 2 * (S + int(I_["xf"]) + 2) * int(I_["hid"]) + (int(I_["a"]) + 1) * int(I_["hid"]) + int(I_["hid"]) + 1
           + (int(I_["hid"]) + 1) * int(I_["nw"]) + ((int(I_["hid"]) + 1) if I_.get("quiet") else 0))(L["ins"]) if L.get("ins") else 0) + \
         ((lambda Hs_, In_, Out_: len(L["slowhalf"]["clocks"]) * ((In_ + 1) * Hs_ + 6 * Hs_ * Hs_ + 6 * Hs_ + (Hs_ + 1) * Hs_ + (Hs_ + 1) * Out_))(
-            int(L["slowhalf"]["hid"]), S + int(L["widths"]["goal"]), len(L["slowhalf"]["horizons"]) * N) if L.get("slowhalf") else 0)
+            int(L["slowhalf"]["hid"]), S + int(L["widths"]["goal"]), len(L["slowhalf"]["horizons"]) * N) if L.get("slowhalf") else 0) + \
+        ((lambda Ho_, Oo_: (S + 1) * Ho_ + (Ho_ + 1) * Ho_ + (Ho_ + 1) * Oo_)(int(L["outlook"]["hid"]), len(L["outlook"]["kinds"]) * (N + 1))
+         if L.get("outlook") else 0)
 
 
 def describe(L):
@@ -378,7 +433,9 @@ def describe(L):
         ("; the slow halves inside (2.1e): {} of {} (head state + goal -> {} -> GRU {} -> {} -> horizons {} x {}), clocks {} head ticks, the "
          "read-back {} columns".format(len(L["slowhalf"]["clocks"]), L["slowhalf"]["hid"], L["slowhalf"]["hid"], L["slowhalf"]["hid"],
                                        L["slowhalf"]["hid"], L["slowhalf"]["horizons"], L["n_target"], L["slowhalf"]["clocks"],
-                                       L["widths"].get("slowback", 0)) if has_slowhalf(L) else "")
+                                       L["widths"].get("slowback", 0)) if has_slowhalf(L) else "") + \
+        ("; the outlook inside (2.1f): {} -> {} -> {} -> kinds {} x ({} targets + goal-blind)".format(
+            L["size"], L["outlook"]["hid"], L["outlook"]["hid"], L["outlook"]["kinds"], L["n_target"]) if has_outlook(L) else "")
 
 
 def _offs(L):
@@ -491,8 +548,17 @@ def make_module(L, seed=4044):
                 self.register_buffer("slow_mix", torch.zeros(()))
                 self.register_buffer("slow_back", torch.zeros(()))
                 self.register_buffer("slow_pick", torch.ones(()))
+            if L.get("outlook"):                             # (2.1f) the outlook inside the head: sim/outlook.py's module (its own random stream:
+                import outlook as outlook_                   # every older layer's draw as before; its last layer at zero), its term's strength,
+                self.out = outlook_.make_module(outlook_layout(L))     # the kind that plays
+                self.register_buffer("out_g", torch.zeros(()))
+                self.register_buffer("out_pick", torch.zeros(()))
 
         def _load_from_state_dict(self, state_dict, prefix, *args, **kw):
+            if L.get("outlook"):                             # (2.1f) no dials in the file: strength 0, the first kind
+                for k_, v_ in (("out_g", torch.zeros(())), ("out_pick", torch.zeros(()))):
+                    if prefix + k_ not in state_dict:
+                        state_dict[prefix + k_] = v_
             if L.get("slowhalf"):                            # (2.1e) no dials in the file: mix 0, back 0, the second half
                 for k_, v_ in (("slow_mix", 0.0), ("slow_back", 0.0), ("slow_pick", 1.0)):
                     if prefix + k_ not in state_dict:

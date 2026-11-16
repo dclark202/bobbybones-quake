@@ -38,6 +38,23 @@ def wv_pack(env, pre, info, G):
     return np.stack([ws_, cut_m[m_].astype(np.float32), (g1 > 0)[m_].astype(np.float32)], 1)
 
 
+def target_ok(env, E_):
+    """(2.1f, the outlook's trial trips) [len(INTENTS)] bool: the targets this simulator's map has: "nothing"; an item or a holding place with
+    a route goal (intent_gi >= 0); the enemy where the simulator has him as a target (EN_ON). None: an older simulator without them"""
+    its_ = getattr(E_, "INTENTS", None)
+    gi_ = getattr(env, "intent_gi", None)
+    if its_ is None or gi_ is None:
+        return None
+    ok_ = np.zeros(len(its_), bool)
+    ok_[0] = True
+    for k_ in range(1, len(its_)):
+        if k_ == int(getattr(E_, "EN_INTENT", -1)):
+            ok_[k_] = bool(getattr(E_, "EN_ON", False))
+        else:
+            ok_[k_] = k_ < len(gi_) and int(gi_[k_]) >= 0
+    return ok_
+
+
 def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill_weapons, react_frames, kind_p, bot_p,
            teacher, lab_courses, lab_p, loadout_p, lab_items_p, lab_gun_p=0.0, dmg_taken_w=2.0, no_walk=False, arena_len=30.0, arena_full=0.5,
            env_module="duel_env", group=2, intent_seek=0.0, item_loss=0.5, stack_p=0.0, near_item_p=0.0, move_only=False):
@@ -104,7 +121,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                  env.hand_lab.astype(np.float16) if getattr(E_, "HAND_TEACH", False) else None,         # (--hand-teach) the first frame's label (none yet)
                  env.legs_prep() if legs_in else None,      # (LEGS_IN) the movement network's inputs of the frame about to be played
                  sorted(set(E_.INTENTS.index(l_) for l_ in (getattr(env, "route_goal", None) or ())     # (--item-floor) the map's big items
-                            if l_ in E_.INTENTS and 1 <= E_.INTENTS.index(l_) <= 7))))                    # as intentions (MH .. YA2)
+                            if l_ in E_.INTENTS and 1 <= E_.INTENTS.index(l_) <= 7)),                     # as intentions (MH .. YA2)
+                 target_ok(env, E_)))                                                                   # (2.1f) the targets this map has
+    OUT_WR = os.environ.get("OUT_WINRAW") == "1"             # (2.1f, --outlook) each seat's win_raw a frame (the stream --head2-pay win pays)
     last = {k: np.copy(v) for k, v in env.stats.items()}
     tw_ = dict(step=0.0, legs_prep=0.0, send=0.0, idle=0.0, frames=0)      # (time.rollout_parts) this worker's seconds, since the last "times"
     t_idle = time.perf_counter()
@@ -142,6 +161,10 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
             if hasattr(env, "intent_arr"):                   # (2.1c, --held) per seat: his target ended (reached and not an arrival, gone, a spawn):
                 n_ = env.n                                   # the next reading is forced (a list: per seat, not summed)
                 delta["trip_end"] = [((env.intent_done[:n_] & ~env.intent_arr[:n_]) | env.intent_gone[:n_] | env.intent_new[:n_]).astype(bool)]
+            if OUT_WR:                                       # (2.1f, --outlook) per seat: the win judge's change in his win chance this frame, as
+                n_ = env.n                                   # the simulator's aux column win_raw makes it (a list: per seat, not summed; zeros
+                wsrc_ = getattr(env, "wh_raw", None) if getattr(env, "ji_P", None) is not None else getattr(env, "wb_raw", None)   # without a judge)
+                delta["win_raw"] = [np.asarray(wsrc_, np.float32)[:n_].copy() if wsrc_ is not None and len(wsrc_) >= n_ else np.zeros(n_, np.float32)]
             delta["way_trips"] = list(getattr(env, "way_trips", ()))      # (WAYS) this step's trips between two places: [from, to, 16 points]
             # frags scored by even (learner) players and by odd players, for learner-vs-snapshot win tracking
             ev = info["events"]
@@ -326,6 +349,11 @@ LIVE_RANGE["SLOW_MIX"] = (0.0, 1.0)                                    # half), 
 LIVE_RANGE["SLOW_BACK"] = (0.0, 1.0)
 LIVE_RANGE["SLOW_PICK"] = (0.0, 2.0)
 LIVE_INT = ("SLOW_PICK",)                                    # (live names whose value must be a whole number: anything else refuses the file)
+LIVE_TRAINER = LIVE_TRAINER + ("OUT_G", "OUT_PICK", "OUT_TRIAL")     # (2.1f, --outlook) the outlook's term's strength, the kind that plays (a whole
+LIVE_RANGE["OUT_G"] = (0.0, 20.0)                                    # number: an index of the file's kinds), the share of his new draws on a held
+LIVE_RANGE["OUT_PICK"] = (0.0, 4.0)                                  # trip that are trial trips
+LIVE_RANGE["OUT_TRIAL"] = (0.0, 0.2)
+LIVE_INT = LIVE_INT + ("OUT_PICK",)
 LIVE_RANGE["KEEPQ_G"] = (0.0, 1.0)                         # his quiet seconds the keep choice's quiet layer decides (with KEEP_ZONE=1; the
 LIVE_RANGE["KEEP_TEACH"] = (0.0, 100.0)                      # rest: the lock rule); the weight of the keep choice's lesson toward the stay
 LIVE_RANGE["STAY_W"] = (0.0, 100.0)                          # value's sign (both layers, all run); a factor on the stay value's own lesson
@@ -1197,6 +1225,13 @@ def main():
                     "stepped (a file's mix and back set to 0)")
     ap.add_argument("--slow-clocks", type=str, default="5,10,20", help="(--slow-half) each half's clock, in head ticks (5 = 1 s); as many as the "
                     "file has halves (written into the file's layout)")
+    ap.add_argument("--outlook", type=int, default=0, help="(2.1f, the outlook; sim/outlook.py; needs --pull 1 and a network whose head has the outlook "
+                    "inside: tools/out_init.py add) 1: the outlook learns silently on the learner's copy (its own Adam, top-level out_opt; the labels' "
+                    "statistics in out_stats; the decay of rule 11 on its last layer at the live H2_L2) from every keep reading of his on a held trip; its "
+                    "term on his target scores: live OUT_G x the picked kind's (live OUT_PICK) centred outlook (standardised units); trial trips (live OUT_TRIAL: a "
+                    "share of his new draws on a held trip to a target drawn evenly among those his map has, held to the trip's end, off-policy: out "
+                    "of every target lesson, in the outlook's). Readouts rec['outlook']. 0: not taught or played (a file's out_g set to 0)")
+    ap.add_argument("--out-kinds", type=str, default="seg,ret,all8,win8,win5", help="(--outlook) the label kinds, as the file's layout names them (in its order)")
     ap.add_argument("--keep-g", type=float, default=-1.0, help="(1.4c, a network with the keep choice: sim/head2.py, tools/keep_init.py) the share of his "
                                                                "readings it decides at the start (live KEEP_G; -1: the file's own); the rest the lock rule. "
                                                                "Each league network plays at the share in its own file (none: 0)")
@@ -1819,7 +1854,9 @@ def main():
     ap.add_argument("--dump-acts", default="", help="(checks) after each update: <this>_<update>.pt with the rollout's actions, log p, "
                                                     "values and rewards (a fixed-seed identity check of two runs)")
     a = ap.parse_args()
-    if a.obs_half:                                           # (retired 2026-11-15) refused: the inputs are always rounded at their source
+    if a.outlook:                                            # (2.1f) the simulators send each seat's win_raw a frame (the outlook's win labels;
+        os.environ["OUT_WINRAW"] = "1"                       # nothing of the game or the pay changes)
+    if a.obs_half:                                         # (retired 2026-11-15) refused: the inputs are always rounded at their source
         print("--obs-half is retired (owner, 2026-11-15): the inputs are now always rounded to half precision at their source, "
               "played and learnt alike; remove it from the command",
               flush=True)
@@ -2028,6 +2065,8 @@ def main():
     for w, f in enumerate(first):
         for k_ in (f[5] if len(f) > 5 else ()):
             IF_OK[IF_MAPS.index(w_map[w]), int(k_)] = True
+    TGT_OK = np.concatenate([np.repeat((np.asarray(f[6], bool) if (len(f) > 6 and f[6] is not None) else np.ones(len(getattr(E_, "INTENTS", ())), bool))[None],
+                                       len(f[0]), 0) for f in first]) if len(getattr(E_, "INTENTS", ())) else None   # (2.1f) each seat's map's targets
     H = a.hidden
 
     CELL_DIM = 16                                            # v8 only: a learned table of 16 numbers per 64-unit cell
@@ -2061,6 +2100,7 @@ def main():
     PLAN_CK = None                                           # (2.1c, --plan) the slow plan: the same
     PLAN_OPT_CK = None                                       # (2.1d) the slow plan inside the head: its Adam (top-level "plan_opt"; its weights in "model")
     SLOW_OPT_CK = None                                       # (2.1e) the slow halves inside the head: their Adam (top-level "slow_opt"; weights in "model")
+    OUT_OPT_CK = OUT_STATS_CK = None                         # (2.1f) the outlook inside the head: its Adam ("out_opt"), its labels' statistics ("out_stats")
     INS_CK = KN_CK = SPW_CK = None
     if a.resume and os.path.exists(os.path.join(out, "policy.pt")):
         ck0_ = torch.load(os.path.join(out, "policy.pt"), weights_only=False, map_location="cpu")
@@ -2092,7 +2132,8 @@ def main():
         PLAN_CK = ck0_.get("plan")                           # (2.1c, --plan) the slow plan: the same
         PLAN_OPT_CK = ck0_.get("plan_opt")                   # (2.1d) the slow plan inside the head: its Adam
         SLOW_OPT_CK = ck0_.get("slow_opt")                   # (2.1e) the slow halves inside the head: their Adam
-        INS_CK = ck0_.get("ins")                            # (2.1, --ins) the instruction's scorer: the same
+        OUT_OPT_CK, OUT_STATS_CK = ck0_.get("out_opt"), ck0_.get("out_stats")   # (2.1f) the outlook inside the head: its Adam, its labels' statistics
+        INS_CK = ck0_.get("ins")                          # (2.1, --ins) the instruction's scorer: the same
         KN_CK, SPW_CK = ck0_.get("known"), ck0_.get("spawn")  # (2.1, --known-odds, --spawn-odds) the brain's two new readouts: the same
         del ck0_
     if ATT is not None and a.attn_mem_query and not ATT.get("mem"):     # (--attn-mem-query) a new layer at zero
@@ -2846,6 +2887,11 @@ def main():
                     o_ = head2_._offs(H2L)["slowback"]
                     assert wi_.shape[1] == o_[0] and net.head2.inp.weight.shape[1] == o_[1], "a league file's head input of {} columns".format(wi_.shape[1])
                     sd["head2.inp.weight"] = torch.cat([wi_, torch.zeros(wi_.shape[0], o_[1] - o_[0], dtype=wi_.dtype)], 1)
+            if head2_.has_out(getattr(net, "head2", None)) and "head2.out.l3.weight" not in sd:   # (2.1f) a file without the outlook (an anchor, a
+                sd = dict(sd)                                # league file of before, the control): the network's own layers, the last at zero, no
+                for k_, v_ in net.head2.state_dict().items():    # term (out_g 0), the first kind: it plays as it did
+                    if k_.startswith("out.") or k_ in ("out_g", "out_pick"):
+                        sd["head2." + k_] = torch.zeros_like(v_) if (k_.startswith("out.l3.") or k_ in ("out_g", "out_pick")) else v_
             if getattr(net, "head2", None) is not None and "head2.gate" not in sd:
                 sd = dict(sd)
                 for k_, v_ in net.head2.state_dict().items():
@@ -3045,10 +3091,11 @@ def main():
         """(--head2) the strategy head in a group of its own after all the others: an optimizer saved without it loads into the
         groups before it"""
         if H2 and not H2_GROUP[0]:
-            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "keepq.", "winp.", "wsc.", "ok_", "op_", "fsc.", "ins_", "plan.", "slow."))],
+            opt.add_param_group({"params": [p_ for n_, p_ in pol.head2.named_parameters() if not n_.startswith(("keep.", "keepq.", "winp.", "wsc.", "ok_", "op_", "fsc.", "ins_", "plan.", "slow.", "out."))],
                                  "lr": a.lr * a.head2_lr_scale, "lr_scale": a.head2_lr_scale})     # (1.4c: the keep choice in its own; 1.5a: the weapon part too;
             #                                                  2.1d: the slow plan inside the head in NO group: its own Adam steps it, the main loss never reaches it;
-            #                                                  2.1e: the slow halves the same; the read-back's columns are head2.inp's: in this group)
+            #                                                  2.1e: the slow halves the same; the read-back's columns are head2.inp's: in this group;
+            #                                                  2.1f: the outlook the same: its own Adam)
             GROUP_NAMES.append("h2")
             H2_GROUP[0] = True
     KEEP = H2 and head2_.has_keep(pol.head2)                 # (1.4c) the keep choice (a file from tools/keep_init.py)
@@ -3831,6 +3878,9 @@ def main():
                            if STAY is not None else ({"stay": STAY_CK} if STAY_CK is not None else {})),   # (2.1, --stay: never in "model"; its Adam with it)
                         **({"plan": plan_save()} if (PLAN is not None and not PIH) else ({"plan": PLAN_CK} if PLAN_CK is not None else {})),   # (2.1c, --plan: the same)
                         **({"slow_opt": slow_save()} if SHALF else ({"slow_opt": SLOW_OPT_CK} if SLOW_OPT_CK is not None else {})),   # (2.1e: their Adam)
+                        **({"out_opt": out_save(), "out_stats": OUT_STATS.to_dict()} if OUTL else
+                           dict(**({"out_opt": OUT_OPT_CK} if OUT_OPT_CK is not None else {}),
+                                **({"out_stats": OUT_STATS_CK} if OUT_STATS_CK is not None else {}))),   # (2.1f: its Adam and its labels' statistics)
                         **({"plan_opt": plan_save()} if (PLAN is not None and PIH) else ({"plan_opt": PLAN_OPT_CK} if PLAN_OPT_CK is not None else {})),   # (2.1d:
                         #                                      the plan inside the head: its weights in "model" (head2.plan.*), its Adam here)
                         **({"ins": dict(INS_CK or {}, seen=int(INS_SEEN[0]), warm=int(a.ins_warm), none_row=int(INS_NONE), fill=dict(INS_FILL))}
@@ -4173,6 +4223,54 @@ def main():
         """(2.1e) the checkpoint's top-level "slow_opt": the halves' Adam (their weights are the head's, in "model")"""
         with PLAN_LOCK:
             return copy.deepcopy(SH_OPT.state_dict())
+    import outlook as outlook_                               # (2.1f, --outlook) the outlook inside the head (sim/outlook.py)
+    OUT_HAS = bool(H2 and head2_.has_outlook(H2L))           # ... the network has it (tools/out_init.py add)
+    OUTL = bool(a.outlook)                                   # ... it is taught and its term played
+    OUT_L = OUT_OPT = OUT_GEN = OUT_STATS = OTGEN = None
+    OUT_GV, OUT_PK, OUT_TR = [0.0], [0], [0.0]               # ... live OUT_G, OUT_PICK, OUT_TRIAL
+    OUT_OFF = [False]                                        # ... a failure in its lesson or readouts: off for the rest of the run (its term plays on)
+    OUT_ST = [None]                                          # ... the readouts of the update's own rollout (R["out"]), for the record
+    OUT_WG = 1.0                                             # ... the gain on win_raw: the one --head2-pay win and --ins-pay-win use
+    assert not OUTL or (OUT_HAS and PULL and PIH and a.plan and HELD), \
+        "--outlook 1: with --pull 1 (--plan 1, --held 1) and a network whose head has the outlook inside (tools/out_init.py add)"
+    if OUT_HAS and not OUTL:
+        with torch.no_grad():                                # (a run without --outlook plays no term: the file it saves says so)
+            pol.head2.out_g.fill_(0.0)
+        print("the outlook inside the head (2.1f): --outlook 0: not taught or played; its strength set to 0", flush=True)
+    if OUTL:
+        kinds_o = [k_.strip() for k_ in a.out_kinds.split(",") if k_.strip()]
+        assert kinds_o == list(H2L["outlook"]["kinds"]), "--out-kinds {}: the file's outlook has the kinds {}".format(kinds_o, H2L["outlook"]["kinds"])
+        assert TGT_OK is not None and TGT_OK.shape[1] == ACTION_DIMS[I_HEAD], "--outlook: the simulators give no targets' list of their maps"
+        OUT_L = head2_.outlook_layout(H2L)
+        OUT_OPT = torch.optim.Adam(pol.head2.out.parameters(), lr=a.plan_lr)
+        if OUT_OPT_CK is not None:
+            OUT_OPT.load_state_dict(OUT_OPT_CK)
+        OUT_GEN = outlook_.generator()
+        OUT_STATS = outlook_.Stats(OUT_L["kinds"], OUT_STATS_CK)
+        OTGEN = torch.Generator(device=dev)                  # (the trial trips' coins and targets: a stream of their own, drawn only at OUT_TRIAL > 0)
+        OTGEN.manual_seed(6262)
+        OUT_GV[0] = min(LIVE_RANGE["OUT_G"][1], max(0.0, float(pol.head2.out_g)))
+        OUT_PK[0] = int(round(float(pol.head2.out_pick)))
+        assert 0 <= OUT_PK[0] < len(OUT_L["kinds"]), "the file's out_pick {}: the outlook has {} kinds".format(OUT_PK[0], len(OUT_L["kinds"]))
+        OUT_WG = float(a.ins_pay_gain) if a.ins_pay_gain > 0 else (float(getattr(E_, "WIN_ADD", 0.0)) or 1.0)
+        print("the outlook INSIDE the head (2.1f): head state {} -> {} -> {} -> kinds {} x ({} targets + goal-blind); its Adam {} ({}); labels "
+              "standardised by running statistics ({}); lesson: every keep reading of his on a held trip (the goal he is on and the goal-blind "
+              "number); the last layer decayed at the live H2_L2 (rule 11). Played: kind {} ({}) at strength {:.4f} (live OUT_G, OUT_PICK) x the "
+              "centred outlook in standardised units, clipped at {}; trial trips at a share {:.4f} (live OUT_TRIAL); win labels: win_raw x {:.4f}".format(
+                  OUT_L["head"], OUT_L["hid"], OUT_L["hid"], OUT_L["kinds"], OUT_L["n_target"], a.plan_lr,
+                  "from the checkpoint" if OUT_OPT_CK is not None else "new", "from the checkpoint" if OUT_STATS_CK is not None else "new",
+                  OUT_PK[0], OUT_L["kinds"][OUT_PK[0]], OUT_GV[0], OUT_L["clip"], OUT_TR[0], OUT_WG), flush=True)
+
+    def out_fail():
+        import traceback
+        OUT_OFF[0] = True
+        print("MAJOR PROBLEM: the outlook's lesson or readouts failed and are off for the rest of the run (its term plays on with its weights as "
+              "they are); the run goes on: " + traceback.format_exc().replace(chr(10), " | ")[-1500:], flush=True)
+
+    def out_save():
+        """(2.1f) the checkpoint's top-level "out_opt": the outlook's Adam (its weights are the head's, in "model")"""
+        with PLAN_LOCK:
+            return copy.deepcopy(OUT_OPT.state_dict())
     KEEPQ_GV = [0.0]                                         # (2.1) its quiet layer's share of his quiet seconds (live KEEPQ_G)
     CMB_GV, FADD_V = [0.0], [0.0]                            # (1.7) the combat order's share (live CMB_G), the fire push's add (live FADD)
     PADD_V = [0.0]                                           # (1.7) the pointer's adds on the targets and the way (live PADD)
@@ -4652,6 +4750,13 @@ def main():
                                           else min(1.0, max(0.0, float(lt_[n_s]))))
                             else:
                                 print("live: {} ignored (the run has no --slow-half 1)".format(n_s), flush=True)
+                    for n_o, h_o in (("OUT_G", OUT_GV), ("OUT_PICK", OUT_PK), ("OUT_TRIAL", OUT_TR)):   # (2.1f) the outlook's dials, from the next rollout
+                        if n_o in lt_:
+                            if OUTL:
+                                h_o[0] = (min(len(OUT_L["kinds"]) - 1, max(0, int(round(float(lt_[n_o]))))) if n_o == "OUT_PICK"
+                                          else min(LIVE_RANGE[n_o][1], max(0.0, float(lt_[n_o]))))
+                            else:
+                                print("live: {} ignored (the run has no --outlook 1)".format(n_o), flush=True)
                     if "KEEP_G" in lt_:                                                # (1.4c) the keep choice's share, from the next rollout
                         if KEEP:
                             KEEP_GV[0] = min(1.0, max(0.0, float(lt_["KEEP_G"])))
@@ -4710,7 +4815,8 @@ def main():
                                   **({"HELD_G": HELD_GV[0]} if HELD else {}),
                                   **({"PULL_G": PULL_GV[0]} if PULL else {}),
                                   **({"SLOW_MIX": SH_MIX[0], "SLOW_BACK": SH_BACK[0], "SLOW_PICK": SH_PICK[0]} if SHALF else {}),
-                                  **({"KNOWN_W": KN_LIVE[0]} if KN_ON else {}),
+                                  **({"OUT_G": OUT_GV[0], "OUT_PICK": OUT_PK[0], "OUT_TRIAL": OUT_TR[0]} if OUTL else {}),
+                                  **({"KNOWN_W":KN_LIVE[0]} if KN_ON else {}),
                                   **({"SPAWN_W": SPW_LIVE[0]} if SPW_ON else {}),
                                   **({"BRANCH_P": BR_P[0], "BRANCH_WPN_P": BR_WP[0]} if BR_ON else {}),
                                   **({"BRANCH_LONG_P": BR_LP[0], "INS_LONG_W": INS_LW[0]} if BR_LG else {}),
@@ -4759,6 +4865,9 @@ def main():
                     pol.head2.held_g.fill_(HELD_GV[0])                   # (2.1c) the held draw's share of this rollout (the file's too)
                 if PULL:
                     pol.head2.pull_g.fill_(PULL_GV[0])                   # (2.1d) the pull's strength of this rollout (the file's too)
+                if OUTL:                                                 # (2.1f) the outlook's strength and kind of this rollout (the file's too)
+                    pol.head2.out_g.fill_(OUT_GV[0])
+                    pol.head2.out_pick.fill_(float(OUT_PK[0]))
                 if SHALF:                                                # (2.1e) the slow halves' dials of this rollout (the file's too)
                     pol.head2.slow_mix.fill_(SH_MIX[0])
                     pol.head2.slow_back.fill_(SH_BACK[0])
@@ -5382,8 +5491,10 @@ def main():
             HG_PLAY = float(net.head2.held_g)
             HG_OPP = float(onet.head2.held_g) if (has_snaps and not HEADL and onet.h2_open) else 0.0
             b_hfr = torch.zeros(T, N, dtype=torch.bool, device=dev)      # the frames a seat's numbers were drawn anew; the frames it was on the held draw
+            b_hchg = torch.zeros(T, N, dtype=torch.bool, device=dev)     # (a readout: the proof's worst frame) a change of target mid-trip on the frame
             b_hon = torch.zeros(T, N, dtype=torch.bool, device=dev)
             HD_CNT = torch.zeros(5, device=dev)                          # his seat-frames; on the held draw; readings applied there; of them a new draw; a change mid-trip
+        b_prf = b_stk = None                                             # (readouts: the proof's worst frame) the plan's refreshes, the slow halves' ticks
         PIH_PLAY = bool(PIH and PLAN is not None)                        # (2.1d) the plan inside the head is played: its odds of every seat made and
         b_pull = TL0_ = b_xp = None                                      # held here, OUTSIDE the readouts' guard (with the pull they are part of play:
         if PIH_PLAY:                                                     # a failure stops the run). The odds carried over; the run's count of keep
@@ -5432,6 +5543,38 @@ def main():
                 PLF_ = torch.zeros(N, dtype=torch.bool, device=dev)
             PCFS_ = torch.full((SHS.K, 4, N), -1, dtype=torch.long, device=dev)   # (each half's replayed pull at k 0, 0.5, 1, 2: the pick at the last
             PCFS_N = torch.zeros(SHS.K, 4, device=dev)                   # reading, the changes mid-trip)
+        OUT_PLAY = bool(OUTL and PIH_PLAY and PULL)                      # (2.1f) the outlook: its term on the target scores of every seat whose network
+        b_out = b_ow = OUT_R = OUT_ROWS = None                           # plays one (his: this rollout's dials; a league network: its own file's), made
+        OTR_ = None                                                      # from the head's state this frame's outputs read, OUTSIDE the readouts' guard
+        if OUT_PLAY:                                                     # (part of play: a failure stops the run); the trial trips; the win stream;
+            OG_P, OK_P = head2_.out_dials(net.head2)               # his decision readings' rows for the lesson (inside its guard)
+            OO_ON = bool(has_snaps and onet.h2_open and head2_.has_out(onet.head2))
+            OG_O, OK_O = head2_.out_dials(onet.head2) if OO_ON else (0.0, 0)
+            OO_ON = OO_ON and OG_O > 0
+            OT_ON = bool(OG_P > 0 or OO_ON)                              # (a term is played this rollout: none at strength 0, to the bit)
+            OCL_ = float(OUT_L["clip"])
+            MINE_O = ((~snap_players) if has_snaps else torch.ones(N, dtype=torch.bool, device=dev))
+            if OT_ON:
+                b_out = torch.zeros(T, N, NI_H, dtype=torch.float16, device=dev)   # the term on his seats' target logits a frame, as played
+            b_ow = torch.zeros(T, N, device=dev)                         # the win-chance part of the pay a frame (win_raw x the gain): the win labels
+            TR_PLAY = float(OUT_TR[0])                                   # the trial trips' share of this rollout
+            OTR_ = C.get("otr")                                          # (a trial trip carried over from the last rollout: held to its end)
+            TR_ON = bool(TR_PLAY > 0 or (OTR_ is not None and bool(OTR_["any"])))
+            if TR_ON and OTR_ is None:
+                OTR_ = dict(trial=torch.zeros(N, dtype=torch.bool, device=dev), goal=torch.zeros(N, dtype=torch.long, device=dev), any=False)
+            TGT_T = torch.from_numpy(TGT_OK).to(dev).float() if TR_ON else None    # (the targets each seat's map has: a trial goal among them)
+            OCHG_ = None                                                 # (this frame's first-order readout: the held draw's pick without the term differs)
+            OCNT_ = torch.zeros(7, dtype=torch.float64, device=dev)      # his readings on held trips (the rows); decisions among them; on trial trips;
+            #                                                              trial trips begun; his own readings with a term played; the pick changed by it;
+            #                                                              frames of a trial trip left in a target lesson after the mask (must be 0)
+            OCT_ = None                                                  # (each seat's "in control" by his own readout at its head's last tick: the split)
+            OCO_ = head2_._offs(H2L).get("ctrl", (0, 0))
+            if OCO_[1] > OCO_[0] and head2_.ctrl_src(H2L) != "none":
+                OCT_ = C.get("octl")
+                if OCT_ is None:
+                    OCT_ = torch.zeros(N, dtype=torch.bool, device=dev)
+            OR_T, OR_I, OR_S, OR_G, OR_D, OR_TR, OR_C, OR_B = [], [], [], [], [], [], [], []   # (the rows: frame, seat, state, goal, decision, trial,
+            OG_R, OND_R, OHFA_ = [], [], None                            # control, base scores; per reading: the goals, a new draw since the last)
         if PLAN is not None and not PLAN_OFF[0]:                                             # (2.1c, --plan) the slow plan in shadow: at each keep reading the head's
             try:
                 JP_ = T // BK                                                # state and his fast target odds (all seats; his rows marked), the rows
@@ -5521,6 +5664,7 @@ def main():
             if ATT_MEM:
                 b_hq[t] = h.half().cpu()
             ev_ = None
+            TRNEW_ = OBASE_ = OCHG_ = None                               # (2.1f) this frame's trial draws, base scores, first-order change
             bt_t = None
             if TOK_ is not None:                                         # (v0.4.1) the last tick's answer turned to his pose now
                 pose_, zm_ = btoken_.pose_from_aux(aux, AUXC_)
@@ -5563,7 +5707,11 @@ def main():
                         s_keep_o_ = H2O.s                                # (2.1d) ... and the league's head's (the plan of a league seat reads it)
                 if SH_PLAY:                                              # (2.1e) the slow halves' ticks of this frame, before the head's tick reads the
                     fr_s = HD_["te"] | ((HD_["kf"][:, 2].long() == 0) & (t % 40 == 0))    # read-back and before the pull: at its clock (keep readings
-                    tk_s, cb_s = SHS.causes(t % BK == 0, fr_s)           # counted), at the roll moment (a trip's end: the held draw's own rule below),
+                    tk_s, cb_s = SHS.causes(t % BK == 0, fr_s)
+                    if b_stk is None:
+                        b_stk = torch.zeros(T, N, dtype=torch.bool, device=dev)
+                    b_stk[t] = tk_s.any(0)
+                    #                                                             # counted), at the roll moment (a trip's end: the held draw's own rule below),
                     SH_RNOW = None                                       # at a change of mind on the frame before; each seat by its own network's halves
                     if bool(tk_s.any()):                                 # on its own head's state (before its tick) and the goal it holds
                         xs_ = torch.cat([torch.where(MINE_S[:, None], s_keep_, s_keep_o_) if has_snaps else s_keep_,
@@ -5611,6 +5759,8 @@ def main():
                                        goal=GU_, slowback=(BK_P * SHS.s[PK_P] if (SH_PLAY and BK_P > 0) else None),   # (2.1e: the read-back,
                                        **rd_)                    # the gate x the picked half's state after this frame's ticks; stored as played)
                     b_u2[t // BK] = u2_.half().cpu()
+                    if OUT_PLAY and OCT_ is not None:                    # (2.1f, a split of the readouts) in control by his own readout (the next two
+                        OCT_ = u2_[:, OCO_[0]] > 0                       # spawns' chance above a half) at this tick
                     H2S.tick(net.head2, u2_)
                     if has_snaps and onet.h2_open:                       # (the league's own head on the same brain's answer, its own hands)
                         H2O.tick(onet.head2, head2_.feats(H2L, hands=h_opp, ctrl=head2_.control_t(net, sb_, h_opp, head2_.ctrl_src(H2L)),
@@ -5626,6 +5776,9 @@ def main():
                 if PIH_PLAY:                                             # (2.1d) the plan's odds of every seat, made from the head's state this
                     fr_pre_ = HD_["te"] | ((HD_["kf"][:, 2].long() == 0) & (t % 40 == 0))    # frame's outputs read (before its tick) at a keep
                     rfp_ = fr_pre_ | bool(t % BK == 0 and (PJ0_ + t // BK) % PEV_ == 0)      # reading every `every` of the run's and where
+                    if b_prf is None:
+                        b_prf = torch.zeros(T, N, dtype=torch.bool, device=dev)
+                    b_prf[t] = rfp_
                     if bool(rfp_.any()):                                 # the seat's numbers are drawn anew this frame (the held draw's rule
                         od_ = head2_.plan_odds(net.head2, s_keep_)       # below, the same numbers), held between; a league seat by its own
                         if has_snaps:                                    # network's plan, or even odds
@@ -5655,6 +5808,17 @@ def main():
                         b_pull[t] = (pv_ * MINE_P[:, None]).half()       # (the draw, the held draw's pick, the log-probabilities); the league
                         b_xp[t] = x[PRF_].float()
                         PVO_ = pv_ * (1.0 - MINE_P)[:, None]             # seats' on their network's logits below
+                    if OUT_PLAY and OT_ON:                               # (2.1f) THE OUTLOOK'S TERM: strength x clip((the picked kind's outlook per target -
+                        ovp_ = (outlook_.term(outlook_.outlook(net.head2.out, s_keep_)[:, OK_P], OG_P, OCL_) if OG_P > 0   # their mean, +-clip),
+                                else torch.zeros(N, NI_H, device=dev))  # in the label's standardised units, rounded to half precision, from the
+                        if OO_ON:                                        # head's state this frame's outputs read; after the pull, before anything
+                            ov_ = torch.where(MINE_O[:, None], ovp_, outlook_.term(outlook_.outlook(onet.head2.out, s_keep_o_)[:, OK_O], OG_O,
+                                                                                  OCL_))  # reads the scores; a league seat by its own network's
+                        else:
+                            ov_ = ovp_ * MINE_P[:, None]
+                        logits = head2_.add_bias(logits, ov_ * MINE_P[:, None], HD_I0)
+                        b_out[t] = (ov_ * MINE_P[:, None]).half()        # (stored as played: every pass of the learner adds it again, to the bit)
+                        OVO_ = ov_ * (1.0 - MINE_P)[:, None]
                 if LONG:
                     b_val2[t] = net.v2(net.zl)
                 if ORDER:                                                # (--ordered-heads) drawn in order
@@ -5677,6 +5841,8 @@ def main():
                     lo, _, h_opp = onet.step(x, h_opp, sm=SM_O, xl=xlu_, bt=bt_t, g2=H2O.adds(onet.head2) if (H2 and onet.h2_open) else None)
                     if PIH_PLAY and PO_ON:                               # (2.1d) a league network's own pull on its seats' target logits
                         lo = head2_.add_bias(lo, PVO_, HD_I0)
+                    if OUT_PLAY and OO_ON:                               # (2.1f) ... and its own outlook's term
+                        lo = head2_.add_bias(lo, OVO_, HD_I0)
                     if HB_ON:                                           # (1.5a, C) the league seats' weapon habits on their weapon key
                         lo = wkey_add(lo, torch.from_numpy(habit_push(obs, hb_acc)).to(lo.device))
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
@@ -5689,10 +5855,23 @@ def main():
                         cn_h = torch.rand(N, generator=HGEN, device=dev) < ((snap_players.float() * HG_OPP + (~snap_players).float() * HG_PLAY) if has_snaps else HG_PLAY)
                         HD_["g"] = torch.where(fr_[:, None], gn_, HD_["g"])   # changes only when his scores cross. The numbers are Gumbel's: a new
                         HD_["on"] = torch.where(fr_, cn_h, HD_["on"])    # draw is exactly a draw from his choice's probabilities
+                        if OUT_PLAY and TR_ON:                           # (2.1f) TRIAL TRIPS: with its share, his new draw on a held trip goes to a
+                            trn_ = (torch.rand(N, generator=OTGEN, device=dev) < TR_PLAY) & MINE_O & HD_["on"]   # target drawn evenly among those his
+                            gln_ = torch.multinomial(TGT_T, 1, generator=OTGEN).squeeze(1)                          # map has (its own stream); the trip then
+                            OTR_["trial"] = torch.where(fr_, trn_, OTR_["trial"])                                   # runs as any held trip (below)
+                            OTR_["goal"] = torch.where(fr_, gln_, OTR_["goal"])
+                            TRNEW_ = fr_ & trn_
                     li_ = logits[:, HD_I0:HD_I0 + NI_H].float()
                     if has_snaps:
                         li_ = torch.where(snap_players[:, None], lo[:, HD_I0:HD_I0 + NI_H].float(), li_)
-                    ah_ = (torch.log_softmax(li_, -1) + HD_["g"]).argmax(-1)
+                    if OUT_PLAY and TRNEW_ is not None:                  # (2.1f) a trial trip's numbers: drawn from the Gumbel law GIVEN that the pick is
+                        HD_["g"] = torch.where(TRNEW_[:, None], outlook_.gumbel_given_top(torch.log_softmax(li_, -1), OTR_["goal"], OTGEN), HD_["g"])
+                    ah_ = (torch.log_softmax(li_, -1) + HD_["g"]).argmax(-1)    # the trial's target: the trip then runs as any held trip, its
+                    if OUT_PLAY and TRNEW_ is not None:                  # mid-trip changes when his scores cross; the pick at the draw set exactly
+                        ah_ = torch.where(TRNEW_, OTR_["goal"], ah_)
+                    if OUT_PLAY and (t % BK == 0):                       # (2.1f, readouts) at a keep reading: his scores without the term + the held
+                        OBASE_ = torch.log_softmax(li_ - ov_ if OT_ON else li_, -1) + HD_["g"]    # numbers (the replay); the pick
+                        OCHG_ = (OBASE_.argmax(-1) != ah_) if OT_ON else None                   # the term changed (first order)
                     act[:, I_HEAD] = torch.where(HD_["on"], ah_, act[:, I_HEAD])
                     lps[I_HEAD] = ds[I_HEAD].log_prob(act[:, I_HEAD])    # (as played: his seats' ratio reads it)
                     if H2:
@@ -5982,6 +6161,9 @@ def main():
             if LEGS_IN:
                 legs_x = legs_cat([(r[15], r[0]) for r in res])
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
+            if b_ow is not None:                                         # (2.1f) the win-chance part of the pay (win_raw x the gain): the win labels
+                b_ow[t] = torch.from_numpy(np.concatenate([r[3]["win_raw"][0] if "win_raw" in r[3] else np.zeros(len(r[1]), np.float32)
+                                                           for r in res])).to(dev) * OUT_WG
             if b_hr is not None:                                         # (a frame with no blend: his pay as it is)
                 b_hr[t] = torch.from_numpy(np.concatenate([r[21] if r[21] is not None else r[1] for r in res])).to(dev)
             if tpay_ is not None:                                        # (--info-pay) zero-sum over each pair of seats
@@ -6004,6 +6186,7 @@ def main():
             if HELD:                                                     # (2.1c) a seat on the held draw learns its target where it was a decision:
                 kf_n = torch.from_numpy(np.concatenate([r[23] for r in res]).astype(np.float32)).to(dev)   # a new draw applied, or a change
                 chg_ = kf_n[:, 2] != HD_["kf"][:, 2]                     # mid-trip (his scores crossed); a reading that kept the target is none
+                b_hchg[t] = chg_ & ~b_hfr[t]
                 dec_h = b_hfr[t] | chg_
                 if SH_PLAY:                                              # (2.1e, channel 4) a change of mind: his target changed on this frame without
                     SHS.chg = chg_ & ~b_hfr[t] & ~(d > 0)                # a new roll and not by a death: the slow halves tick at the next frame
@@ -6043,7 +6226,41 @@ def main():
                                                                          MX_P if ck_mx_ else 0.0, PFL_ if ck_mx_ else 0.0))
                         except Exception:
                             ck_fail()
+                if OUT_PLAY:                                             # (2.1f) the outlook's rows: EVERY keep reading of his seats on a held trip,
+                    trn_now_ = (OTR_["trial"] & b_hon[t]) if TR_ON else None    # alive (the goal he is on after it; a decision: a new draw applied
+                    OHFA_ = b_hfr[t] if OHFA_ is None else (OHFA_ | b_hfr[t])  # or a change mid-trip; else a stay), the trial trips' marks
+                    if t % BK == 0:
+                        rmk_ = mine_h & b_hon[t] & (live > 0)
+                        gon_ = kf_n[:, 2].long().clamp(0, NI_H - 1)
+                        OCNT_[0] += rmk_.sum()
+                        OCNT_[1] += (rmk_ & dec_h).sum()
+                        if trn_now_ is not None:
+                            OCNT_[2] += (rmk_ & trn_now_).sum()
+                            OCNT_[3] += (rmk_ & trn_now_ & OHFA_).sum()
+                        if OCHG_ is not None:
+                            own_ = rmk_ if trn_now_ is None else (rmk_ & ~trn_now_)
+                            OCNT_[4] += own_.sum()
+                            OCNT_[5] += (own_ & OCHG_).sum()
+                        if not OUT_OFF[0]:
+                            try:
+                                OG_R.append(torch.where(rmk_, gon_, torch.full_like(gon_, -1)))
+                                OND_R.append(OHFA_.clone())
+                                rw_ = torch.nonzero(rmk_, as_tuple=True)[0]
+                                OR_T.append(torch.full((len(rw_),), t, dtype=torch.int16, device=dev))
+                                OR_I.append(rw_.int())
+                                OR_S.append(s_keep_[rw_].half())
+                                OR_G.append(gon_[rw_].to(torch.int8))
+                                OR_D.append(dec_h[rw_])
+                                OR_TR.append(trn_now_[rw_] if trn_now_ is not None else torch.zeros(len(rw_), dtype=torch.bool, device=dev))
+                                OR_C.append(OCT_[rw_] if OCT_ is not None else torch.zeros(len(rw_), dtype=torch.bool, device=dev))
+                                OR_B.append(OBASE_[rw_].half())
+                            except Exception:
+                                out_fail()
+                        OHFA_ = None
                 live = torch.where(b_hon[t], live * dec_h.float(), live)
+                if OUT_PLAY and trn_now_ is not None:                    # (2.1f) a trial trip is off-policy: none of its frames in any target lesson
+                    live = torch.where(trn_now_, torch.zeros_like(live), live)    # (his hands' and the head's: the held draw's own mask, b_live)
+                    OCNT_[6] += (trn_now_ & (live > 0)).sum()
                 HD_["kf"] = kf_n
                 HD_["te"] = torch.from_numpy(np.concatenate([r[3]["trip_end"][0] for r in res])).to(dev)
             b_live[t] = live
@@ -6316,6 +6533,21 @@ def main():
             except Exception:
                 SH_ROWS = None
                 slow_fail()
+        if OUT_PLAY:                                                     # (2.1f) the outlook as played, its rows for the lesson in the learner (host)
+            C["otr"] = dict(OTR_, any=bool(OTR_["trial"].any())) if OTR_ is not None else None
+            if OCT_ is not None:
+                C["octl"] = OCT_
+            OUT_R = dict(g=OG_P, pick=OK_P, g_opp=OG_O, pick_opp=OK_O, opp_has=bool(OO_ON), trial=TR_PLAY, term_on=bool(OT_ON),
+                         cnt=[float(x_) for x_ in OCNT_.cpu()], ctrl=OCT_ is not None)
+            if not OUT_OFF[0]:
+                try:
+                    OUT_ROWS = dict(t=torch.cat(OR_T).cpu(), i=torch.cat(OR_I).cpu(), s=torch.cat(OR_S).cpu(), g=torch.cat(OR_G).cpu(),
+                                    d=torch.cat(OR_D).cpu(), tr=torch.cat(OR_TR).cpu(), c=torch.cat(OR_C).cpu(), b=torch.cat(OR_B).cpu(),
+                                    gr=torch.stack(OG_R).to(torch.int8).cpu(), nd=torch.stack(OND_R).cpu()) if OR_T else None
+                except Exception:
+                    OUT_ROWS = None
+                    out_fail()
+            OR_T = OR_I = OR_S = OR_G = OR_D = OR_TR = OR_C = OR_B = OG_R = OND_R = None
         if KEEP:
             C["kf"] = KF_                                                # (1.4c) what the keep choice reads on the next rollout's first frame
         if CMB:
@@ -6337,7 +6569,9 @@ def main():
                     cg=CG_PLAY if CMB else 0.0,
                     h2g=float(net.head2.gate) if H2 else 0.0, h2m=float(net.head2.mix) if H2 else 0.0, wv=WV_ST[0].take() if WV_ON else None,
                     ms_bel=ms_bel, b_ws=b_ws, ins=IB_, b_hw=b_hw, b_vw=b_vw, plan=PLAN_R, held=HELD_R,
-                    b_pull=b_pull, pull=PULL_R, plan_rows=PLAN_ROWS, b_xp=b_xp, slow=SH_R, slow_rows=SH_ROWS)
+                    b_pull=b_pull, pull=PULL_R, plan_rows=PLAN_ROWS, b_xp=b_xp, slow=SH_R, slow_rows=SH_ROWS,
+                    b_out=b_out, b_ow=b_ow, out=OUT_R, out_rows=OUT_ROWS,
+                    b_hfr=b_hfr if HELD else None, b_hchg=b_hchg if HELD else None, b_prf=b_prf, b_stk=b_stk)
 
     def launch(upd):
         """(--overlap) between two rollouts: what comes before rollout `upd`, pol copied into ACT, the rollout started in a thread"""
@@ -6545,6 +6779,8 @@ def main():
             PLAN_ST[0] = R.get("plan")                                   # (for the record: a main-scope holder)
         B_PULL = R.get("b_pull") if PULL else None                       # (2.1d, --pull) the pull on his target logits a frame, as played: added in
         PULL_R = R.get("pull") if PULL else None                         # every pass of the learner that forms the target's distribution
+        B_OUT = R.get("b_out") if OUTL else None                         # (2.1f, --outlook) the outlook's term on his target logits a frame, as played
+        PULL_WORST = [None, None]                                        # (readouts) each reading's worst frame, its 99.9th percentile, the frames over 0.003 / 0.01
         PULL_ERR = [None, None]                                          # ... its proof: the target's log p re-made against the rollout's (pull_first_err:
         #                                                                  the inputs at full precision as played; and at half precision as stored)
         KQG_R = float(R.get("kqg") or 0.0)                               # layer as played, the stay value, the keep readings; its share
@@ -6660,6 +6896,35 @@ def main():
         RFG_R = float(R.get("rfg") or 0.0)                               # (v0.4.2a) the rule fade's gate he played at: learnt at it
         BFG_R = float(R.get("bfg") or 0.0)                               # (v0.6.1b) the brain's gate he played at: learnt at it (the people's
                                                                          # lesson too: it runs the same brain)
+
+        def proof_worst(ltp_, R, ch_d_, wpm_):
+            """(a readout) the pull's proof's worst frame: the step, a keep reading or not, the seat's marks on that frame and the one before (a
+            reset, a new draw, a change mid-trip, the plan's refresh, a slow half's tick), the played and the learner's log-probabilities, the target,
+            the largest pull (and outlook term) on it, at a sequence's edge (the first or last head segment); the 99.9th percentile; frames over
+            0.003 and 0.01"""
+            with torch.no_grad():
+                e_ = (ltp_ - R["b_lpi"][:, ch_d_]).abs() * wpm_
+                ev_ = e_[wpm_ > 0].float()
+                fl_ = int(torch.argmax(e_.reshape(-1)))
+                t_, j_ = fl_ // e_.shape[1], fl_ % e_.shape[1]
+                i_ = int(ch_d_[j_])
+                tp_ = max(t_ - 1, 0)
+
+                def mk(b_):
+                    if b_ is None:
+                        return None
+                    return [bool(b_[tp_, i_]) if t_ > 0 else None, bool(b_[t_, i_])]
+                bp_ = R.get("b_pull")
+                bo_ = R.get("b_out")
+                q_ = (lambda x_: float(x_)) if len(ev_) else (lambda x_: None)
+                return dict(t=int(t_), reading=bool(t_ % BK == 0), seat=i_, err=round(float(e_[t_, j_]), 6),
+                            lp_played=round(float(R["b_lpi"][t_, i_]), 5), lp_learner=round(float(ltp_[t_, j_]), 5),
+                            target=int(b_act[t_, i_, I_HEAD]), reset=[bool(b_done[tp_, i_] > 0) if t_ > 0 else None, bool(b_done[t_, i_] > 0)],
+                            new_draw=mk(R.get("b_hfr")), change=mk(R.get("b_hchg")), plan_refresh=mk(R.get("b_prf")), slow_tick=mk(R.get("b_stk")),
+                            pull_max=round(float(bp_[t_, i_].float().abs().max()), 5) if bp_ is not None else None,
+                            out_max=round(float(bo_[t_, i_].float().abs().max()), 5) if bo_ is not None else None,
+                            edge=bool(t_ < BK or t_ >= T - BK), p999=q_(outlook_._qt(ev_, 0.999)) if len(ev_) else None,
+                            over_003=int((ev_ > 0.003).sum()), over_01=int((ev_ > 0.01).sum()), frames=int(len(ev_)))
 
         def played_at():
             """the gates and the mix this rollout was played at, into pol: learnt at them. Called again after --overlap's launch, whose
@@ -6848,6 +7113,8 @@ def main():
                         lg_ = torch.cat([lg_[..., :HD_W0], lg_[..., HD_W0:HD_W0 + 3] + HO2_[0]["yadd"].detach(), lg_[..., HD_W0 + 3:]], -1)
                 if HO2_[0].get("pull") is not None:              # (2.1d, --pull) the pull as it was played, a number, on the target's logits
                     lg_ = head2_.add_bias(lg_, HO2_[0]["pull"], HD_I0)    # (after every other part, as in the rollout): every pass reads it
+                if HO2_[0].get("out") is not None:               # (2.1f, --outlook) the outlook's term as played, a number, after the pull (as
+                    lg_ = head2_.add_bias(lg_, HO2_[0]["out"], HD_I0)     # in the rollout)
             return lg_
         UG_ = [None, None, None]                                         # (--legs-feat, --legs-guide) the last seq_pass's guide addition, the
         #                                                                  branch's logits and its "has a way" (for pi_t and the counters)
@@ -6923,6 +7190,7 @@ def main():
                     ho2_["yadd"] = pol.head2.padd * ya_[sg_] * al_
                     ho2_["xo"], ho2_["ci"], ho2_["co"] = xo_, ci_, co_
                 ho2_["pull"] = B_PULL[:, chunk].float() if B_PULL is not None else None    # (2.1d) the pull of these players a frame, as played
+                ho2_["out"] = B_OUT[:, chunk].float() if B_OUT is not None else None       # (2.1f) the outlook's term of these players, as played
                 HO2_[0] = ho2_
             if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
                 hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk], lay=gru_layout(DN_H[:, hchunk(chunk)], dev) if NOSYNC else None)
@@ -7274,6 +7542,10 @@ def main():
                             lgp_ = seq_pass(ch_d_, h0[ch_d_], xs_over=xo_)[0]
                             ltp_ = dists(lgp_)[I_HEAD].log_prob(b_act[:, ch_d_, I_HEAD])
                             PULL_ERR[k_] = float(((ltp_ - R["b_lpi"][:, ch_d_]).abs() * wpm_).max())
+                            try:                                         # (a readout only: never stops the run or touches the numbers above)
+                                PULL_WORST[k_] = proof_worst(ltp_, R, ch_d_, wpm_)
+                            except Exception as e_pw:                    # noqa: BLE001
+                                PULL_WORST[k_] = dict(error=repr(e_pw)[:300])
                     finally:
                         if now_sd_ is not None:
                             pol.load_state_dict(now_sd_)
@@ -7490,6 +7762,8 @@ def main():
                         lmx_ = (1.0 - ho2_["k"]) * ho2_["hands_int"] + ho2_["k"] * ho2_["raw"] + ho2_["bias"]     # (b1.4a: the mix; k 0: as before)
                     if ho2_.get("pull") is not None:                     # (2.1d, --pull) the pull as played, a number: its ratio is the target's as played
                         lmx_ = lmx_ + ho2_["pull"]
+                    if ho2_.get("out") is not None:                      # (2.1f) the outlook's term as played, a number, the same way
+                        lmx_ = lmx_ + ho2_["out"]
                     lpi_ = torch.log_softmax(lmx_, -1).gather(-1, A[..., I_HEAD:I_HEAD + 1]).squeeze(-1)
                     if KEEP:                                             # (1.4c) his target where it was read, the keep choice where it decided
                         lpi_ = lpi_ * (B_LT[:, chunk] if CMB else lv) + lk_
@@ -8240,6 +8514,49 @@ def main():
                     X_s = Z_s = C_s = Y_s = OK_s = PF_s = PN_s = None
                 except Exception:
                     slow_fail()
+        if OUTL:                                                         # (2.1f) the outlook's lesson on the learner's copy (pol.head2.out): its rows (every
+            OUT_ST[0] = dict(R.get("out") or {})                         # keep reading of his seats on a held trip, alive), the labels per kind from the
+            orw_ = R.get("out_rows")                                     # head's own quantities, its readouts BEFORE the lesson (prequential), the lesson
+            if orw_ is not None and not OUT_OFF[0]:                      # (its own Adam and stream, the decay of its last layer at the live H2_L2: rule 11),
+                try:                                                     # the labels' statistics after. Its gradient never comes from the main loss
+                    t_ol = time.time()
+                    T_o, I_o = orw_["t"].to(dev).long(), orw_["i"].to(dev).long()
+                    S_o, G_o, B_o = orw_["s"].to(dev).float(), orw_["g"].to(dev).long(), orw_["b"].to(dev).float()
+                    D_o, TR_o, C_o = orw_["d"].to(dev).bool(), orw_["tr"].to(dev).bool(), orw_["c"].to(dev).bool()
+                    with torch.no_grad():                                # (seg: the reading at which he leaves the goal he is on; J x BK = T: past the end)
+                        end_o = outlook_.segment_ends(orw_["gr"].to(dev).long(), orw_["nd"].to(dev).bool())[T_o // BK, I_o] * BK
+                        Y_o, OK_o, SL_o = outlook_.labels(OUT_L["kinds"], T_o, I_o, ret=RET_H, pay_all=B_HR, pay_win=R.get("b_ow"), done=b_done[:T],
+                                                          gamma=float(H2L["gamma"]), val=B_VH, seg_end=end_o)
+                        Zp_ = Y_o.clone()                                # (standardised by the statistics BEFORE this rollout; a kind's first: its own)
+                        for k_o in range(len(OUT_L["kinds"])):
+                            y_k = Y_o[OK_o[:, k_o], k_o]
+                            if OUT_STATS.ready(k_o):
+                                Zp_[:, k_o] = (Y_o[:, k_o] - float(OUT_STATS.mean[k_o])) / float(np.sqrt(max(float(OUT_STATS.var[k_o]), 1e-12)))
+                            elif len(y_k) > 1:
+                                Zp_[:, k_o] = (Y_o[:, k_o] - y_k.mean()) / y_k.std().clamp(min=1e-6)
+                        out_now = outlook_.forward_rows(pol.head2.out, S_o)
+                        ro_ = outlook_.readouts(out_now, G_o, Zp_, OK_o, dec=D_o, ctrl=C_o if bool(OUT_ST[0].get("ctrl")) else None,
+                                                trial=TR_o if bool(TR_o.any()) else None, base=B_o, clip=float(OUT_L["clip"]))
+                        raw_o = OUT_STATS.update(Y_o, OK_o)
+                        Zn_ = OUT_STATS.standardise(Y_o)
+                    with PLAN_LOCK, torch.enable_grad():
+                        outlook_.learn(pol.head2.out, OUT_OPT, S_o, G_o, Zn_, OK_o, epochs=2, mb=4096, gen=OUT_GEN, clip=1.0, decay=H2_L2_[0])
+                    for p_ in pol.head2.out.parameters():                # (nothing of its lesson left for any other clip or step)
+                        p_.grad = None
+                    loss_o = outlook_.loss_of(pol.head2.out, S_o, G_o, Zn_, OK_o)
+                    sg_ = None
+                    if SL_o is not None and len(SL_o):
+                        sr_ = SL_o.double() / BK
+                        sg_ = dict(mean=round(float(sr_.mean()), 3), p10=round(float(outlook_._qt(sr_, 0.1)), 2), p50=round(float(outlook_._qt(sr_, 0.5)), 2),
+                                   p90=round(float(outlook_._qt(sr_, 0.9)), 2), p99=round(float(outlook_._qt(sr_, 0.99)), 2),
+                                   past_end=round(float((end_o >= T).double().mean()), 4), rows=int(len(sr_)))
+                    OUT_ST[0].update(lesson=ro_, loss=round(loss_o, 5) if loss_o is not None else None, seg_readings=sg_,
+                                     raw=[None if r_ is None else dict(mean=round(r_[0], 5), sd=round(r_[1], 5), n=r_[2]) for r_ in raw_o],
+                                     rows=int(len(T_o)), rows_decision=int(D_o.sum()), rows_trial=int(TR_o.sum()),
+                                     secs=round(time.time() - t_ol, 3))
+                    S_o = G_o = B_o = Y_o = Zp_ = Zn_ = out_now = None
+                except Exception:
+                    out_fail()
         if NOSYNC:                                                       # (--learn-nosync) the counters summed on the card, read once
             CHK_[:] = [None, None]
             XL_[:] = [None, None]
@@ -8817,8 +9134,39 @@ def main():
                                        max=round(float(pz_[3]), 5), frames=int(pz_[2]),
                                        first_err=(float("{:.3g}".format(PULL_ERR[0])) if PULL_ERR[0] is not None else None),
                                        first_err_half=(float("{:.3g}".format(PULL_ERR[1])) if PULL_ERR[1] is not None else None),
+                                       worst=PULL_WORST[0], worst_half=PULL_WORST[1],
                                        parts=dict(hands=h2r_.get("hands"), head=h2r_.get("raw"), pull=round(float(pz_[1] / max(1.0, pz_[2])), 5)),
                                        plan_w=round(float(PLAN.l3.weight.norm()), 5), decay=H2_L2_[0], every=int(PLAN_L["every"]))
+            if OUTL:                                                     # (2.1f) the outlook: what played (strength and kind as played and next, the
+                osr_ = OUT_ST[0] or {}                                   # league's), the term's size on his learner frames (rule 11: the sum's fourth
+                cn_o = osr_.get("cnt") or [0.0] * 7                      # part, its centred mean absolute, its largest), the share of his own readings
+                oz_ = None                                               # the term changed, the trial trips, the readouts by kind (prequential), the
+                if B_OUT is not None:                                    # labels' statistics, the segments' lengths, the last layer's size
+                    with torch.no_grad():
+                        oz_ = torch.zeros(4, dtype=torch.float64, device=dev)
+                        for c0_ in range(0, N, 2048):
+                            bo_ = B_OUT[:, c0_:c0_ + 2048].float()
+                            wm_ = (b_w[:, c0_:c0_ + 2048] > 0).float()
+                            oz_[0] += (bo_.abs().mean(-1) * wm_).sum().double()
+                            oz_[1] += (bo_.norm(dim=-1) * wm_).sum().double()
+                            oz_[2] += wm_.sum().double()
+                            oz_[3] = torch.maximum(oz_[3], (bo_.abs().amax(-1) * wm_).max().double())
+                        oz_ = oz_.cpu().numpy()
+                rec["outlook"] = dict(
+                    kinds=list(OUT_L["kinds"]), g=osr_.get("g"), g_next=round(OUT_GV[0], 5), pick=osr_.get("pick"), pick_next=int(OUT_PK[0]),
+                    g_opp=osr_.get("g_opp"), pick_opp=osr_.get("pick_opp"), opp_has=osr_.get("opp_has"), trial=osr_.get("trial"),
+                    trial_next=round(OUT_TR[0], 5), off=bool(OUT_OFF[0]),
+                    size=(round(float(oz_[0] / max(1.0, oz_[2])), 5) if oz_ is not None else 0.0),
+                    norm=(round(float(oz_[1] / max(1.0, oz_[2])), 5) if oz_ is not None else 0.0),
+                    max=(round(float(oz_[3]), 5) if oz_ is not None else 0.0),
+                    readings=int(cn_o[0]), decisions=int(cn_o[1]), trial_readings=int(cn_o[2]), trial_trips=int(cn_o[3]),
+                    trial_in_lesson=int(cn_o[6]) if len(cn_o) > 6 else None,
+                    changed=(round(cn_o[5] / cn_o[4], 5) if cn_o[4] > 0 else None), changed_n=int(cn_o[5]),
+                    rows=osr_.get("rows"), rows_decision=osr_.get("rows_decision"), rows_trial=osr_.get("rows_trial"),
+                    kind={k_: (osr_.get("lesson") or [{}] * len(OUT_L["kinds"]))[i_] for i_, k_ in enumerate(OUT_L["kinds"])},
+                    raw={k_: (osr_.get("raw") or [None] * len(OUT_L["kinds"]))[i_] for i_, k_ in enumerate(OUT_L["kinds"])},
+                    stats=OUT_STATS.to_dict(), seg_readings=osr_.get("seg_readings"), loss=osr_.get("loss"),
+                    l3=round(float(pol.head2.out.l3.weight.norm()), 5), decay=H2_L2_[0], lr=a.plan_lr, secs=osr_.get("secs"))
             if SHALF:                                                    # (2.1e) the slow halves: what played (mix, back, pick as played and next, the
                 slr_ = SLOW_ST[0] or {}                                   # league's; the read-back's weight size), each half (its clock, ticks a
                 o_sb = head2_._offs(H2L)["slowback"]                     # seat-minute by cause, how far its odds move at a tick beside the fast plan's

@@ -267,6 +267,13 @@ class Policy:
             self.sh_mix = float(np.asarray(self.h2W.get("slow_mix", 0.0)))
             self.sh_back = float(np.asarray(self.h2W.get("slow_back", 0.0)))
             self.set_slow_pick(int(round(float(np.asarray(self.h2W.get("slow_pick", 1.0))))))
+        self.outW, self.out_g, self.out_pick = None, 0.0, 0   # (2.1f, the outlook inside the head: sim/outlook.py) its arrays, its term's strength (the
+        if self.h2 is not None and head2_g.has_outlook(self.h2):    # file's head2.out_g; set_out_g) and the kind that plays (head2.out_pick; set_out_pick)
+            import outlook as outlook_g
+            self.outW = outlook_g.np_params(self.h2W)
+            assert self.outW is not None, "the layout names the outlook and the file has no head2.out.* weights"
+            self.out_g = float(np.asarray(self.h2W.get("out_g", 0.0)))
+            self.set_out_pick(int(round(float(np.asarray(self.h2W.get("out_pick", 0.0))))))
         self.hrng = np.random.default_rng(int(seed) + 2121)  # ... its numbers and coins: a stream of their own
         self.hd_g = self.hd_on = self.held_pick = None       # ... each seat's held numbers, its trip's coin; this frame's targets under it
         self.hd_t = 0
@@ -555,6 +562,23 @@ class Policy:
         return logits
 
     @property
+    def out_on(self):
+        """(2.1f) the outlook's term plays: the outlook inside the head and its strength above 0"""
+        return self.outW is not None and self.out_g > 0
+
+    def set_out_g(self, g):
+        """(2.1f, the checks and tests) the outlook's strength, in place of the file's (a network without the outlook: refused)"""
+        assert self.outW is not None, "set_out_g: this network has no outlook inside its head"
+        self.out_g = float(g)
+
+    def set_out_pick(self, k):
+        """(2.1f, the checks and tests) the kind that plays (an index of the layout's kinds), in place of the file's"""
+        assert self.outW is not None, "set_out_pick: this network has no outlook inside its head"
+        k = int(k)
+        assert 0 <= k < len(self.h2["outlook"]["kinds"]), "set_out_pick: one of 0 .. {}".format(len(self.h2["outlook"]["kinds"]) - 1)
+        self.out_pick = k
+
+    @property
     def sh_on(self):
         """(2.1e) the picked slow half plays: the network has the halves and its read-back's gate is above 0, or the pull plays with its
         source's mix above 0 (otherwise nothing of them is read: they are not stepped)"""
@@ -749,6 +773,7 @@ class Policy:
             kf = np.asarray(kf, np.float32)
             if kf.shape[1] in (head2_.KEEP_FEAT + 1, head2_.KEEP_FEAT + head2_.KSIG + 1):
                 te_, kf = kf[:, -1] > 0, kf[:, :-1]
+        assert not self.out_on or (kf is not None and h2s is not None and (self.held_g > 0 or self.goal_on)),             "(2.1f) the outlook plays with the held draw's rows: give act() kf with the trip-end column (head2.np_kf_end(env))"
         assert not self.pull_on or (kf is not None and h2s is not None and (self.held_g > 0 or self.goal_on)), \
             "(2.1d) the pull plays with the held draw's rows: give act() kf with the trip-end column (head2.np_kf_end(env))"
         if (self.held_g > 0 or self.goal_on) and kf is not None and h2s is not None:   # (2.1c) the held draw, as the trainer's rollout plays
@@ -764,6 +789,9 @@ class Policy:
                              head2_.np_goal_u(self.h2, kf, self.hd_on))                # before the pull and the head's tick read it
             if self.pull_on:                                                         # (2.1d) the pull on his target scores before the
                 logits = self._pull(logits, si_, h2s, fr_)                             # held draw's pick and the draw
+            if self.out_on:                                                          # (2.1f) the outlook's term after the pull, as the trainer's
+                logits = logits.copy()                                                 # rollout adds it (head2.np_out_vec: the plugin's sums)
+                logits[:, si_] += head2_.np_out_vec(self.outW, self.h2, h2s, self.out_g, self.out_pick)
             li_ = logits[:, si_]
             li_ = li_ - li_.max(1, keepdims=True)
             lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
