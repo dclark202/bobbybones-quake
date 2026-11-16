@@ -121,8 +121,8 @@ def main():
         for n_ in SCHEDULE:                                  # (the file at the schedule's value before its first knot)
             assert abs(float(cur.get(n_, -99)) - value(n_, 0.0)) < 1e-9, "{} is {} in live.json, not {}".format(n_, cur.get(n_), value(n_, 0.0))
 
-    def update_lines(m_, base):
-        u_ = m_.get("update")
+    def update_lines(m_, base, u_):                          # u_: the RUN's update = the line's 1-based place in metrics.jsonl (a --resume
+        #                                                      restarts the trainer's own "update" at 1)
         pt_ = m_.get("pay_terms") or {}
         pm_, ss_ = pt_.get("per_player_min") or {}, pt_.get("size_share") or {}
         if pm_:
@@ -171,7 +171,7 @@ def main():
         if pu_:
             pa_ = pu_.get("parts") or {}
             log("update {}: pull: strength played {} (next {}; the league's {}) on horizon {} ({} ticks), floor {} | size {} length {} largest {} on {} "
-                "frames | the target's parts: hands {} head {} pull {} | proof first_err {} (inputs at half precision, --obs-half's rounding: {}) "
+                "frames | the target's parts: hands {} head {} pull {} | proof first_err {} (as the learner reads them: {}) "
                 "| plan last layer {} decay {}".format(
                     u_, pu_.get("g"), pu_.get("g_next"), pu_.get("g_opp"), pu_.get("h"), pu_.get("ticks"), pu_.get("floor"), pu_.get("size"),
                     pu_.get("norm"), pu_.get("max"), pu_.get("frames"), pa_.get("hands"), pa_.get("head"), pa_.get("pull"), pu_.get("first_err"),
@@ -278,7 +278,7 @@ def main():
                     log("live applied from update {}: {}".format(ap_.get("from_update"), got_))
             for m_ in jl(MET)[seen_m[0]:]:
                 seen_m[0] += 1
-                update_lines(m_, base)
+                update_lines(m_, base, seen_m[0])
             if once:
                 return
             time.sleep(a.poll)
@@ -322,15 +322,19 @@ def main():
     log("ramp_21d on for {}: {} (the owner's schedule of 2026-11-15; marks {}); FREE: the clock never holds or steps back, a check under 40% is a MAJOR PROBLEM{}".format(
         a.run, "; ".join("{} knots {}".format(n_, knots(n_)) for n_ in SCHEDULE), MARKS, " (resumed)" if a.resume else ""))
     L0 = jl(MET)
-    done_n = int(L0[-1]["update"]) if (a.resume and L0) else 0
+    done_n = len(L0) if (a.resume and L0) else 0             # (the run's clock = the lines of metrics.jsonl, as tools/run/watch.py: the
+    #                                                          trainer's own "update" restarts at 1 on a --resume)
     seen, marked = mtime(), set()
     if a.resume:
         marked = {k_ for k_ in MARKS if any(f_.startswith("policy_u") and f_.endswith("_21d.pt") and int(f_[8:-7]) >= k_
                                             for f_ in os.listdir(KEEP) if f_[8:-7].isdigit())}
+        if done_n:                                           # (the dials for the current update now, not at the next one)
+            v_ = write(float(done_n))
+            log("clock {} after update {} (resumed): {}".format(min(done_n, END), done_n, v_))
     while True:
         time.sleep(a.poll)
         L = jl(MET)
-        n = int(L[-1]["update"]) if L else 0
+        n = len(L)
         if n > done_n:
             if done_n < END or n <= END:
                 v_ = write(float(n))

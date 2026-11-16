@@ -45,3 +45,22 @@
 11-15 17:08:55 trainer: held draw (2.1c): share 0.0000 of his trips (the rest: the lock rule, INTENT_HOLD)
 11-15 17:08:55 trainer: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 3748758 weights, device cuda, 884.0 min
 11-15 17:08:55 trainer: the dodge token (2.0d): gate 0.00 now (follows live DODGE_G = 0: log of it, shut at 0)
+11-15 18:21:39 restart.ps1 (the trainer only, from the run's last save): -Minutes 810 -Updates 1000 -Lam 0.998 -PullH 0
+11-15 18:21:39 train.cmd, 810 minutes, 1000 updates, head2-lam 0.998, pull horizon 0: wrote train.cmd: --minutes 810 --max-updates 1000 --head2-lam 0.998 --pull 1 --pull-g 0 --pull-h 0 ; aim2_env.cmd: 2.1c's
+11-15 18:21:39 no firing cost in the command: every one at zero
+11-15 18:21:39 allowed arg --max-updates: run '1000' | reference '100'
+11-15 18:21:39 allowed arg --minutes: run '810' | reference '384'
+11-15 18:21:39 allowed arg --obs-half: run '<unset>' | reference ''
+11-15 18:21:39 allowed arg --pull: run '1' | reference '<unset>'
+11-15 18:21:39 allowed arg --pull-g: run '0' | reference '<unset>'
+11-15 18:21:39 allowed arg --pull-h: run '0' | reference '<unset>'
+11-15 18:21:39 allowed arg --run: run 'duel_gru_2_1d' | reference 'duel_gru_2_1c'
+11-15 18:21:39 settings check: PASS
+11-15 18:21:40 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\live.json: accepted
+11-15 18:21:40 the ramp ramp_21d.py: 112 files (clocks 0 to 111), all accepted
+11-15 18:21:40 LIVE ACCEPT: PASS
+11-15 18:21:40 trainer restarted: cmd 31144, --resume from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\policy.pt and opt.pt, 810 minutes, at most 1000 updates (--max-updates)
+11-15 18:21:55 live.json applied by the restarted trainer (2026-11-15 18:21:54)
+11-15 18:21:55 the watcher running: 34936
+11-15 18:21:55 the ramp running: 33060
+11-15 18:21:55 the self-play logger running: 38228

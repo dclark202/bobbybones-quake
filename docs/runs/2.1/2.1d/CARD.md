@@ -98,7 +98,7 @@ flagged at once. Logged every update: the held draw's, the plan's and the pull's
 
 **An existing trait the build found, not changed:** the learner re-reads its inputs at half precision (`--obs-half`, in 1.6a's and 2.0e's
 commands too), so its recomputed log-probabilities differ from the played ones by about 0.005. Every recent run has had it. The proof
-above is measured on full-precision inputs; the half-precision number is recorded beside it. Left alone for this run; a question for later.
+above is measured on full-precision inputs; the half-precision number is recorded beside it. Left alone at the start; **removed at update 10 on the owner's word** (see "The restart at update 10" below).
 
 ## Red team
 
@@ -141,6 +141,21 @@ frame at full size: the existing `--obs-half` trait, larger on the card than in 
 
 Updates 1 and 2 otherwise: frags 1.25 and 1.5 a match-minute (the fresh-start dip, as 2.1c's 1.1 and 1.4), the graphics card at 12.5 GB
 held, an update in about 5.3 minutes.
+
+## The restart at update 10 (11-15 18:21): `--obs-half` out
+
+Owner, 11-15: "I would really like this to be removed. There's no reason to keep it. Remove it, and resume the run at update 10, and make
+it so that it's never used again." The trainer was stopped at the update-10 save (18:04; kept as `keep/policy_u10.pt` + `opt_u10.pt`),
+the flag retired (the trainer refuses it; the stored inputs are full precision; `make_files.py` strips it from 2.1c's command; `CLAUDE.md`'s
+gotchas), the smoke run without it (ALL PASSED: the proof 0.000006 on both readings), and the trainer alone restarted from the update-10 save
+with `restart.ps1` (810 minutes, to about 07:52). The watcher, the ramp and the self-play logger were not stopped. 17 minutes without training.
+
+| | |
+|---|---|
+| The proof after the restart (pull 0 to 0.2, updates 11 to 17) | 0.0002 to 0.0023 on both readings (they are now the same); before, the learner's reading was 0.08 to 0.09 at its worst frame |
+| Memory, **not foreseen** | the stored inputs are 12.6 GB a buffer (two), not the 0.4 GB I told the owner; the trainer holds about 50 GB (was about 26); during the update-10 check the PC had 3.7 GB of RAM available and 97 GB committed of 111. Owner, 11-15 evening: left as it is for the night (the PC is not used); **afterwards everything goes to half precision, played and learnt alike** ("it just needs to be consistent") |
+| The ramp's clock, a fault of the restart | after a `--resume` the trainer numbers its updates from 1 and the ramp read that number: the pull stayed at 0 for updates 11 to 13 (it should have been 0.05 to 0.15). The ramp now counts the lines of `metrics.jsonl` as the watcher does, and was restarted alone at 18:44 (clock 13, `PULL_G` 0.15). The ramp's lines for updates 11 to 13 in `watch.log` are labelled 1 to 3 |
+| The check at update 10 (before the pull opened) | 102-98 = 51.0% against 2.1c's end |
 
 ## Before the go
 

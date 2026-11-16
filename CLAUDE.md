@@ -243,6 +243,9 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - A wiring bug can look like a bad idea: 1.7c's false start (PPO's reference pass without the weapon key's mask) read as a slow
   collapse. When a check falls, look at the KL and the trainer's own pieces before the design.
 - Restart only right after a save (every 10 updates), keep a copy; pass `--fade-start <minute>` on every resume.
+- `--obs-half` is retired (owner, 2026-11-15: "There's no reason to keep it"): the rollout's stored inputs at half precision made the
+  learner's recomputed log-probabilities differ from the played ones (up to 0.08 to 0.12 at the worst frame at full size, 2.1d's proof);
+  the trainer refuses the flag; a new run's command built from an older one strips it.
 - Write `.cmd` run files with the Write tool to the scratchpad and copy them over (Git Bash heredocs mangle backslashes; writing
   over an existing `.cmd` in a chain once failed silently and the old settings ran). After a patch to `sim/`, check the change is
   there (a write once failed with Errno 22 and left the file as it was).

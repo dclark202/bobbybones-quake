@@ -4,6 +4,7 @@ I set for myself"): 2.1c's command, every setting as it runs, with:
   --head2-lam <lam>      the head's credit (2.1c: 0.998; given here so a change is said)
   --pull 1 --pull-g 0    the pull built in, its strength shut (live PULL_G: ramp_21d.py opens it); the plan inside the head (tools/plan_init.py
   --pull-h <h>           add); which of the plan's horizons pulls (0: 2 s, 1: 5 s)
+  --obs-half removed     retired (owner, 2026-11-15: the learner reads the inputs as played; the trainer refuses the flag)
 Everything else 2.1c's: --held 1 --held-g 0 (live HELD_G: start_live.py takes 2.1c's last), --plan 1 (now the head's own layers, taught on the
 learner's copy), --dmg-taken-w 0.9.
     python docs/runs/2.1/2.1d/make_files.py <minutes> <max updates> <head2 lam> <pull horizon>"""
@@ -35,12 +36,16 @@ assert c.count(" --head2-lam 0.998 ") == 1, "2.1c's --head2-lam 0.998 not found"
 c = c.replace(" --head2-lam 0.998 ", " --head2-lam {} ".format(LAM))
 assert c.count(" --held 1 --held-g 0 --plan 1 %LEARN% >> ") == 1, "2.1c's --held 1 --held-g 0 --plan 1 not found at the end"
 c = c.replace(" --held 1 --held-g 0 --plan 1 %LEARN% >> ", " --held 1 --held-g 0 --plan 1 " + NEW_ARGS + "%LEARN% >> ")
+assert len(re.findall(r" --obs-half(?= )", c)) == 1, "2.1c's --obs-half not found exactly once"   # (retired, owner 2026-11-15)
+c = re.sub(r" --obs-half(?= )", "", c)
+assert "--obs-half" not in c, "--obs-half still in the command"
 lines[cl_[0]] = c
 t = "\n".join(x if x.startswith("rem") else x.replace("duel_gru_2_1c", "duel_gru_2_1d") for x in lines)   # (the history lines stay as written)
 sub("rem the repo root: this file lives in docs\\runs\\2.1\\2.1c\\",
     "rem ==== 2.1d (owner, 2026-11-15: the pull; docs/runs/2.1/2.1d): from a 2.1c save with the slow plan moved inside the head (tools/plan_init.py "
     "add). 2.1c's command with: run duel_gru_2_1d; --minutes {}; --max-updates {}; --head2-lam {}; {}(live PULL_G, opened by ramp_21d.py; "
-    "his target scores as played + PULL_G x log(the plan's odds)). Made by make_files.py.\n"
+    "his target scores as played + PULL_G x log(the plan's odds)); --obs-half removed (retired, owner 2026-11-15: the learner reads "
+    "the inputs as played). Made by make_files.py.\n"
     "rem the repo root: this file lives in docs\\runs\\2.1\\2.1d\\".format(MIN, UPDATES, LAM, NEW_ARGS))
 t = t.replace("docs\\runs\\2.1\\2.1c\\", "docs\\runs\\2.1\\2.1d\\")
 cl_ = [x for x in t.split("\n") if "train_duel_rnn.py" in x and not x.startswith("rem")]
@@ -52,6 +57,7 @@ for x_ in ("--pfsp", "--opt-cold-ok", "--wrule", "--keep-freeze", "--keep-g", "-
 for x_ in ("--held", "--held-g", "--plan", "--head2-lam", "--dmg-taken-w", "--pull", "--pull-g", "--pull-h"):
     assert cl_[0].count(" " + x_ + " ") == 1, x_
 assert "--pull-floor" not in cl_[0], "--pull-floor: the default (0.01)"
+assert "--obs-half" not in cl_[0], "--obs-half (retired) in the command"
 assert "--run duel_gru_2_1d " in cl_[0] and "--resume " in cl_[0] and "--dmg-taken-w 0.9 " in cl_[0] and "--head2-lam {} ".format(LAM) in cl_[0]
 assert "--head2 1 " in cl_[0] and "--head2-add 1 " in cl_[0] and "--head2-l2 0.01" in cl_[0] and "--env duel_env_ffa20e " in cl_[0]
 for s_ in ("INTENT_HOLD=8", "WEAPON_OWN=1", "INTENT_SWITCH=0", "AIM3=1", "KNOCK_QL=1", "KNOCK_NOW=1", "DODGE_IN=1", "DODGE_G=0"):

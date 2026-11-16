@@ -44,7 +44,8 @@ if ($LASTEXITCODE -ne 0) { Log "make_files failed: not started"; exit 1 }
 & $PY -c "import re, sys; t = open(sys.argv[1]).read(); s = lambda n: float((re.findall(r'^set ' + n + r'=(\S*)\s*$', t, re.M) or ['0'])[-1] or 0); bad = {n: s(n) for n in ('SHOT_COST', 'RG_FAR_PRICE', 'BLIND_FIRE_W', 'BLIND_RL_DMG') if s(n) != 0}; bad.update({'BLIND_RL_DMG (unset: 6 by default)': 6} if not re.search(r'^set BLIND_RL_DMG=', t, re.M) else {}); print('no firing cost in the command: every one at zero' if not bad else 'A FIRING COST ABOVE ZERO: ' + str(bad)); sys.exit(1 if bad else 0)" (Join-Path $HERE "train.cmd") | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "a firing cost above zero: not started"; exit 1 }
 # 2.1c's command and these differences, exactly
-$ALLOW = "--run,--minutes,--max-updates,--head2-lam,--pull,--pull-g,--pull-h"
+# (--obs-half: removed, retired by the owner 2026-11-15; the learner reads the inputs as played)
+$ALLOW = "--run,--minutes,--max-updates,--head2-lam,--pull,--pull-g,--pull-h,--obs-half"
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") (Join-Path $HERE "train.cmd") --ref (Join-Path $ROOT "docs\runs\2.1\2.1c\train.cmd") "--allow=$ALLOW" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against 2.1c's command): not started"; exit 1 }
 # against the source save: its env_vars carry the live values 2.1c played (as 2.1c's own --ck allowed against 2.0e's end)
