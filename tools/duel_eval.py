@@ -300,8 +300,14 @@ def play(job):
             a[:, -1] = -1
             kf_ = __import__("head2").np_kf_end(env)                             # (2.1c: with the trip-end column, for the held draw)
         ox_ = None                                                              # (1.7) the combat order's candidates after the frame before
-        if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False)):
+        dd_ = getattr(pol, "desc_due", False) or getattr(opp_pol, "desc_due", False)   # (2.2a) a network whose desc term plays reads the description
+        if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False) or dd_):
             ox_ = env.order_feat()                                              # (a keep reading of some seat: its head ticked on that frame)
+            if dd_:                                                             # (2.2a: + his weapons and the weapon in his hand, sim/desc22.py env_ox;
+                ox_ = tuple(ox_) + (np.asarray(env.has[:env.n, :9], bool).copy(), np.asarray(env.weapon[:env.n], np.int64).copy())   # the map's name
+                for p_m in (pol, opp_pol):                                      # for the map sense's table)
+                    if p_m is not None and hasattr(p_m, "set_maps"):
+                        p_m.set_maps(mp)
         ix_ = None                                                              # (2.1) the instruction's candidates of this reading (some seat's
         if getattr(E, "INSTR", False) and hasattr(env, "instr_feat") and (getattr(pol, "ins_due", False) or getattr(opp_pol, "ins_due", False)):
             import branch as branch_e                                           # head ticked on the frame before): the rows, the signals, the row he is on
@@ -322,7 +328,8 @@ def play(job):
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
                         **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
                         **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}),
-                        **({"ox": (ox_[0][ev], ox_[1][ev])} if (ox_ is not None and pol.order_due) else {}),
+                        **({"ox": (tuple(v_[ev] for v_ in ox_) if getattr(pol, "desc_due", False) else (ox_[0][ev], ox_[1][ev]))}
+                           if (ox_ is not None and (pol.order_due or getattr(pol, "desc_due", False))) else {}),
                         **({"ix": tuple(v_[ev] for v_ in ix_)} if (ix_ is not None and getattr(pol, "ins_due", False)) else {}))
         a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]                        # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if kp_ and pol.keep_on:
@@ -331,7 +338,8 @@ def play(job):
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
                                  **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}),
-                                 **({"ox": (ox_[0][od], ox_[1][od])} if (ox_ is not None and opp_pol.order_due) else {}),
+                                 **({"ox": (tuple(v_[od] for v_ in ox_) if getattr(opp_pol, "desc_due", False) else (ox_[0][od], ox_[1][od]))}
+                                    if (ox_ is not None and (opp_pol.order_due or getattr(opp_pol, "desc_due", False))) else {}),
                                  **({"ix": tuple(v_[od] for v_ in ix_)} if (ix_ is not None and getattr(opp_pol, "ins_due", False)) else {}))
             a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
             if kp_ and opp_pol.keep_on:

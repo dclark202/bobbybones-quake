@@ -118,6 +118,16 @@ def load(path):
             ok_ = int(round(float(np.asarray(W2.get("out_pick", 0.0)))))
             assert 0 <= ok_ < len(lay2["outlook"]["kinds"]), "out_pick {}: the layout has {} kinds".format(ok_, len(lay2["outlook"]["kinds"]))
             P["_out"] = dict(W=ow_, g=float(np.asarray(W2.get("out_g", 0.0))), pick=ok_)
+        P["_dsc"] = None                                     # (2.2a) the desc outlook (sim/desc22.py NpDesc): its term made at a keep reading from the
+        if head2_.has_parts22(lay2):                         # simulator's description (step(ox=desc22.env_ox(env), mapname=)), held to the next;
+            import desc22 as desc22_                         # the map sense: the file's "map_sense", its tables <QLBOT_ROOT>/data/maps/space_<map>.npz
+            if os.environ.get("NET_OUT_SRC", "") != "":      # (the server needs them there); NET_OUT_SRC overrides the file's source
+                W2["out_src"] = np.array(np.float32(float(os.environ["NET_OUT_SRC"])))
+            ms_ = None
+            if "map_sense" in P:
+                msl_ = json.loads(str(P["map_sense"]))
+                ms_ = dict(layout=msl_, model={k_[len("map_sense."):]: P[k_] for k_ in list(P.keys()) if k_.startswith("map_sense.")})
+            P["_dsc"] = desc22_.NpDesc(W2, lay2, ms_)
         P["_shalf"] = None                                   # (2.1e) the slow halves inside the head: the picked half (its arrays, its per-seat
         if head2_.has_slowhalf(lay2):                        # state: sim/slowhalf.py NpState), the pull's source mix, the read-back's gate;
             import slowhalf as slowhalf_                     # NET_SLOW_MIX, NET_SLOW_BACK, NET_SLOW_PICK override the file's
@@ -465,6 +475,17 @@ def out_g(P):
     return float(P["_out"]["g"]) if P.get("_out") is not None else 0.0
 
 
+def desc_on(P):
+    """(2.2a) the desc outlook's term plays (the outlook's term plays and its source is desc)"""
+    return P.get("_dsc") is not None and P["_dsc"].src == 1 and out_on(P)
+
+
+def desc_due(P):
+    """(2.2a) the coming frame is a keep reading for some seat and desc's term plays: give step() ox=desc22.env_ox(env) and mapname="""
+    kr_ = P.get("_k_r")
+    return desc_on(P) and kr_ is not None and bool(np.asarray(kr_).any())
+
+
 def out_on(P):
     """(2.1f) the outlook's term plays: the outlook inside the head and its strength above 0 (with the held draw's rows: kf_rows)"""
     return out_g(P) > 0
@@ -700,7 +721,20 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
             logits = _pull(P, logits, si_, h2s, fr_)                            # draw's pick and the draw
         if out_on(P):                                                         # (2.1f) the outlook's term after the pull (test_suite.Policy's sums)
             logits = logits.copy()
-            logits[:, si_] += P["_head2"][2].np_out_vec(P["_out"]["W"], P["_head2"][0], h2s, P["_out"]["g"], P["_out"]["pick"])
+            if desc_on(P):                                                    # (2.2a) desc's term: made at a keep reading, held (test_suite's)
+                kr_d = P.get("_k_r")
+                if kr_d is not None and len(kr_d) == B_ and np.asarray(kr_d).any():
+                    assert ox is not None and len(ox) >= 5 and bst is not None and mapname, \
+                        "(2.2a) desc's term plays: give step() ox=desc22.env_ox(env) at a keep reading (desc_due) and mapname="
+                    r_d = np.nonzero(np.asarray(kr_d, bool))[0]
+                    br_d, tk_d = bst
+                    sb_d = np.asarray(br_d.s, np.float32)[r_d]
+                    P["_dsc"].reading(r_d, h2s[r_d], sb_d, xa[r_d], np.asarray(tk_d.P, np.float32)[r_d], np.asarray(tk_d.valid, bool)[r_d],
+                                      np.asarray(tk_d.hand)[r_d].argmax(1), P["_brain"][2].np_mlp(P["_brain"][0]["trk"], sb_d),
+                                      tuple(np.asarray(v_)[r_d] for v_ in ox[:5]), np.full(len(r_d), mapname), P["_out"]["g"], P["_out"]["pick"], B_)
+                logits[:, si_] += P["_dsc"].term(B_)
+            else:
+                logits[:, si_] += P["_head2"][2].np_out_vec(P["_out"]["W"], P["_head2"][0], h2s, P["_out"]["g"], P["_out"]["pick"])
         li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
         lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
         HD_["t"] += 1
