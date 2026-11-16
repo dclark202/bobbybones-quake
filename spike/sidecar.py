@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 sidecar.py -- the spike "brain": drives one bot slot in a Quake3e + OSP
-server through the botctl Unix socket and runs the T1-T6 spike scenarios.
+server through the botctl Unix socket and runs the T1-T8 spike scenarios.
 
 Usage:
   python3 sidecar.py --port 28133 --scenario t2 --botname SpikeBot [--team red]
@@ -18,10 +18,25 @@ Scenarios (each prints a PASS/FAIL line and exits 0/1):
       the nearest health item and verify it disappears AND health rises.
   t5  warmup: bot must be ready-able via TEXT "ready"; the driver checks
       the server log for the match-start line (see run_spike.sh).
+  t5b real map rotation (rcon map ospdm6; TDM killBots=qfalse): managed
+      clients must SURVIVE via the SV_SpawnServer reconnect path (V2:
+      isBot=qfalse + SV_ClientEnterWorld), LIST intact, drivable on the
+      new map.
+  t5c killserver -> map (the SV_Shutdown + "map" cycle of the 12 h
+      SV_Restart): socket must go down with the shutdown, come back after
+      the restart (enable-flag re-arm), LIST empty, re-ADD works.
   t6  soak: random-walk + occasional fire for N seconds (default 600);
       PASS = no engine crash (socket alive) the whole time.
+  t7  admin kick (rcon clientkick <slot>) followed by a stock bot joining
+      that slot (rcon addbot dwcbot1 4 red): management state must clear on
+      its own (LIST empty, stays empty), and the addbot bot must land on the
+      same slot.
+  t8  sidecar crash: closing the connection without REMOVE must make the
+      engine drop its managed clients and keep listening (fresh connection
+      sees LIST empty, old player gone, can ADD again).
 
-Stdlib only. Talks to the engine socket /tmp/q3e-botctl-<port>.sock.
+Stdlib only. Talks to the engine socket <fs_homepath>/botctl-<port>.sock
+(see botctl.sockpath_for_port; the spike runs use ~/.q3a_spike).
 """
 
 import argparse
@@ -51,6 +66,32 @@ def log(msg: str, verbose_only: bool = False, verbose: bool = False):
     if verbose_only and not verbose:
         return
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def rcon(args, command: str, timeout: float = 3.0) -> str:
+    """One RCON command over UDP. q3e handles rcon CONNECTIONLESS:
+    '\\xff\\xffrcon <pass> <cmd>\\0', replies come back as one or more
+    '\\xff\\xffprint\\n<text>' packets (sv_main.c SVC_RemoteCommand +
+    SV_FlushRedirect). Keep rcon calls per scenario few:
+    SVC_RateLimitAddress rate-limits them."""
+    import socket as _socket
+    s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+    s.settimeout(timeout)
+    s.bind(("127.0.0.1", 0))
+    payload = b"\xff\xffrcon " + args.rconpass.encode() + b" " + command.encode() + b"\x00"
+    s.sendto(payload, (args.rconhost, args.port))
+    chunks = []
+    try:
+        while True:
+            data, _ = s.recvfrom(4096)
+            if data.startswith(b"\xff\xffprint"):
+                chunks.append(data[len(b"\xff\xffprint"):].decode(errors="replace").lstrip("\n"))
+            else:
+                break
+    except _socket.timeout:
+        pass
+    s.close()
+    return "".join(chunks)
 
 
 def wait_for_connect(bc: Botctl, slot: int, timeout: float) -> bool:
@@ -105,6 +146,33 @@ def fwd_right_from_yaw(yaw_deg: float):
     """World-space unit vectors for Q3 yaw (0 = +x, 90 = +y)."""
     r = math.radians(yaw_deg)
     return (math.cos(r), math.sin(r)), (-math.sin(r), math.cos(r))
+
+
+def choose_clear_yaw(bc: Botctl, slot: int, hz: float, verbose: bool = False):
+    """Spawn facing on q3dm7 is random -- a full-speed hold may walk straight
+    into a wall (spawn luck, not a channel bug; this bit us on 2026-11-16:
+    T2 dot=1.000 but 49 u/s). Probe 0.35 s of forward walking in the four
+    cardinal world-yaw directions and return the clearest one."""
+    best_yaw, best_rate = 0.0, -1.0
+    for yaw in (0.0, 90.0, 180.0, 270.0):
+        p0 = bc.snap().player(slot)
+        if not p0:
+            continue
+        start = p0["origin"]
+        t0 = time.time()
+        while time.time() - t0 < 0.35:
+            bc.cmd(slot, 127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
+            time.sleep(1.0 / hz)
+        p1 = bc.snap().player(slot)
+        if not p1:
+            continue
+        d = math.hypot(p1["origin"][0] - start[0], p1["origin"][1] - start[1])
+        rate = d / max(time.time() - t0, 1e-6)
+        log(f"probe yaw {yaw:.0f}: {d:.0f}u ({rate:.0f}u/s)", verbose_only=True, verbose=verbose)
+        if rate > best_rate:
+            best_rate, best_yaw = rate, yaw
+        time.sleep(0.2)
+    return best_yaw, best_rate
 
 
 def result(name: str, ok: bool, detail: str = "") -> int:
@@ -229,9 +297,9 @@ def t2(bc: Botctl, args) -> int:
         return result(name, False, "no team join")
     time.sleep(1.0)  # let the spawn settle (knockback + DoT)
 
-    # Hold fwd=127 for ~1.2 s but MEASURE the first ~1.0 s: that segment is
-    # clean run speed (~320 u/s) before any wall in the (random) facing
-    # direction can clip the average. One mid-hold snapshot (~1 frame).
+    # Hold fwd=127 for ~1.2 s but MEASURE the first ~1.0 s along the
+    # clearest of four probe directions (see choose_clear_yaw): that segment
+    # is clean run speed (~320 u/s) unless the (random) spawn faces a wall.
     hz = args.hz
     dt = 1.0 / hz
     HOLD, MEASURE = 1.2, 1.0
@@ -240,8 +308,14 @@ def t2(bc: Botctl, args) -> int:
     if not p0:
         bc.remove(slot)
         return result(name, False, "no player after join")
+    yaw0, probe_rate = choose_clear_yaw(bc, slot, hz, verbose=args.verbose)
+    time.sleep(0.3)
+
+    p0 = bc.snap().player(slot)
+    if not p0:
+        bc.remove(slot)
+        return result(name, False, "no player after probe")
     start = p0["origin"]
-    yaw0 = p0["viewangles"][1]
 
     mid, mid_t = None, 0.0
     t0 = time.time()
@@ -276,9 +350,8 @@ def t3(bc: Botctl, args) -> int:
 
     def run(substeps: int):
         """Stage `substeps` identical cmds per frame (hz = 20*substeps) for
-        1.2 s and MEASURE the first 1.0 s of travel. The full hold would hit
-        a wall in the (random) spawn facing within ~30-400u on q3dm7, so the
-        first second is the clean-run segment (same rationale as T2)."""
+        1.2 s and MEASURE the first 1.0 s of travel along the clearest
+        direction (see choose_clear_yaw)."""
         slot = bc.add(args.botname, args.team)
         if slot < 0:
             return None
@@ -289,16 +362,16 @@ def t3(bc: Botctl, args) -> int:
             bc.remove(slot)
             return None
         time.sleep(1.0)
+        hz = 20 * substeps
+        yaw, probe_rate = choose_clear_yaw(bc, slot, 20.0)
+        dt = 1.0 / hz
+        HOLD, MEASURE = 1.2, 1.0
+        mid, mid_t = None, 0.0
         p0 = bc.snap().player(slot)
         if not p0:
             bc.remove(slot)
             return None
         start = p0["origin"]
-        yaw = p0["viewangles"][1]
-        hz = 20 * substeps
-        dt = 1.0 / hz
-        HOLD, MEASURE = 1.2, 1.0
-        mid, mid_t = None, 0.0
         t0 = time.time()
         while time.time() - t0 < HOLD:
             bc.cmd(slot, 127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
@@ -542,8 +615,262 @@ def t6(bc: Botctl, args) -> int:
                   f"ran={elapsed:.0f}s/{dur}s snaps={snaps} dead_time={dead_waited:.1f}s")
 
 
+def wait_list_empty(bc: Botctl, timeout: float) -> bool:
+    """Poll LIST until no managed client is left (engine-side drop must
+    clear the management state via Botctl_ClientDropped)."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if not bc.list():
+            return True
+        time.sleep(0.2)
+    return False
+
+
+def t5b(bc: Botctl, args) -> int:
+    """T5b: a REAL map rotation (rcon 'map ospdm6'). In TDM, SV_Map_f passes
+    killBots=qfalse, so SV_SpawnServer reaches the reconnect loop with every
+    NA_BOT client still connected:
+      - V1 reconnected managed clients through the engine-bot path
+        (isBot=qtrue): dropped (no botlib skill/character, or
+        BotConnectfailed with bot_enable 0).
+      - V2: Botctl_IsManaged -> isBot=qfalse + SV_ClientEnterWorld, so the
+        managed clients SURVIVE the rotation with their slots and management
+        intact, and stay drivable on the new map.
+    Proof: restart_id changes, LIST still holds both client numbers, both
+    have a live player state on the new map, and a fresh usercmd visibly
+    changes their viewangles (input pipeline alive, wall-independent).
+    Contrast with t7: the kick path DROPS a managed client and management
+    clears."""
+    name = "T5b map rotation"
+    red = bc.add(args.botname + "-red", "red")
+    blue = bc.add(args.botname + "-blue", "blue")
+    if red < 0 or blue < 0:
+        if red >= 0:
+            bc.remove(red)
+        if blue >= 0:
+            bc.remove(blue)
+        return result(name, False, f"ADD failed (red={red} blue={blue})")
+    if not (wait_for_connect(bc, red, 20.0) and wait_for_connect(bc, blue, 20.0)):
+        bc.remove(red); bc.remove(blue)
+        return result(name, False, "no connect before rotation")
+    if not (join_team(bc, red, "red") and join_team(bc, blue, "blue")):
+        bc.remove(red); bc.remove(blue)
+        return result(name, False, "no team join before rotation")
+
+    base_id = bc.snap().restart_id
+
+    r_out = rcon(args, "map ospdm6")
+    log(f"RCON 'map ospdm6' -> {r_out.strip()[:60]!r}")
+
+    # wait for the new level (restart_id changes; snaps empty during loading)
+    rid = 0
+    t0 = time.time()
+    while time.time() - t0 < 30.0:
+        time.sleep(0.5)
+        try:
+            rid = bc.snap().restart_id
+        except Exception:
+            continue
+        if rid and rid != base_id:
+            break
+    if not rid or rid == base_id:
+        bc.remove(red); bc.remove(blue)
+        return result(name, False, "map rotation never happened (restart_id unchanged)")
+
+    time.sleep(2.0)  # let the reconnect + first frames settle
+
+    # management must be INTACT: both slots still managed, same client nums
+    slots = {c["client"] for c in bc.list()}
+    still_managed = red in slots and blue in slots
+
+    # both must have a live player state on the new map
+    pr = pb = None
+    t0 = time.time()
+    while time.time() - t0 < 20.0 and not (pr and pb):
+        snap = bc.snap()
+        pr, pb = snap.player(red), snap.player(blue)
+        if not (pr and pb):
+            time.sleep(0.5)
+    alive = bool(pr and pb and pr["health"] > 0 and pb["health"] > 0)
+
+    # input pipeline check: command a distinctive viewangle, verify it lands
+    # (viewangles apply even against a wall, so this is not spawn-luck)
+    ctrl_ok = False
+    if alive:
+        want_yaw = (pr["viewangles"][1] + 123.0) % 360.0
+        t0 = time.time()
+        while time.time() - t0 < 2.0 and not ctrl_ok:
+            bc.cmd(red, 0, 0, 0, 0, WP_MACHINEGUN, 30.0, want_yaw)
+            time.sleep(0.1)
+            p = bc.snap().player(red)
+            if p:
+                dy = abs((p["viewangles"][1] - want_yaw + 180.0) % 360.0 - 180.0)
+                dp = abs(p["viewangles"][0] - 30.0)
+                ctrl_ok = dy < 5.0 and dp < 5.0
+
+    bc.remove(red); bc.remove(blue)
+
+    ok = still_managed and alive and ctrl_ok
+    return result(name, ok,
+                  f"restart_id {base_id}->{rid} managed_intact={still_managed} "
+                  f"(slots {sorted(slots)}) alive={alive} input_ok={ctrl_ok}")
+
+
+def t5c(bc: Botctl, args) -> int:
+    """T5c: killserver -> map (the exact SV_Shutdown + "map" cycle that the
+    12 h SV_Restart performs). Botctl_Shutdown must stop + unlink the socket
+    AND reset the enable flag, and Botctl_Frame must re-arm the channel after
+    the restart (v1 bug: a static 'was_enabled' stayed true, so the socket
+    never came back). Proof: socket disappears on killserver, the engine
+    recreates it after 'map q3dm7', a FRESH connection sees LIST empty and
+    can ADD again."""
+    name = "T5c killserver restart"
+    slot = bc.add(args.botname, args.team or "red")
+    if slot < 0:
+        return result(name, False, "ADD failed")
+    if not wait_for_connect(bc, slot, 20.0):
+        bc.remove(slot)
+        return result(name, False, "no connect")
+
+    path = bc.sockpath
+    r_out = rcon(args, "killserver")
+    log(f"RCON 'killserver' -> {r_out.strip()[:60]!r}")
+    time.sleep(1.5)                       # SV_Shutdown + Botctl_Shutdown teardown
+    sock_gone = not os.path.exists(path)
+
+    try:
+        bc.close()                        # the engine closed our connection
+    except Exception:
+        pass
+
+    rcon(args, "map q3dm7")               # same Cbuf text SV_Restart adds
+
+    # the channel must re-arm: Botctl_Frame sees botctl_enable 1 as a fresh
+    # on-edge (s_enabled was reset) and recreates listener + socket
+    t0 = time.time()
+    while time.time() - t0 < 40.0 and not os.path.exists(path):
+        time.sleep(0.5)
+    if not os.path.exists(path):
+        return result(name, False, "socket never recreated after restart")
+    time.sleep(1.0)                       # let map load + first frames run
+
+    try:
+        bc2 = Botctl(path)
+        bc2.ping()
+    except Exception as e:
+        return result(name, False, f"reconnect after restart failed: {e}")
+
+    try:
+        list_empty = not bc2.list()
+        n = bc2.add(args.botname + "-after", args.team or "red")
+        readd = n >= 0 and wait_for_connect(bc2, n, 20.0)
+        joined = readd and join_team(bc2, n, args.team or "red")
+        if readd:
+            bc2.remove(n)
+    finally:
+        bc2.close()
+
+    ok = sock_gone and list_empty and readd and joined
+    return result(name, ok,
+                  f"socket_gone={sock_gone} socket_recreated=True "
+                  f"list_empty={list_empty} readd_slot={n if readd else '-'} "
+                  f"connect+team={joined}")
+
+
+def t7(bc: Botctl, args) -> int:
+    """T7 (as requested in the PR review): admin kick of a managed client
+    (rcon 'clientkick <slot>'), then a STOCK bot joins that slot
+    (rcon 'addbot dwcbot1 red'). The drop goes through SV_DropClient, which
+    is NOT a botctl path: without the Botctl_ClientDropped hook the slot
+    would keep a phantom 'managed' flag (auto-ACK + injected usercmds for
+    the next occupant). Proof: LIST empties on its own, the addbot bot
+    lands on the same slot (engine really freed it), and LIST stays empty
+    (botctl does not hijack the botlib bot). run_spike.sh deploys
+    bot_enable 1 + the dwc botfiles for this scenario."""
+    name = "T7 clientkick -> addbot"
+    slot = bc.add(args.botname, args.team or "red")
+    if slot < 0:
+        return result(name, False, "ADD failed")
+    if not wait_for_connect(bc, slot, 20.0):
+        bc.remove(slot)
+        return result(name, False, "no connect")
+    if not join_team(bc, slot, args.team or "red"):
+        bc.remove(slot)
+        return result(name, False, "no team join")
+
+    r_out = rcon(args, f"clientkick {slot}")   # clientkick takes the 0-based slot
+    log(f"RCON 'clientkick {slot}' -> {r_out.strip()[:60]!r}")
+
+    cleared = wait_list_empty(bc, 5.0)
+
+    # OSP usage: addbot <botname> [skill 1-5] [team] -> team is ARG 3
+    # (g_bot.c Svcmd_AddBot_f); skill 4 = OSP's default.
+    rcon(args, "addbot dwcbot1 4 red")
+    occupied = False
+    t0 = time.time()
+    # bot_memory 0 -> the addbot path COMPILES the dwcbot1 character files
+    # on the server thread before the client slot is taken; allow plenty of
+    # time before judging the slot reused.
+    while time.time() - t0 < 30.0 and not occupied:
+        occupied = bc.snap().player(slot) is not None
+        if not occupied:
+            time.sleep(0.5)
+    if occupied:
+        time.sleep(2.0)          # let the bot finish connect + team join
+    still_cleared = not bc.list()
+
+    ok = cleared and occupied and still_cleared
+    return result(name, ok,
+                  f"kicked slot={slot} list_cleared={cleared} "
+                  f"addbot_took_same_slot={occupied} botctl_list_still_empty={still_cleared}")
+
+
+def t8(bc: Botctl, args) -> int:
+    """T8: the sidecar dies. Closing the connection without REMOVE (crash
+    simulation) must make the engine drop the clients it drove ('bot control
+    connection lost' in Botctl_Frame) and keep listening: a FRESH connection
+    sees LIST empty, no player state for the old slot, and can ADD again."""
+    name = "T8 sidecar lost"
+    slot = bc.add(args.botname, args.team or "red")
+    if slot < 0:
+        return result(name, False, "ADD failed")
+    if not wait_for_connect(bc, slot, 20.0):
+        bc.remove(slot)
+        return result(name, False, "no connect")
+    if not join_team(bc, slot, args.team or "red"):
+        bc.remove(slot)
+        return result(name, False, "no team join")
+
+    path = bc.sockpath
+    bc.close()                      # simulate the crash (EOF, no REMOVE sent)
+    log("connection closed without REMOVE (simulated crash)")
+    time.sleep(1.5)                 # Botctl_Frame notices within a frame
+
+    try:
+        bc2 = Botctl(path)          # engine must still be listening
+        bc2.ping()
+    except Exception as e:
+        return result(name, False, f"engine stopped listening: {e}")
+
+    try:
+        lst_empty = not bc2.list()
+        gone = bc2.snap().player(slot) is None
+        n = bc2.add(args.botname + "-after", args.team or "red")
+        readd = n >= 0 and wait_for_connect(bc2, n, 20.0)
+        if readd:
+            bc2.remove(n)
+    finally:
+        bc2.close()
+
+    ok = lst_empty and gone and readd
+    return result(name, ok,
+                  f"old_slot={slot} list_empty={lst_empty} player_gone={gone} "
+                  f"readd_after_reconnect={readd}")
+
+
 SCENARIOS = {
-    "t1": t1, "t2": t2, "t3": t3, "t4": t4, "t5": t5, "t6": t6,
+    "t1": t1, "t2": t2, "t3": t3, "t4": t4, "t5": t5, "t5b": t5b,
+    "t5c": t5c, "t6": t6, "t7": t7, "t8": t8,
 }
 
 
@@ -557,6 +884,9 @@ def main():
     ap.add_argument("--team", default="", help="red/blue, or empty for auto")
     ap.add_argument("--hz", type=float, default=100.0)
     ap.add_argument("--seconds", type=float, default=10.0)
+    ap.add_argument("--rconhost", default="127.0.0.1")
+    ap.add_argument("--rconpass", default="testrcon123",
+                    help="rcon password of the spike server")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 

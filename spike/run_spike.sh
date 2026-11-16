@@ -30,7 +30,7 @@
 #    alive for minutes. => stdin goes through a FIFO now, both PIDs are
 #    owned explicitly, cleanup = TERM with 10 s grace + KILL fallback.
 #
-# Usage:  run_spike.sh <scenario t1..t6> [seconds]
+# Usage:  run_spike.sh <scenario t1..t8> [seconds]
 #
 # Logs:   ~/tmp/spike/server_<scen>_<ts>.log
 #         ~/tmp/spike/sidecar_<scen>_<ts>.log
@@ -49,7 +49,8 @@ ENGINE=/home/hkuehnemund/tmp/q3e_botctl/build/release-linux-x86_64/quake3e.ded.x
 SPIKE_HOME=/home/hkuehnemund/.q3a_spike
 SIDECAR=/home/hkuehnemund/tmp/knecht-q3-bot/spike/sidecar.py
 PORT=28133
-SOCK=/tmp/q3e-botctl-$PORT.sock
+# engine default socket (V2): fs_homepath + /botctl-<net_port>.sock, chmod 0600
+SOCK=$SPIKE_HOME/botctl-$PORT.sock
 LOGDIR=/home/hkuehnemund/tmp/spike
 TS=$(date +%H%M%S)
 mkdir -p "$LOGDIR"
@@ -80,7 +81,13 @@ mkdir -p "$SPIKE_HOME/osp"
 # level.time + 1000*g_warmup - 1000).
 WARMUP=30
 [ "$SCEN" = "t5" ] && WARMUP=10
+# t7 needs the botlib game side (rcon "addbot dwcbot1 red" after the kick):
+# bot_enable 1 + the dwc botfiles pk3 (scripts/bots.txt + botfiles/bots/*_c.c)
+# deployed into the HOME gamedir -- it outranks the install pk3s.
+BOT_ENABLE=0
+[ "$SCEN" = "t7" ] && BOT_ENABLE=1
 cat > "$SPIKE_HOME/osp/spike.cfg" <<EOF
+rconPassword testrcon123
 g_gametype 3
 g_doWarmup 1
 g_warmup $WARMUP
@@ -91,11 +98,16 @@ g_teamForceBalance 0
 match_carespawn 1
 match_instagib 0
 pmove_fixed 0
-bot_enable 0
+bot_enable $BOT_ENABLE
 bot_ai 0
 bot_autoload "[none]"
 bot_memory 0
 EOF
+if [ "$SCEN" = "t7" ]; then
+  ASSET=/home/hkuehnemund/tmp/spike_assets/zzz_dwc_bots.pk3
+  [ -f "$ASSET" ] || fail "t7 needs the dwc botfiles pk3: $ASSET missing"
+  cp "$ASSET" "$SPIKE_HOME/osp/" || fail "copy $ASSET"
+fi
 
 cd "$Q3" || fail "cd $Q3"
 
@@ -183,7 +195,7 @@ sleep 1
 TEAM_ARG=""
 [ "$SCEN" != "t5" ] && TEAM_ARG="--team red"
 
-python3 "$SIDECAR" --port "$PORT" --scenario "$SCEN" \
+python3 "$SIDECAR" --port "$PORT" --sockpath "$SOCK" --scenario "$SCEN" \
    --seconds "$SECS" --botname SpikeBot $TEAM_ARG >> "$SCLOG" 2>&1
 RC=$?
 tail -n 5 "$SCLOG"
@@ -202,6 +214,45 @@ if [ "$SCEN" = "t5" ]; then
     echo "RESULT t5-log: PASS match restart observed in server log" | tee -a "$SCLOG"
   else
     echo "RESULT t5-log: FAIL no match restart in server log (warmup never ended?)" | tee -a "$SCLOG"
+    RC=1
+  fi
+fi
+
+# lifecycle scenarios: the engine-side drop hooks must show up in the log
+# (Botctl_ClientDropped queues "management cleared"; the sidecar-loss drop
+#  path uses the reason "bot control connection lost")
+if [ "$SCEN" = "t7" ]; then
+  if grep -q 'management cleared' "$LOG" 2>/dev/null; then
+    echo "RESULT t7-log: PASS engine cleared management on its drop path" | tee -a "$SCLOG"
+  else
+    echo "RESULT t7-log: FAIL no 'management cleared' line in server log" | tee -a "$SCLOG"
+    RC=1
+  fi
+fi
+if [ "$SCEN" = "t5b" ]; then
+  # TDM rotation (killBots=qfalse): managed clients are reconnected, NOT
+  # dropped -> the rcon must have run and NO management-cleared line allowed
+  if grep -q 'map ospdm6' "$LOG" 2>/dev/null && ! grep -q 'management cleared' "$LOG" 2>/dev/null; then
+    echo "RESULT t5b-log: PASS rotation kept management intact" | tee -a "$SCLOG"
+  else
+    echo "RESULT t5b-log: FAIL rcon missing or management wrongly cleared" | tee -a "$SCLOG"
+    RC=1
+  fi
+fi
+if [ "$SCEN" = "t8" ]; then
+  if grep -q 'bot control connection lost' "$LOG" 2>/dev/null; then
+    echo "RESULT t8-log: PASS engine dropped the orphaned managed clients" | tee -a "$SCLOG"
+  else
+    echo "RESULT t8-log: FAIL no 'bot control connection lost' line in server log" | tee -a "$SCLOG"
+    RC=1
+  fi
+fi
+if [ "$SCEN" = "t5c" ]; then
+  if grep -q 'Server Shutdown (killserver)' "$LOG" 2>/dev/null \
+     && grep -q 'management cleared' "$LOG" 2>/dev/null; then
+    echo "RESULT t5c-log: PASS shutdown stopped the channel and cleared management" | tee -a "$SCLOG"
+  else
+    echo "RESULT t5c-log: FAIL missing shutdown/management-cleared lines" | tee -a "$SCLOG"
     RC=1
   fi
 fi

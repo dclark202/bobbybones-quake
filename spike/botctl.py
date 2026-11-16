@@ -38,6 +38,7 @@ Stdlib only. x86 host (little-endian) -- the engine's writer is explicit
 little-endian, so struct '<' formats match byte-for-byte.
 """
 
+import os
 import socket
 import struct
 
@@ -54,9 +55,12 @@ MAX_NAME = 32
 MAX_TEAM = 16
 
 
-def sockpath_for_port(port: int) -> str:
-    """Default engine socket path (mirrors Botctl_DeriveSockpath)."""
-    return f"/tmp/q3e-botctl-{port}.sock"
+def sockpath_for_port(port: int, home: str = None) -> str:
+    """Default engine socket path (mirrors Botctl_DeriveSockpath):
+    fs_homepath + '/botctl-<net_port>.sock'. Spike runs use ~/.q3a_spike."""
+    if home is None:
+        home = os.path.expanduser("~/.q3a_spike")
+    return f"{home}/botctl-{port}.sock"
 
 
 def angle2short(deg: float) -> int:
