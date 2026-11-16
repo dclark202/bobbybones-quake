@@ -30,7 +30,7 @@
 #    alive for minutes. => stdin goes through a FIFO now, both PIDs are
 #    owned explicitly, cleanup = TERM with 10 s grace + KILL fallback.
 #
-# Usage:  run_spike.sh <scenario t1..t8> [seconds]
+# Usage:  run_spike.sh <scenario t1..t9> [seconds]
 #
 # Logs:   ~/tmp/spike/server_<scen>_<ts>.log
 #         ~/tmp/spike/sidecar_<scen>_<ts>.log
@@ -242,11 +242,11 @@ if [ "$SCEN" = "t5b" ]; then
     RC=1
   fi
 fi
-if [ "$SCEN" = "t8" ]; then
+if [ "$SCEN" = "t8" ] || [ "$SCEN" = "t9" ]; then
   if grep -q 'bot control connection lost' "$LOG" 2>/dev/null; then
-    echo "RESULT t8-log: PASS engine dropped the orphaned managed clients" | tee -a "$SCLOG"
+    echo "RESULT ${SCEN}-log: PASS engine dropped the orphaned managed clients" | tee -a "$SCLOG"
   else
-    echo "RESULT t8-log: FAIL no 'bot control connection lost' line in server log" | tee -a "$SCLOG"
+    echo "RESULT ${SCEN}-log: FAIL no 'bot control connection lost' line in server log" | tee -a "$SCLOG"
     RC=1
   fi
 fi

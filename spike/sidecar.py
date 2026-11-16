@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 sidecar.py -- the spike "brain": drives one bot slot in a Quake3e + OSP
-server through the botctl Unix socket and runs the T1-T8 spike scenarios.
+server through the botctl Unix socket and runs the T1-T9 spike scenarios.
 
 Usage:
   python3 sidecar.py --port 28133 --scenario t2 --botname SpikeBot [--team red]
@@ -31,12 +31,17 @@ Scenarios (each prints a PASS/FAIL line and exits 0/1):
   t6  soak: random-walk + occasional fire for N seconds (default 600);
       PASS = no engine crash (socket alive) the whole time.
   t7  admin kick (rcon clientkick <slot>) followed by a stock bot joining
-      that slot (rcon addbot dwcbot1 4 red): management state must clear on
-      its own (LIST empty, stays empty), and the addbot bot must land on the
-      same slot.
+      that slot (rcon addbot dwcbot1 5 red -- the dwc botfiles define only a
+      skill-5 block): management state must clear on its own (LIST empty,
+      stays empty), and the addbot bot must land on the same slot.
   t8  sidecar crash: closing the connection without REMOVE must make the
       engine drop its managed clients and keep listening (fresh connection
       sees LIST empty, old player gone, can ADD again).
+  t9  stalled reader (review round 2): flood SNAP requests without reading
+      any reply until the engine's SO_SNDTIMEO send fails -- the engine must
+      CLOSE the connection (never continue with dropped replies), drop its
+      managed clients, stay responsive (rcon), and accept a fresh
+      connection + ADD (LIST empty).
 
 Stdlib only. Talks to the engine socket <fs_homepath>/botctl-<port>.sock
 (see botctl.sockpath_for_port; the spike runs use ~/.q3a_spike).
@@ -47,6 +52,7 @@ import math
 import os
 import random
 import signal
+import socket
 import struct
 import sys
 import time
@@ -55,6 +61,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from botctl import (
     Botctl, Snapshot, sockpath_for_port,
     BUTTON_ATTACK,
+    OP_SNAP, _send_frame,     # raw send for the T9 stalled-reader flood
     WP_MACHINEGUN,          # this OSP build's spawn weapon (no blaster; 1=GAUNTLET)
     WEAPON_FIRING,          # ==3 in this build (NOT 1)
     PM_NORMAL, PM_DEAD,
@@ -1097,9 +1104,102 @@ def t8(bc: Botctl, args) -> int:
                   f"readd_after_reconnect={readd}")
 
 
+def t9(bc: Botctl, args) -> int:
+    """T9 (review round 2, 2026-11-16): stalled reader. The sidecar stops
+    reading its socket and keeps firing SNAP requests. Each engine reply send
+    carries the 500 ms SO_SNDTIMEO; once the kernel buffers fill, bc_send_msg
+    must FAIL -- and the handler must then treat the connection as broken and
+    CLOSE it, instead of continuing with silently dropped replies (a partial
+    frame would desync the stream; a request/response sidecar would wait
+    forever for the missing reply). Expected engine behaviour after the close:
+    it drops the clients it drove (same path as the T8 crash, 'bot control
+    connection lost'), keeps serving UDP (rcon status answers), and a FRESH
+    connection sees LIST empty and can ADD again."""
+    name = "T9 stalled reader"
+    slot = bc.add(args.botname, args.team or "red")
+    if slot < 0:
+        return result(name, False, "ADD failed")
+    if not wait_for_connect(bc, slot, 20.0):
+        bc.remove(slot)
+        return result(name, False, "no connect")
+    if not join_team(bc, slot, args.team or "red"):
+        bc.remove(slot)
+        return result(name, False, "no team join")
+    time.sleep(1.0)
+
+    # flood SNAP requests, never read a reply: each dump is ~3 kB on q3dm7,
+    # so a few dozen unanswered ones fill the UDS buffer and the engine's
+    # next send() hits SO_SNDTIMEO -> bc_sendall -1 -> bc_send_msg -1 ->
+    # conn_broke -> handler break + close.
+    path = bc.sockpath
+    sent = 0
+    closed = False
+    t0 = time.time()
+    while time.time() - t0 < 25.0:
+        try:
+            _send_frame(bc.sock, OP_SNAP, b"")
+            sent += 1
+        except OSError as e:
+            log(f"T9: send failed after {sent} requests: {e}")
+            closed = True             # engine already closed the socket
+            break
+        if sent % 25 == 0:            # peek: did the engine close the connection?
+            try:
+                data = bc.sock.recv(1, socket.MSG_PEEK)
+            except OSError:
+                data = b""
+            if data == b"":           # EOF
+                closed = True
+                break
+        time.sleep(0.02)
+    if not closed:
+        try:                          # final check after the flood window
+            bc.sock.settimeout(3.0)
+            closed = bc.sock.recv(1) == b""
+        except OSError:
+            closed = True
+    try:
+        bc.close()
+    except Exception:
+        pass
+    if not closed:
+        return result(name, False,
+                      f"engine kept the broken stream open ({sent} SNAP requests, "
+                      "no close -- dropped replies would desync the sidecar)")
+
+    log(f"T9: engine closed the connection after {sent} unanswered SNAP requests")
+    time.sleep(2.0)                   # Botctl_Frame drops the orphaned clients
+
+    # the server must still be fully responsive on UDP (point 8's symptom was
+    # a stalled handler; here the whole connection is gone -- rcon must work)
+    resp = rcon(args, "status", timeout=5.0)
+    rcon_ok = bool(resp.strip())
+
+    try:
+        bc2 = Botctl(path)
+        bc2.ping()
+    except Exception as e:
+        return result(name, False, f"engine stopped listening: {e}")
+    try:
+        lst_empty = not bc2.list()
+        gone = bc2.snap().player(slot) is None
+        n = bc2.add(args.botname + "-after", args.team or "red")
+        readd = n >= 0 and wait_for_connect(bc2, n, 20.0)
+        if readd:
+            bc2.remove(n)
+    finally:
+        bc2.close()
+
+    ok = rcon_ok and lst_empty and gone and readd
+    return result(name, ok,
+                  f"requests_flooded={sent} engine_closed_conn=True "
+                  f"rcon_answered={rcon_ok} list_empty={lst_empty} "
+                  f"player_gone={gone} readd_after_reconnect={readd}")
+
+
 SCENARIOS = {
     "t1": t1, "t2": t2, "t3": t3, "t4": t4, "t5": t5, "t5b": t5b,
-    "t5c": t5c, "t6": t6, "t7": t7, "t8": t8,
+    "t5c": t5c, "t6": t6, "t7": t7, "t8": t8, "t9": t9,
 }
 
 
