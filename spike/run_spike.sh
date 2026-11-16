@@ -81,7 +81,7 @@ mkdir -p "$SPIKE_HOME/osp"
 # level.time + 1000*g_warmup - 1000).
 WARMUP=30
 [ "$SCEN" = "t5" ] && WARMUP=10
-# t7 needs the botlib game side (rcon "addbot dwcbot1 red" after the kick):
+# t7 needs the botlib game side (rcon "addbot dwcbot1 5 red" after the kick):
 # bot_enable 1 + the dwc botfiles pk3 (scripts/bots.txt + botfiles/bots/*_c.c)
 # deployed into the HOME gamedir -- it outranks the install pk3s.
 BOT_ENABLE=0
@@ -231,11 +231,14 @@ if [ "$SCEN" = "t7" ]; then
 fi
 if [ "$SCEN" = "t5b" ]; then
   # TDM rotation (killBots=qfalse): managed clients are reconnected, NOT
-  # dropped -> the rcon must have run and NO management-cleared line allowed
-  if grep -q 'map ospdm6' "$LOG" 2>/dev/null && ! grep -q 'management cleared' "$LOG" 2>/dev/null; then
+  # dropped. NOTE: the rcon redirect swallows the map-change console output
+  # (it is returned to the rcon client), so 'map ospdm6' never appears in
+  # the log -- the rotation itself is proven by the sidecar's restart_id
+  # check; the log only has to show NO wrongful management clearing.
+  if ! grep -q 'management cleared' "$LOG" 2>/dev/null; then
     echo "RESULT t5b-log: PASS rotation kept management intact" | tee -a "$SCLOG"
   else
-    echo "RESULT t5b-log: FAIL rcon missing or management wrongly cleared" | tee -a "$SCLOG"
+    echo "RESULT t5b-log: FAIL management wrongly cleared during rotation" | tee -a "$SCLOG"
     RC=1
   fi
 fi
@@ -248,11 +251,14 @@ if [ "$SCEN" = "t8" ]; then
   fi
 fi
 if [ "$SCEN" = "t5c" ]; then
-  if grep -q 'Server Shutdown (killserver)' "$LOG" 2>/dev/null \
-     && grep -q 'management cleared' "$LOG" 2>/dev/null; then
-    echo "RESULT t5c-log: PASS shutdown stopped the channel and cleared management" | tee -a "$SCLOG"
+  # 'Server Shutdown (killserver)' itself is NOT log-verifiable: it is printed
+  # inside the rcon redirect (returned to the rcon client -- the sidecar
+  # asserts it from the RCON answer). The queued 'management cleared' line IS
+  # drained by Botctl_Frame after the restart and lands in the log.
+  if grep -q 'management cleared' "$LOG" 2>/dev/null; then
+    echo "RESULT t5c-log: PASS shutdown cleared management" | tee -a "$SCLOG"
   else
-    echo "RESULT t5c-log: FAIL missing shutdown/management-cleared lines" | tee -a "$SCLOG"
+    echo "RESULT t5c-log: FAIL missing management-cleared line" | tee -a "$SCLOG"
     RC=1
   fi
 fi

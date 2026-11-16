@@ -10,13 +10,14 @@ Usage:
 Scenarios (each prints a PASS/FAIL line and exits 0/1):
   t1  slot lifecycle: add -> appears in LIST + SNAP (spawns, gets a team in
       TDM) -> remove -> slot freed. (scoreboard/kick covered via server log)
-  t2  scripted movement: hold forward; the peak 0.5 s window rate must hit
-      run speed (~320 u/s) straight along the commanded yaw (boxed spawns
+  t2  scripted movement: hold forward; the best STRAIGHT ~0.5 s window rate
+      must hit run speed (~320 u/s) along the commanded yaw (boxed spawns
       are rerolled via re-ADD, so the map geometry cannot skew it).
   t3  substeps: two runs (1 cmd/frame vs 4 cmds/frame, same total input
       time), peak-window rates must match (physics is substep-driven).
   t4  world state: verify items are present in the entity dump; walk into
-      the nearest health item and verify it disappears AND health rises.
+      a reachable item (up to 5 candidates, stuck-aware brain_toward) and
+      verify it vanishes under the bot; firing via MG ammo decrement.
   t5  warmup: bot must be ready-able via TEXT "ready"; the driver checks
       the server log for the match-start line (see run_spike.sh).
   t5b real map rotation (rcon map ospdm6; TDM killBots=qfalse): managed
@@ -166,9 +167,16 @@ def choose_clear_yaw(bc: Botctl, slot: int, hz: float, verbose: bool = False):
             continue
         start = p0["origin"]
         t0 = time.time()
+        t_next = t0
         while time.time() - t0 < 0.35:
             bc.cmd(slot, 127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
-            time.sleep(1.0 / hz)
+            # absolute-deadline pacing: plain sleep(1/hz) overshoots
+            # (scheduler + UDS latency) and starves the engine queue -> an
+            # idle cmd frame (bot stands a beat). 2026-11-16 T3: sub1 peaks
+            # landed at 267-272 u/s this way, ratio skewed to 0.83-0.84.
+            t_next += 1.0 / hz
+            if t_next > time.time():
+                time.sleep(t_next - time.time())
         p1 = bc.snap().player(slot)
         if not p1:
             continue
@@ -184,22 +192,28 @@ def choose_clear_yaw(bc: Botctl, slot: int, hz: float, verbose: bool = False):
 def hold_and_measure(bc: Botctl, slot: int, yaw: float, hz: float,
                      hold: float = 2.0, win: float = 0.5):
     """Hold fwd=127 along `yaw` for `hold` s, sampling the origin at hz, and
-    return the PEAK (rate, dir_dot, distance, window_len) over any ~win-
-    second window. A fixed-window average measures the spawn geometry (a
-    wall 130-165 u ahead truncates it); the peak window measures the input
-    channel: in an unobstructed stretch the bot runs at ~320 u/s, so
-    peak >= 260 + dot >= 0.99 proves full-rate straight movement regardless
-    of where the (random) team spawn happens to face."""
+    return the best (rate, dir_dot, distance, window_len) over windows of
+    ~win seconds that are STRAIGHT (direction dot >= 0.95): the claim to
+    prove is "there is a full-rate straight run along the commanded yaw".
+    A fixed-window average measures the spawn geometry (a wall 130-165 u
+    ahead truncates it); a curving window measures wall-following, not the
+    channel (2026-11-16 sub4: rate 301.9 with dot 0.559 -- the bot rounded a
+    corner at speed). If no straight window exists, the overall fastest
+    window is returned so the FAIL detail shows what actually happened."""
     samples = []
     t0 = time.time()
+    t_next = t0
     while time.time() - t0 < hold:
         bc.cmd(slot, 127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
         p = bc.snap().player(slot)
         if p:
             samples.append((time.time() - t0, p["origin"][0], p["origin"][1]))
-        time.sleep(1.0 / hz)
+        t_next += 1.0 / hz
+        if t_next > time.time():          # deadline pacing, see choose_clear_yaw
+            time.sleep(t_next - time.time())
     fx, fy = fwd_right_from_yaw(yaw)[0]
-    best = (0.0, 0.0, 0.0, 0.0)
+    best = (0.0, 0.0, 0.0, 0.0)           # fastest overall (fallback detail)
+    best_straight = (0.0, 0.0, 0.0, 0.0)
     for i in range(len(samples)):
         ti, xi, yi = samples[i]
         for j in range(i + 1, len(samples)):
@@ -212,17 +226,22 @@ def hold_and_measure(bc: Botctl, slot: int, yaw: float, hz: float,
             rate = d / dt
             if rate > best[0]:
                 best = (rate, (dx * fx + dy * fy) / max(d, 1e-6), d, dt)
-    return best
+            dot = (dx * fx + dy * fy) / max(d, 1e-6)
+            if dot >= 0.95 and rate > best_straight[0]:
+                best_straight = (rate, dot, d, dt)
+    return best_straight if best_straight[0] > 0 else best
 
 
 def spawn_drivable(bc: Botctl, args, suffix: str, verbose: bool = False,
-                   gate: float = 200.0, max_spawns: int = 3):
+                   gate: float = 260.0, max_spawns: int = 4):
     """ADD + connect + team join + probe; returns (slot, yaw, probe_rate).
     If every cardinal probe stays below `gate` u/s the spawn is boxed in:
     REMOVE + re-ADD rerolls the team spawn point (random pick) and probes
     again, up to max_spawns tries. Always returns the last live slot (even
     a boxed spawn still has a peak window before the wall) -- except when
-    ADD/connect/join itself failed, then slot is -1."""
+    ADD/connect/join itself failed, then slot is -1. Gate 260 (probe ~ peak
+    correlation, 2026-11-16: probe-gated spawns give peak >= ~280 u/s; a
+    200-gate spawn measured peak 271.9 and skewed the T3 ratio to 0.84)."""
     slot, yaw, rate = -1, 0.0, -1.0
     for attempt in range(1, max_spawns + 1):
         slot = bc.add(args.botname + suffix, args.team)
@@ -271,13 +290,21 @@ def brain_hold(bc: Botctl, slot: int, dur: float, hz: float,
 
 def brain_toward(bc: Botctl, slot: int, target_xy, hz: float, max_time: float,
                  yaw_step=0.0, verbose=False):
-    """Steer toward a 2-D point. Returns (reached: bool, start, end)."""
+    """Steer toward a 2-D point. Returns (reached: bool, start, end).
+    Stuck handling (2026-11-16 T4): if less than 24 u of 2-D progress in 2 s
+    of walking, back up for 0.6 s and retry; after 3 stuck events give up on
+    this target (railing/ledge above the spawn -- some q3dm7 items are not
+    walk-reachable from a random spawn at all)."""
     snap = bc.snap()
     p0 = snap.player(slot)
     start = p0["origin"]
     yaw = p0["viewangles"][1]
     t0 = time.time()
     last = start
+    t_next = t0
+    stuck = 0
+    anchor_t, anchor_pos = t0, start
+    unstick_until = 0.0
     while time.time() - t0 < max_time:
         snap = bc.snap()
         p = snap.player(slot)
@@ -286,18 +313,34 @@ def brain_toward(bc: Botctl, slot: int, target_xy, hz: float, max_time: float,
             continue
         ox, oy, oz = p["origin"]
         yaw = p["viewangles"][1]
-        fx, fy = norm2d(target_xy[0] - ox, target_xy[1] - oy)
-        # project the world target direction onto the view's fwd/right
-        (fdx, fdy), (rdx, rdy) = fwd_right_from_yaw(yaw)
-        fwd = fx * fdx + fy * fdy
-        right = fx * rdx + fy * rdy
-        fwd_i = int(max(-127, min(127, round(fwd * 127))))
-        right_i = int(max(-127, min(127, round(right * 127))))
-        bc.cmd(slot, fwd_i, right_i, 0, 0, WP_MACHINEGUN, 0.0, yaw + yaw_step)
+        now = time.time()
+        if unstick_until > now:
+            # walk straight away from the target for a moment
+            bc.cmd(slot, -127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
+        else:
+            fx, fy = norm2d(target_xy[0] - ox, target_xy[1] - oy)
+            # project the world target direction onto the view's fwd/right
+            (fdx, fdy), (rdx, rdy) = fwd_right_from_yaw(yaw)
+            fwd = fx * fdx + fy * fdy
+            right = fx * rdx + fy * rdy
+            fwd_i = int(max(-127, min(127, round(fwd * 127))))
+            right_i = int(max(-127, min(127, round(right * 127))))
+            bc.cmd(slot, fwd_i, right_i, 0, 0, WP_MACHINEGUN, 0.0, yaw + yaw_step)
+            if now - anchor_t >= 2.0:
+                if dist2d((ox, oy), anchor_pos) < 24.0:
+                    stuck += 1
+                    log(f"brain_toward stuck event {stuck} at ({ox:.0f},{oy:.0f})",
+                        verbose_only=True, verbose=verbose)
+                    if stuck >= 3:
+                        return False, start, last
+                    unstick_until = now + 0.6
+                anchor_t, anchor_pos = now, (ox, oy)
         last = p["origin"]
         if dist2d((ox, oy), target_xy) < 24.0:
             return True, start, last
-        time.sleep(1.0 / hz)
+        t_next += 1.0 / hz
+        if t_next > time.time():          # deadline pacing, see choose_clear_yaw
+            time.sleep(t_next - time.time())
     return False, start, last
 
 
@@ -353,8 +396,8 @@ def t1(bc: Botctl, args) -> int:
 
 
 def t2(bc: Botctl, args) -> int:
-    """T2: scripted movement. Hold fwd=127 at full rate and measure the PEAK
-    0.5 s window (hold_and_measure): the channel must produce straight
+    """T2: scripted movement. Hold fwd=127 at full rate; hold_and_measure scores
+    the best straight ~0.5 s window: the channel must produce straight
     run-speed movement (~320 u/s) no matter where the random team spawn
     faces. Boxed-in spawns are rerolled via re-ADD (spawn_drivable)."""
     name = "T2 movement"
@@ -373,15 +416,22 @@ def t2(bc: Botctl, args) -> int:
 
 def t3(bc: Botctl, args) -> int:
     """T3: substeps. Stage 1 vs 4 identical fwd cmds per engine frame (sidecar
-    at 20 vs 80 Hz) and compare the peak-window rates (hold_and_measure).
+    at 24 vs 96 Hz) and compare the straight-window rates (hold_and_measure).
     Multi-cmd replay that drops or clumps inputs shows up as a rate spread;
     both must reach full run speed along the commanded direction."""
+    name = "T3 substeps"
 
     def run(substeps: int):
+        # stage at 24 Hz * substeps (slightly over the 20 fps engine): with a
+        # plain 20 Hz cadence every scheduler/UDS overshoot starves the staged
+        # queue -> Botctl_RunClient injects its idle cmd for that frame (bot
+        # stands a beat) -- that skewed sub1 peaks to 267-272 u/s on
+        # 2026-11-16. The queue absorbs the surplus (identical cmds, no
+        # physics difference); the 4x factor between stages is preserved.
         slot, yaw, probe = spawn_drivable(bc, args, "", verbose=args.verbose)
         if slot < 0:
             return None
-        rate, dot, dist, dt = hold_and_measure(bc, slot, yaw, 20.0 * substeps)
+        rate, dot, dist, dt = hold_and_measure(bc, slot, yaw, 24.0 * substeps)
         bc.remove(slot)
         time.sleep(2.0)  # let the slot free + world settle between runs
         return rate, dot, dist, dt, probe
@@ -422,18 +472,62 @@ def t4(bc: Botctl, args) -> int:
         bc.remove(slot)
         return result(name, False, "no ET_ITEM entities in dump")
 
-    # 2) walk into the nearest item: it must vanish AND health should rise
+    # 2) walk into an item and watch it vanish under the bot. The nearest
+    #    item is not always walk-reachable from a random spawn (ledge/railing,
+    #    2026-11-16 runs), so walk attempts cycle through up to 5 reachable-
+    #    distance candidates (2-D distance + height penalty), each with a
+    #    stuck-aware brain_toward. Pickup (not a health rise) is the signal:
+    #    the item may be armor, and DoT near the q3dm7 red spawn can lower
+    #    health regardless.
     p = snap.player(slot)
-    nearest = min(items0, key=lambda e: dist2d(p["origin"][:2], e["origin"][:2]))
-    d0 = dist2d(p["origin"][:2], nearest["origin"][:2])
+    if not p:
+        bc.remove(slot)
+        return result(name, False, "no player after item dump")
     h0 = p["health"]
-    reached, start, end = brain_toward(bc, slot, (nearest["origin"][0], nearest["origin"][1]),
-                                       args.hz, 25.0, verbose=args.verbose)
+    reached = pickup_ok = False
+    target = None
+    d0 = -1.0
+    tried = set()
+    for cand_no in range(5):
+        snap = bc.snap()
+        p = snap.player(slot)
+        if not p:
+            break
+        po = p["origin"]
+        # rank by walking distance with a penalty for height difference
+        # (a hard +/-48 z filter hid the reachable ground items behind the
+        # ledge items on 2026-11-16: last candidate was 574 u away)
+        cand = [e for e in snap.items() if dist2d(po[:2], e["origin"][:2]) <= 420.0]
+        cand.sort(key=lambda e: dist2d(po[:2], e["origin"][:2])
+                  + 1.5 * abs(e["origin"][2] - po[2]))
+        nearest = None
+        for e in cand:
+            key = (round(e["origin"][0]), round(e["origin"][1]))
+            if key not in tried:
+                nearest = e
+                break
+        if nearest is None:
+            break
+        tried.add((round(nearest["origin"][0]), round(nearest["origin"][1])))
+        target = nearest
+        d0 = dist2d(po[:2], nearest["origin"][:2])
+        reached, start, end = brain_toward(bc, slot,
+                                           (nearest["origin"][0], nearest["origin"][1]),
+                                           args.hz, 30.0, verbose=args.verbose)
+        if not reached:
+            continue
+        snap = bc.snap()
+        still_there = any(dist2d(e["origin"][:2], nearest["origin"][:2]) < 8.0
+                          for e in snap.items())
+        if not still_there:
+            pickup_ok = True
+            break
+
     snap = bc.snap()
     p1 = snap.player(slot)
     h1 = p1["health"] if p1 else 0
-    still_there = any(dist2d(e["origin"][:2], nearest["origin"][:2]) < 8.0
-                      for e in snap.items())
+    still_there = target is not None and any(
+        dist2d(e["origin"][:2], target["origin"][:2]) < 8.0 for e in snap.items())
 
     # 3) firing: the spawn weapon is the hitscan MACHINEGUN (this OSP build
     #    has no blaster; slot 1 is the GAUNTLET, which only fires on a
@@ -468,13 +562,13 @@ def t4(bc: Botctl, args) -> int:
     missiles_seen = len(bc.snap().missiles())
 
     bc.remove(slot)
-    # pickup: the item vanishing under us is the robust signal. Do NOT require
-    # a health rise -- the nearest item may not be a health pack, and a
-    # -1 hp/s damage-over-time runs near the q3dm7 red spawn.
-    pickup_ok = (not still_there) or (h1 > h0)
+    # pickup verdict was computed in the walk loop (item vanished under the
+    # bot on one of the attempts); h0->h1 stays in the detail only -- the
+    # item may be armor, and DoT near the q3dm7 red spawn lowers health
+    # regardless.
     ok = reached and pickup_ok and fired
-    detail = (f"items0={len(items0)} dist={d0:.0f} reached={reached} "
-              f"health {h0}->{h1} item_gone={not still_there} "
+    detail = (f"items0={len(items0)} tries={len(tried)} dist={d0:.0f} "
+              f"reached={reached} health {h0}->{h1} item_gone={not still_there} "
               f"fire_ok={fired} (MG ammo {ammo0}->{ammo1} "
               f"firing_state_seen={saw_firing_state}) missiles_now={missiles_seen}")
     return result(name, ok, detail)
@@ -678,7 +772,7 @@ def t5b(bc: Botctl, args) -> int:
     time.sleep(2.0)  # let the reconnect + first frames settle
 
     # management must be INTACT: both slots still managed, same client nums
-    slots = {c["client"] for c in bc.list()}
+    slots = {c[0] for c in bc.list()}   # botctl list() -> tuples (client, name, team)
     still_managed = red in slots and blue in slots
 
     # both must have a live player state on the new map
@@ -732,7 +826,11 @@ def t5c(bc: Botctl, args) -> int:
 
     path = bc.sockpath
     r_out = rcon(args, "killserver")
-    log(f"RCON 'killserver' -> {r_out.strip()[:60]!r}")
+    log(f"RCON 'killserver' -> {r_out.strip()[:80]!r}")
+    # NOTE: the rcon redirect swallows the server's console output while the
+    # command runs (common.c Com_Printf -> rd_buffer only), so the shutdown
+    # line shows up HERE, not in the server log.
+    shutdown_seen = "Server Shutdown (killserver)" in r_out
     time.sleep(1.5)                       # SV_Shutdown + Botctl_Shutdown teardown
     sock_gone = not os.path.exists(path)
 
@@ -768,9 +866,10 @@ def t5c(bc: Botctl, args) -> int:
     finally:
         bc2.close()
 
-    ok = sock_gone and list_empty and readd and joined
+    ok = sock_gone and shutdown_seen and list_empty and readd and joined
     return result(name, ok,
-                  f"socket_gone={sock_gone} socket_recreated=True "
+                  f"socket_gone={sock_gone} shutdown_line={shutdown_seen} "
+                  f"socket_recreated=True "
                   f"list_empty={list_empty} readd_slot={n if readd else '-'} "
                   f"connect+team={joined}")
 
@@ -778,7 +877,7 @@ def t5c(bc: Botctl, args) -> int:
 def t7(bc: Botctl, args) -> int:
     """T7 (as requested in the PR review): admin kick of a managed client
     (rcon 'clientkick <slot>'), then a STOCK bot joins that slot
-    (rcon 'addbot dwcbot1 4 red'). The drop goes through SV_DropClient, which
+    (rcon 'addbot dwcbot1 5 red'). The drop goes through SV_DropClient, which
     is NOT a botctl path: without the Botctl_ClientDropped hook the slot
     would keep a phantom 'managed' flag (auto-ACK + injected usercmds for
     the next occupant). Proof: LIST empties on its own, the addbot bot
@@ -801,20 +900,33 @@ def t7(bc: Botctl, args) -> int:
 
     cleared = wait_list_empty(bc, 5.0)
 
-    # OSP usage: addbot <botname> [skill 1-5] [team] -> team is ARG 3
-    # (g_bot.c Svcmd_AddBot_f); skill 4 = OSP's default.
-    rcon(args, "addbot dwcbot1 4 red")
+    # OSP usage: addbot <botname> [skill 1-5] [team] [msec delay] [altname]
+    # (g_bot.c Svcmd_AddBot_f). Skill 5 on purpose: the dwc botfiles are
+    # production-tuned and define ONLY a "skill 5" personality block
+    # (botfiles/bots/dwcbot1_c.c) -- skill 4 makes botlib fall back to the
+    # default personality and abort ("couldn't find skill 4 in
+    # bots/dwcbot1_c.c", verified 2026-11-16 via the rcon answer).
+    r_out = rcon(args, "addbot dwcbot1 5 red")
+    # every G_AddBot failure text ("Bot not defined", "All player slots in
+    # use", "BotConnectfailed") is printed INSIDE the rcon redirect -> it
+    # only shows up here, never in the server log. Log it.
+    log(f"RCON 'addbot dwcbot1 5 red' -> {r_out.strip()[:400]!r}")
     occupied = False
     t0 = time.time()
     # bot_memory 0 -> the addbot path COMPILES the dwcbot1 character files
     # on the server thread before the client slot is taken; allow plenty of
-    # time before judging the slot reused.
-    while time.time() - t0 < 30.0 and not occupied:
+    # time before judging the slot reused (warmup countdown runs in
+    # parallel, g_warmup 30).
+    while time.time() - t0 < 45.0 and not occupied:
         occupied = bc.snap().player(slot) is not None
         if not occupied:
             time.sleep(0.5)
     if occupied:
         time.sleep(2.0)          # let the bot finish connect + team join
+    else:
+        # name dump: snapshots carry no names, rcon 'status' does
+        st = rcon(args, "status", timeout=4.0)
+        log(f"RCON 'status' -> {st.strip()[:400]!r}")
     still_cleared = not bc.list()
 
     ok = cleared and occupied and still_cleared
