@@ -10,10 +10,11 @@ Usage:
 Scenarios (each prints a PASS/FAIL line and exits 0/1):
   t1  slot lifecycle: add -> appears in LIST + SNAP (spawns, gets a team in
       TDM) -> remove -> slot freed. (scoreboard/kick covered via server log)
-  t2  scripted movement: hold forward for N seconds, verify the snapshot
-      origin moves in the commanded direction by a plausible distance.
+  t2  scripted movement: hold forward; the peak 0.5 s window rate must hit
+      run speed (~320 u/s) straight along the commanded yaw (boxed spawns
+      are rerolled via re-ADD, so the map geometry cannot skew it).
   t3  substeps: two runs (1 cmd/frame vs 4 cmds/frame, same total input
-      time), verify total displacement is close (physics is substep-driven).
+      time), peak-window rates must match (physics is substep-driven).
   t4  world state: verify items are present in the entity dump; walk into
       the nearest health item and verify it disappears AND health rises.
   t5  warmup: bot must be ready-able via TEXT "ready"; the driver checks
@@ -69,23 +70,27 @@ def log(msg: str, verbose_only: bool = False, verbose: bool = False):
 
 
 def rcon(args, command: str, timeout: float = 3.0) -> str:
-    """One RCON command over UDP. q3e handles rcon CONNECTIONLESS:
-    '\\xff\\xffrcon <pass> <cmd>\\0', replies come back as one or more
-    '\\xff\\xffprint\\n<text>' packets (sv_main.c SVC_RemoteCommand +
-    SV_FlushRedirect). Keep rcon calls per scenario few:
-    SVC_RateLimitAddress rate-limits them."""
+    """One RCON command over UDP. q3e handles rcon CONNECTIONLESS: the
+    marker is FOUR 0xff bytes (SV_PacketEvent tests *(int32_t*)msg->data
+    == -1; a 2-byte marker is silently dropped), then 'rcon <pass> <cmd>\\0'.
+    Replies come back the same way: NET_OutOfBandPrint also prepends four
+    0xff bytes, so a reply packet is '\\xff\\xff\\xff\\xffprint\\n<text>'
+    (sv_main.c SVC_RemoteCommand + SV_FlushRedirect). Keep rcon calls per
+    scenario few: SVC_RateLimitAddress rate-limits them."""
     import socket as _socket
     s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
     s.settimeout(timeout)
     s.bind(("127.0.0.1", 0))
-    payload = b"\xff\xffrcon " + args.rconpass.encode() + b" " + command.encode() + b"\x00"
+    payload = (b"\xff\xff\xff\xffrcon " + args.rconpass.encode()
+               + b" " + command.encode() + b"\x00")
     s.sendto(payload, (args.rconhost, args.port))
     chunks = []
     try:
         while True:
             data, _ = s.recvfrom(4096)
-            if data.startswith(b"\xff\xffprint"):
-                chunks.append(data[len(b"\xff\xffprint"):].decode(errors="replace").lstrip("\n"))
+            body = data.lstrip(b"\xff")          # the marker is 4x 0xff
+            if body.startswith(b"print"):
+                chunks.append(body[len(b"print"):].decode(errors="replace").lstrip("\n"))
             else:
                 break
     except _socket.timeout:
@@ -151,8 +156,9 @@ def fwd_right_from_yaw(yaw_deg: float):
 def choose_clear_yaw(bc: Botctl, slot: int, hz: float, verbose: bool = False):
     """Spawn facing on q3dm7 is random -- a full-speed hold may walk straight
     into a wall (spawn luck, not a channel bug; this bit us on 2026-11-16:
-    T2 dot=1.000 but 49 u/s). Probe 0.35 s of forward walking in the four
-    cardinal world-yaw directions and return the clearest one."""
+    rate 49-165 u/s on 1 s averages even along the probed best yaw). Probe
+    0.35 s of forward walking in the four cardinal world-yaw directions and
+    return the clearest one; spawn_drivable() uses the rate as a gate."""
     best_yaw, best_rate = 0.0, -1.0
     for yaw in (0.0, 90.0, 180.0, 270.0):
         p0 = bc.snap().player(slot)
@@ -173,6 +179,68 @@ def choose_clear_yaw(bc: Botctl, slot: int, hz: float, verbose: bool = False):
             best_rate, best_yaw = rate, yaw
         time.sleep(0.2)
     return best_yaw, best_rate
+
+
+def hold_and_measure(bc: Botctl, slot: int, yaw: float, hz: float,
+                     hold: float = 2.0, win: float = 0.5):
+    """Hold fwd=127 along `yaw` for `hold` s, sampling the origin at hz, and
+    return the PEAK (rate, dir_dot, distance, window_len) over any ~win-
+    second window. A fixed-window average measures the spawn geometry (a
+    wall 130-165 u ahead truncates it); the peak window measures the input
+    channel: in an unobstructed stretch the bot runs at ~320 u/s, so
+    peak >= 260 + dot >= 0.99 proves full-rate straight movement regardless
+    of where the (random) team spawn happens to face."""
+    samples = []
+    t0 = time.time()
+    while time.time() - t0 < hold:
+        bc.cmd(slot, 127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
+        p = bc.snap().player(slot)
+        if p:
+            samples.append((time.time() - t0, p["origin"][0], p["origin"][1]))
+        time.sleep(1.0 / hz)
+    fx, fy = fwd_right_from_yaw(yaw)[0]
+    best = (0.0, 0.0, 0.0, 0.0)
+    for i in range(len(samples)):
+        ti, xi, yi = samples[i]
+        for j in range(i + 1, len(samples)):
+            tj, xj, yj = samples[j]
+            dt = tj - ti
+            if dt < win * 0.5 or dt > win * 2.0:
+                continue
+            dx, dy = xj - xi, yj - yi
+            d = math.hypot(dx, dy)
+            rate = d / dt
+            if rate > best[0]:
+                best = (rate, (dx * fx + dy * fy) / max(d, 1e-6), d, dt)
+    return best
+
+
+def spawn_drivable(bc: Botctl, args, suffix: str, verbose: bool = False,
+                   gate: float = 200.0, max_spawns: int = 3):
+    """ADD + connect + team join + probe; returns (slot, yaw, probe_rate).
+    If every cardinal probe stays below `gate` u/s the spawn is boxed in:
+    REMOVE + re-ADD rerolls the team spawn point (random pick) and probes
+    again, up to max_spawns tries. Always returns the last live slot (even
+    a boxed spawn still has a peak window before the wall) -- except when
+    ADD/connect/join itself failed, then slot is -1."""
+    slot, yaw, rate = -1, 0.0, -1.0
+    for attempt in range(1, max_spawns + 1):
+        slot = bc.add(args.botname + suffix, args.team)
+        if slot < 0:
+            return -1, 0.0, -1.0
+        if not wait_for_connect(bc, slot, 20.0) or not join_team(bc, slot, args.team or "red"):
+            bc.remove(slot)
+            time.sleep(0.5)
+            continue
+        time.sleep(1.0)  # spawn settle (knockback + DoT)
+        yaw, rate = choose_clear_yaw(bc, slot, 20.0, verbose=verbose)
+        if rate >= gate:
+            return slot, yaw, rate
+        log(f"spawn {attempt} boxed in (best probe {rate:.0f}u/s) -> reroll",
+            verbose_only=True, verbose=verbose)
+        bc.remove(slot)
+        time.sleep(1.0)
+    return slot, yaw, rate
 
 
 def result(name: str, ok: bool, detail: str = "") -> int:
@@ -285,121 +353,51 @@ def t1(bc: Botctl, args) -> int:
 
 
 def t2(bc: Botctl, args) -> int:
+    """T2: scripted movement. Hold fwd=127 at full rate and measure the PEAK
+    0.5 s window (hold_and_measure): the channel must produce straight
+    run-speed movement (~320 u/s) no matter where the random team spawn
+    faces. Boxed-in spawns are rerolled via re-ADD (spawn_drivable)."""
     name = "T2 movement"
-    slot = bc.add(args.botname, args.team)
-    if slot < 0:
-        return result(name, False, "ADD failed")
-    if not wait_for_connect(bc, slot, 20.0):
-        bc.remove(slot)
-        return result(name, False, "no connect")
-    if not join_team(bc, slot, args.team or "red"):
-        bc.remove(slot)
-        return result(name, False, "no team join")
-    time.sleep(1.0)  # let the spawn settle (knockback + DoT)
-
-    # Hold fwd=127 for ~1.2 s but MEASURE the first ~1.0 s along the
-    # clearest of four probe directions (see choose_clear_yaw): that segment
-    # is clean run speed (~320 u/s) unless the (random) spawn faces a wall.
     hz = args.hz
-    dt = 1.0 / hz
-    HOLD, MEASURE = 1.2, 1.0
-
-    p0 = bc.snap().player(slot)
-    if not p0:
-        bc.remove(slot)
-        return result(name, False, "no player after join")
-    yaw0, probe_rate = choose_clear_yaw(bc, slot, hz, verbose=args.verbose)
-    time.sleep(0.3)
-
-    p0 = bc.snap().player(slot)
-    if not p0:
-        bc.remove(slot)
-        return result(name, False, "no player after probe")
-    start = p0["origin"]
-
-    mid, mid_t = None, 0.0
-    t0 = time.time()
-    while time.time() - t0 < HOLD:
-        bc.cmd(slot, 127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw0)
-        if mid is None and (time.time() - t0) >= MEASURE - dt:
-            mid = bc.snap().player(slot)
-            mid_t = time.time() - t0
-        time.sleep(dt)
-
-    end = bc.snap().player(slot)
+    slot, yaw, probe = spawn_drivable(bc, args, "", verbose=args.verbose)
+    if slot < 0:
+        return result(name, False, "ADD/connect/join failed")
+    rate, dot, dist, dt = hold_and_measure(bc, slot, yaw, hz)
     bc.remove(slot)
-    if not mid:
-        return result(name, False, "mid snapshot missing")
-
-    fx, fy = fwd_right_from_yaw(yaw0)[0]      # commanded direction
-    mo = mid["origin"]
-    mdx, mdy = mo[0] - start[0], mo[1] - start[1]
-    mtraveled = math.hypot(mdx, mdy)
-    mdot = (mdx * fx + mdy * fy) / max(mtraveled, 1e-6)
-    rate = mtraveled / max(mid_t, 1e-6)
-    ok = rate > 250.0 and mdot > 0.95 and mtraveled > 200.0
-    end_str = (f" end=({end['origin'][0]-start[0]:+.1f},{end['origin'][1]-start[1]:+.1f})"
-               if end else "")
+    ok = rate >= 260.0 and dot >= 0.99
     return result(name, ok,
-                  f"first{mid_t:.2f}s: rate={rate:.1f}u/s dir_dot={mdot:.3f} "
-                  f"travel={mtraveled:.1f}u ({mdx:+.1f},{mdy:+.1f}){end_str}")
+                  f"peak{dt:.2f}s: rate={rate:.1f}u/s dir_dot={dot:.3f} "
+                  f"travel={dist:.1f}u (spawn probe best={probe:.0f}u/s, "
+                  f"cmd yaw={yaw:.0f})")
 
 
 def t3(bc: Botctl, args) -> int:
-    name = "T3 substeps"
+    """T3: substeps. Stage 1 vs 4 identical fwd cmds per engine frame (sidecar
+    at 20 vs 80 Hz) and compare the peak-window rates (hold_and_measure).
+    Multi-cmd replay that drops or clumps inputs shows up as a rate spread;
+    both must reach full run speed along the commanded direction."""
 
     def run(substeps: int):
-        """Stage `substeps` identical cmds per frame (hz = 20*substeps) for
-        1.2 s and MEASURE the first 1.0 s of travel along the clearest
-        direction (see choose_clear_yaw)."""
-        slot = bc.add(args.botname, args.team)
+        slot, yaw, probe = spawn_drivable(bc, args, "", verbose=args.verbose)
         if slot < 0:
             return None
-        if not wait_for_connect(bc, slot, 20.0):
-            bc.remove(slot)
-            return None
-        if not join_team(bc, slot, args.team or "red"):
-            bc.remove(slot)
-            return None
-        time.sleep(1.0)
-        hz = 20 * substeps
-        yaw, probe_rate = choose_clear_yaw(bc, slot, 20.0)
-        dt = 1.0 / hz
-        HOLD, MEASURE = 1.2, 1.0
-        mid, mid_t = None, 0.0
-        p0 = bc.snap().player(slot)
-        if not p0:
-            bc.remove(slot)
-            return None
-        start = p0["origin"]
-        t0 = time.time()
-        while time.time() - t0 < HOLD:
-            bc.cmd(slot, 127, 0, 0, 0, WP_MACHINEGUN, 0.0, yaw)
-            if mid is None and (time.time() - t0) >= MEASURE - dt:
-                mid = bc.snap().player(slot)
-                mid_t = time.time() - t0
-            time.sleep(dt)
+        rate, dot, dist, dt = hold_and_measure(bc, slot, yaw, 20.0 * substeps)
         bc.remove(slot)
-        time.sleep(2.0)  # let the slot free + world reset between runs
-        if not mid:
-            return None
-        return mid_t, math.hypot(mid["origin"][0] - start[0],
-                                 mid["origin"][1] - start[1])
+        time.sleep(2.0)  # let the slot free + world settle between runs
+        return rate, dot, dist, dt, probe
 
     r1 = run(1)
     r4 = run(4)
     if r1 is None or r4 is None:
         return result(name, False, "run failed (spawn/add)")
-    t1, d1 = r1
-    t4, d4 = r4
-    rate1, rate4 = d1 / max(t1, 1e-6), d4 / max(t4, 1e-6)
+    rate1, dot1, dist1, dt1, probe1 = r1
+    rate4, dot4, dist4, dt4, probe4 = r4
     ratio = min(rate1, rate4) / max(rate1, rate4)
-    # both substep rates must be near clean run speed (~300 u/s in the first
-    # second); a >2.5x spread means the multi-cmd-per-frame replay path
-    # drops or clumps staged inputs.
-    ok = rate1 > 200.0 and rate4 > 200.0 and 0.4 <= ratio <= 2.5
-    detail = (f"rate(sub1)={rate1:.1f}u/s rate(sub4)={rate4:.1f}u/s "
-              f"d1={d1:.1f}u d4={d4:.1f}u ratio={ratio:.2f}")
+    ok = (rate1 >= 260.0 and rate4 >= 260.0
+          and dot1 >= 0.99 and dot4 >= 0.99
+          and 0.85 <= ratio <= 1.2)
+    detail = (f"peak rate(sub1)={rate1:.1f}u/s dot={dot1:.3f} | "
+              f"rate(sub4)={rate4:.1f}u/s dot={dot4:.3f} | ratio={ratio:.2f}")
     return result(name, ok, detail)
 
 
@@ -780,7 +778,7 @@ def t5c(bc: Botctl, args) -> int:
 def t7(bc: Botctl, args) -> int:
     """T7 (as requested in the PR review): admin kick of a managed client
     (rcon 'clientkick <slot>'), then a STOCK bot joins that slot
-    (rcon 'addbot dwcbot1 red'). The drop goes through SV_DropClient, which
+    (rcon 'addbot dwcbot1 4 red'). The drop goes through SV_DropClient, which
     is NOT a botctl path: without the Botctl_ClientDropped hook the slot
     would keep a phantom 'managed' flag (auto-ACK + injected usercmds for
     the next occupant). Proof: LIST empties on its own, the addbot bot
