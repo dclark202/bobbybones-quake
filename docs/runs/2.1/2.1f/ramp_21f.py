@@ -476,7 +476,7 @@ def main():
         MK_["held"] = float(live_now().get("OUT_G") or 0.0) if os.path.exists(os.path.join(WD, "out_mark.json")) else 0.0
         if done_n:                                           # (the dial for the current update now, not at the next one)
             v_ = write(float(done_n))
-            log("clock {} after update {} (resumed): {}".format(done_n, done_n, v_ if v_ is not None else "no mark file: nothing written"))
+            log("clock {} after update {} (resumed): {}".format(done_n, done_n, v_ if v_ is not None else "no mark in force (no file, or refused): nothing written"))
     while True:
         time.sleep(a.poll)
         L = jl(MET)
