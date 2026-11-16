@@ -1,18 +1,19 @@
-"""2.1f's live.json at the start: 2.1d's last live.json (the values 2.1d played last: its pull PULL_G and held share HELD_G as they are, AIM3
+"""2.2a's live.json at the start (made from 2.1f's): 2.1d's last live.json (the values 2.1d played last: its pull PULL_G and held share HELD_G as they are, AIM3
 at 2.0e's end values, the damage pay 0.005, DMG_TAKEN_W 0.9, the far rail 0.1, DODGE_G 1, the lock INTENT_HOLD 8 with CONTACT_FREE 1, no
 weapon habits, no firing cost, no item rule), with:
-  OUT_G 0           the outlook's term: none (ramp_21f.py opens it only once the owner's mark file watch/out_mark.json exists)
-  OUT_PICK 0        the kind that plays: "seg" (the option's value; the owner's to change; the ramp never writes it)
-  OUT_TRIAL 0       no trial trips (the owner's to set; the ramp never writes it)
+  OUT_G 0           the outlook's term: none (ramp_22a.py opens it from the owner's watch/out_mark.json, or by its automatic mark at update 60)
+  OUT_PICK 0        the kind that plays: "seg" (the ramp never writes it)
+  OUT_TRIAL 0       no trial trips at the start (ramp_22a.py: 0 -> 0.03 over updates 0 to 10)
+  OUT_SRC 0         the built outlook's term (the automatic mark or the owner's mark file may set desc's, 1)
 Every other value as 2.1d's file has it; PULL_G and HELD_G are taken as found (the ramp never writes them). Refuses (exit 1) when 2.1d's file is
 not at the values 2.1d ran with or already has a new name.
-    python docs/runs/2.1/2.1f/start_live.py <2.1d's live.json> <out live.json> [--any]
+    python docs/runs/2.2/2.2a/start_live.py <2.1d's live.json> <out live.json> [--any]
 --any (the smoke and the live test only): the values are not asserted, but the ones that must hold always (the lock, no firing cost, no
 habits, no item rule's lesson: the pull refuses it)."""
 import json
 import sys
 
-NEW = dict(OUT_G=0.0, OUT_PICK=0, OUT_TRIAL=0.0)
+NEW = dict(OUT_G=0.0, OUT_PICK=0, OUT_TRIAL=0.0, OUT_SRC=0)
 RAN_21D = (("DMG_TAKEN_W", 0.9), ("DMG_REWARD", 0.005), ("RAIL_FAR_PAY", 0.1), ("WIN_ADD", 0.33), ("INTENT_HOLD", 8.0), ("CONTACT_FREE", 1.0),
            ("COST_FIRE_W", 0.0), ("SPEED_PAY", 0.0), ("INTENT_TEACH_W", 0.0), ("HABIT_P", 0.0), ("H2_PG", 1.0), ("H2_WPG", 1.0), ("ITEM_PT_MIX", 1.0),
            ("STACK_DIFF", 0.0), ("AIM3_W", 1.0), ("AIM3_SIZE_A", 0.39), ("AIM3_SIZE_B", 0.355), ("AIM3_LEAD", 1.0), ("AIM3_RELOAD", 0.0),
@@ -39,7 +40,7 @@ def main():
     if float(d.get("ITEM_FLOOR_W", 0.0)) != 0.0:
         raise SystemExit("2.1d's live.json has ITEM_FLOOR_W {} (the floor on his item odds): not made (not in 2.1d's play)".format(d.get("ITEM_FLOOR_W")))
     d.update(NEW)
-    print("2.1f's new names at the start: {}; PULL_G ({}) and HELD_G ({}) as 2.1d's file has them; every other value as 2.1d's {} ({} names)".format(
+    print("2.2a's new names at the start: {}; PULL_G ({}) and HELD_G ({}) as 2.1d's file has them; every other value as 2.1d's {} ({} names)".format(
         json.dumps(NEW), d["PULL_G"], d["HELD_G"], "file (not checked: --any)" if any_ else "file", len(d)))
     json.dump(d, open(args[1], "w", encoding="utf-8"), indent=1)
     print("written: " + args[1])
