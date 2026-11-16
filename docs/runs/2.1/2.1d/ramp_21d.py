@@ -71,6 +71,25 @@ def dial_at(clock, lo, hi, v0, v1, pre):
     return v1 if clock >= hi else (pre if clock < lo else v0 + (v1 - v0) * (clock - lo) / float(hi - lo))
 
 
+def kinds_line(ch_, u_):
+    """(b22r) the kinds of his changes mid-trip in plain words (rec plan.changes; sim/change_kinds.py): no flag, no threshold"""
+    if ch_.get("kinds_off"):
+        return "update {}: his changes mid-trip: the kinds' readouts are off (failed in the trainer; a readout only)".format(u_)
+    nk_ = ch_.get("news_kind") or {}
+    bg_ = ch_.get("back_gap") or {}
+    return ("update {}: his changes mid-trip (of {} judged): after news and stuck {} ({}), after news and back {} ({}), quiet and stuck {} ({}), "
+            "quiet and back {} ({}) | news is present at {} of readings ({}), at {} of changes (lift {}); contact {} / {}, a sound {} / {}, "
+            "a hit unseen {} / {} | of the backs, {} returned to the plan's top goal; away {} readings (median; mean {}, {} backs) | of those "
+            "that stuck, {} went to the plan's top goal (plan: {}) | a held seat-minute: {} after news, {} quiet | {} changes off a keep "
+            "reading").format(
+        u_, ch_.get("n_2s"), ch_.get("news_stuck"), ch_.get("news_stuck_n"), ch_.get("news_back"), ch_.get("news_back_n"),
+        ch_.get("quiet_stuck"), ch_.get("quiet_stuck_n"), ch_.get("quiet_back"), ch_.get("quiet_back_n"), ch_.get("news_base"), ch_.get("base_n"),
+        ch_.get("news_at_change"), ch_.get("news_lift"),
+        *[x_ for k_ in ("contact", "sound", "hit_unseen") for x_ in ((nk_.get(k_) or {}).get("base"), (nk_.get(k_) or {}).get("at_change"))],
+        ch_.get("back_to_plan"), bg_.get("median"), bg_.get("mean"), bg_.get("n"), ch_.get("stuck_to_plan"), ch_.get("plan_src"),
+        ch_.get("news_min"), ch_.get("quiet_min"), ch_.get("off_reading_n"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run")
@@ -165,6 +184,8 @@ def main():
                                                                       ch_.get("news"), ch_.get("against_plan")))
             log("update {}: flicker: share of his mid-trip changes he took back within 2 seconds {} (of {} changes)".format(
                 u_, ch_.get("back_2s"), ch_.get("n_2s")))
+            if "news_back" in ch_ or ch_.get("kinds_off"):       # (b22r) the kinds of his changes: plain numbers, no flag
+                log(kinds_line(ch_, u_))
         elif u_ and hd_:
             log("MAJOR PROBLEM update {}: no plan record in the metrics (the run has no --plan 1, or the plan's readouts failed)".format(u_))
         pu_ = m_.get("pull")                                 # (2.1d) the pull as played
