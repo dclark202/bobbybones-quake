@@ -1,7 +1,7 @@
 # Phase 0 — Spike Engine: external per-frame control of Quake3e bot client slots
 
 **Status: V2 rework done (Quake3e PR #13, issue #12); full green spike run
-T1–T8 on the V2 engine (2026-11-16) — GO for Phase 1.** See `QUAKE3E_ISSUE.md`
+T1–T9 on the V2 engine (2026-11-16) — GO for Phase 1.** See `QUAKE3E_ISSUE.md`
 for the issue/PR text.
 
 ## Objective
@@ -19,8 +19,8 @@ per-frame external driving doesn't work, the port needs a different architecture
 ## Design (V2 = review rework, branch `botctl-spike`)
 
 - **Engine patch** (Quake3e, off `dwc` tip `8fa5549e`; commit stack
-  `7d3932ce` (v1) → `21a35999` (build gating) → `a7dae3fc` (review fixes);
-  6 files):
+  `7d3932ce` (v1) → `21a35999` (build gating) → `a7dae3fc` (review fixes)
+  → `ef9820ab`/`dbed1dd8`/`054019ce` (review round 2); 6 files):
   - **Gating**: Makefile `USE_BOTCTL = 0` by default; only a non-mingw
     dedicated build with `USE_BOTCTL=1` compiles `-DUSE_BOTCTL`, links
     `ded/botctl.o` and `-lpthread`. `server.h` declares the hooks only under
@@ -52,34 +52,41 @@ per-frame external driving doesn't work, the port needs a different architecture
     packetless managed clients (mirrors `SV_BotGetConsoleMessage` for engine
     bots; without it: "Server command overflow" drop in ~1 min, `sv_timeout`
     after 200 s).
+  - Reply-send semantics (review round 2): every reply send checks its
+    result; a failure (`SO_SNDTIMEO` timeout or gone socket — the peer
+    stopped consuming) closes the connection instead of continuing with
+    silently dropped replies on a stream that can no longer be framed
+    correctly. A failed send then uses the SAME path as a sidecar crash
+    (`s_sidecar_lost` → managed clients dropped). Covered by T9.
 - **Protocol**: snapshot = `u32 time, u32 restart_id, u16 np, u16 ne` +
   player blobs (132 B: client, origin[3], health, armor, weapon, weaponstate,
   team, score, viewangles[3], delta_angles[3], pm_type, ammo[16]) + entity
   blobs (52 B, taken live from `sv.num_entities` after the game frame).
 - **Sidecar** (this repo, branch `spike-q3e-botctl`, `spike/`): stdlib-Python
-  `botctl.py` (protocol client) + `sidecar.py` (T1–T8 brains) + `run_spike.sh`
+  `botctl.py` (protocol client) + `sidecar.py` (T1–T9 brains) + `run_spike.sh`
   (driver: FIFO stdin, fresh home, TDM cvars, port 28133, TERM→KILL cleanup).
 
 ## Test matrix & results
 
 Test instance: knecht, port 28133, fresh home `~/.q3a_spike`, V2 spike engine
-(`quake3e.ded.x64` md5 `f7c8b279…`, `USE_BOTCTL=1`), stock OSP **dwc.4** QVM,
-TDM `q3dm7` (`g_gametype 3`), 20 fps, 30 s warmup.
+(`quake3e.ded.x64` md5 `c06bc7c6…`, `USE_BOTCTL=1`, review-round-2 fixes),
+stock OSP **dwc.4** QVM, TDM `q3dm7` (`g_gametype 3`), 20 fps, 30 s warmup.
 
-| # | Test | Result | Measured (final run 2026-11-16, all 10 scenarios in one session) |
-|---|------|--------|--------------------------------------------------------------------|
+| # | Test | Result | Measured (final4 run 2026-11-16, all 11 scenarios in one session) |
+|---|------|--------|----------------------------------------------------------------------|
 | T1 | slot lifecycle (add/list/connect/join/remove/freed/readd) | **PASS** | `list=True connect=True joined=True team=red remove=1 freed=True readd=0` |
-| T2 | scripted movement — best straight window over a 4-direction sweep | **PASS** | window 0.45 s: **321.5 u/s**, dot 1.000, travel 144 u, yaw 180 (spawn probe 284 u/s, spawns=1) |
-| T3 | substep replay 1 vs 4 cmds/frame | **PASS** | sub1 **321.5 u/s** (dot 1.000, yaw 0) vs sub4 **321.9 u/s** (dot 1.000, yaw 90), **ratio 1.00** |
-| T4 | world state + firing (up to 6 fresh-spawn pickup tries, stuck-aware) | **PASS** | items 53 visible; try 1: dist 244 u, reached, item vanished under the bot; MG ammo 50→37 + FIRING state seen |
-| T5 | TDM warmup → match start | **PASS** | red+blue join + `say ready`, match started after 15.4 s, alive after the in-place `map_restart` |
-| T5b | real map rotation (`rcon map ospdm6`) | **PASS** | restart_id 5982→7952, managed slots [0, 1] intact, both alive + drivable (distinctive viewangle test) |
+| T2 | scripted movement — best straight window over a 4-direction sweep | **PASS** | window 0.40 s: **321.6 u/s**, dot 1.000, travel 128 u, yaw 270 (spawn probe 282 u/s, spawns=1) |
+| T3 | substep replay 1 vs 4 cmds/frame | **PASS** | sub1 **321.9 u/s** (dot 1.000, yaw 90) vs sub4 **322.1 u/s** (dot 1.000, yaw 270), **ratio 1.00** |
+| T4 | world state + firing (up to 6 fresh-spawn pickup tries, stuck-aware) | **PASS** | items 53 visible; try 2: dist 285 u, item vanished under the bot (graze sweep); MG ammo 50→37 + FIRING state seen (health 124→110 = spawn DoT, not a criterion) |
+| T5 | TDM warmup → match start | **PASS** | red+blue join + `say ready`, match started after 15.3 s, alive after the in-place `map_restart` |
+| T5b | real map rotation (`rcon map ospdm6`) | **PASS** | restart_id 5027→7019, managed slots [0, 1] intact, both alive + drivable (distinctive viewangle test) |
 | T5c | `killserver` → `map q3dm7` restart cycle | **PASS** | socket gone + `Server Shutdown` in the rcon answer, socket recreated, LIST empty, re-ADD on slot 0 + team join |
-| T6 | 10-min random-action soak + clean SIGTERM | **PASS** | 600 s/600 s, 9,408 snapshots, 37 s dead-time (random walks fall into the q3dm7 pit → die + respawn; channel stays alive + drivable throughout) |
+| T6 | 10-min random-action soak + clean SIGTERM | **PASS** | 600 s/600 s, 10,002 snapshots, 0.0 s dead-time (this run's random walks stayed out of the pit; channel alive + drivable throughout) |
 | T7 | `clientkick <slot>` → `addbot dwcbot1 5 red` reuses the slot | **PASS** | kicked slot 0 → botctl LIST clears engine-side → addbot takes the same slot → LIST stays empty |
 | T8 | sidecar crash → engine drops + keeps listening | **PASS** | `list_empty=True player_gone=True readd_after_reconnect=True` |
+| T9 | stalled reader (review round 2): unanswered SNAP flood → send must fail → engine closes the connection | **PASS** | 132 unanswered SNAP requests flooded → engine closed the connection (no dropped-reply stream), dropped managed clients (`bot control connection lost`), rcon `status` still answered, LIST empty, re-ADD after reconnect |
 
-All 10 scenarios PASS in the final run; engine alive at every scenario end,
+All 11 scenarios PASS in the final4 run; engine alive at every scenario end,
 `SERVER_EXIT=0`.
 
 ### Measurement notes (how the gates became trustworthy)
@@ -174,13 +181,21 @@ All 10 scenarios PASS in the final run; engine alive at every scenario end,
 9. **TDM `map` does NOT kill bots** (`SV_SpawnServer(killBots=qfalse)`): botlib
    and managed clients reconnect through `SV_MapRestart_f`. The engine's 12 h
    `SV_Restart` is the shutdown/reinit path (T5c).
+10. **A failed reply send IS a broken connection** (n4cer review round 2): with
+    `SO_SNDTIMEO` set, `send()` can time out on a peer that stopped reading —
+    continuing then drops replies on a half-sent frame, desyncing the stream
+    and hanging a request/response sidecar. The handler closes the connection
+    and reuses the sidecar-crash drop path. T9 reproduces it permanently: ~130
+    unanswered ~3 kB SNAP dumps (~400 kB) fill the UDS buffers, the engine's
+    send hits the 500 ms timeout → close + managed clients dropped.
 
 ## Go / No-Go
 
 **GO.** An external process can drive a client slot per-frame on the production
 engine+QVM with stock behavior: full run speed, substeps, state reads (incl.
 items + ammo + firing), team/warmup/match flow, map rotation survival,
-kick/addbot/restart/sidecar-death lifecycle edges, and multi-minute stability.
+kick/addbot/restart/sidecar-death/stalled-reader lifecycle edges, and
+multi-minute stability.
 No engine-side limitations surfaced that would block the port.
 
 ## Next (Phase 1: sim parity)
