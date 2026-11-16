@@ -1,0 +1,31 @@
+rem ---- !aim default = the pros' mean, the twelve knobs measured on 781 pro demos (owner, 2026-10-27 evening; scratchpad
+rem      knobs/write_aim.py, the same values as data\duellive_playaim2\policy_default.npz). Called by run_duel_gru_v0_6_0.cmd;
+rem      the delays are the trainer's --react-ms 125 --acquire-ms 225 (set in the command).
+set AIM_LEVEL=3
+set PERCEPT_SPEED=0
+set PERCEPT_SPEED_MAX=
+set AIM2=1
+set AIM2_SPLIT=1
+set AIM2_FOCUS=1
+set AIM2_FLINCH=1
+set PERCEPT_SIGMA=0.9
+set PERCEPT_TAU=0.15
+set SURPRISE_MS=0
+set MOTOR_NOISE=0.10
+set MOTOR_BASE=0.05
+set AIM2_W=1
+set AIM2_SPLIT_W=1
+set AIM2_FOCUS_GAIN=0
+set AIM2_FOCUS_SIG=1.0
+set AIM2_C_SLIP=0.023
+set AIM2_S0=5
+set AIM2_CAP_SLIP=2.1
+set AIM2_C_ECC=0.06
+set AIM2_E0=0
+set AIM2_CAP_ECC=2.8
+set FLINCH_PER_DMG=0.012
+set FLINCH_MAX=0.7
+set FLINCH_TAU=0.3
+set VEL_DELAY_MS=200
+set VEL_WEBER=0.2
+set RANGE_WEBER=0.19

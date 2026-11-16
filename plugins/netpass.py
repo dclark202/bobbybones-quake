@@ -107,6 +107,19 @@ def load(path):
                 W2["pull_g"] = np.array(np.float32(float(os.environ["NET_PULL_G"])))
             P["_plan"] = dict(W=pw_, g=float(np.asarray(W2.get("pull_g", 0.0))), h=int(round(float(np.asarray(W2.get("pull_h", 0.0))))),
                               floor=float(lay2["slowplan"]["floor"]), every=int(lay2["slowplan"]["every"]), odds=None, cnt=None)
+        P["_shalf"] = None                                   # (2.1e) the slow halves inside the head: the picked half (its arrays, its per-seat
+        if head2_.has_slowhalf(lay2):                        # state: sim/slowhalf.py NpState), the pull's source mix, the read-back's gate;
+            import slowhalf as slowhalf_                     # NET_SLOW_MIX, NET_SLOW_BACK, NET_SLOW_PICK override the file's
+            for e_, k_ in (("NET_SLOW_MIX", "slow_mix"), ("NET_SLOW_BACK", "slow_back"), ("NET_SLOW_PICK", "slow_pick")):
+                if os.environ.get(e_, "") != "":
+                    W2[k_] = np.array(np.float32(float(os.environ[e_])))
+            shL_ = head2_.slowhalf_layout(lay2)
+            pk_ = int(round(float(np.asarray(W2.get("slow_pick", 1.0)))))
+            assert 0 <= pk_ < len(shL_["clocks"]), "slow_pick {}: the layout has {} halves".format(pk_, len(shL_["clocks"]))
+            shP_ = slowhalf_.np_params(W2, pk_)
+            assert shP_ is not None, "the layout names the slow halves and the file has no head2.slow.{}.* weights".format(pk_)
+            P["_shalf"] = dict(L=shL_, mix=float(np.asarray(W2.get("slow_mix", 0.0))), back=float(np.asarray(W2.get("slow_back", 0.0))), pick=pk_,
+                               st=slowhalf_.NpState(shL_, pk_, shP_), mod=slowhalf_)
         P["_kq"] = None                                      # (2.1) the keep choice's quiet layer: its share (the file's head2.keepq_g; NET_KEEPQ_G
         if lay2.get("keep") and lay2.get("keepq") and head2_.np_has_keepq(W2):   # overrides it) and the stay value's (layout, weights) or None
             if os.environ.get("NET_KEEPQ_G", "") != "":      # (sim/stay.py; the export's "stay" and "stay.<name>"; none: 0)
@@ -279,6 +292,9 @@ def clear(P, h, rows=None):
     if P.get("_plan") is not None and P["_plan"]["odds"] is not None and len(P["_plan"]["odds"]) == len(h):   # (2.1d) the plan's held odds: even
         P["_plan"]["odds"] = P["_plan"]["odds"].copy()
         P["_plan"]["odds"][r] = np.float32(1.0 / P["_plan"]["odds"].shape[-1])
+    sh_ = P.get("_shalf")                                    # (2.1e) the slow half of these seats: zeros, even odds, its clock from naught
+    if sh_ is not None and sh_["st"].s is not None and len(sh_["st"].s) == len(h):
+        sh_["st"].clear(rows)
     end = None
     if P.get("_brain") is not None:                          # (v0.4.1) the brain and its answer, by the same flag (the trainer's reset:
         B_, _, bt_, end, _ = P["_brain"]                     # btoken.packed_clear keeps its tick clock and the time since he noticed
@@ -425,8 +441,18 @@ def _pull(P, logits, si_, h2s, fr_):
         PL_["odds"] = PL_["odds"].copy()
         PL_["odds"][rf_] = hm_.np_plan_odds(PL_["W"], lay_, np.asarray(h2s)[rf_])
     logits = logits.copy()
-    logits[:, si_] += hm_.np_pull(PL_["odds"][:, PL_["h"]], PL_["g"], PL_["floor"])
+    sh_ = P.get("_shalf")
+    if slow_on(P) and sh_["mix"] > 0:                        # (2.1e, channel 2) the pull's source mixed (test_suite.Policy._pull's sums)
+        logits[:, si_] += sh_["mod"].np_pull_mix(PL_["odds"][:, PL_["h"]], sh_["st"].odds[:, PL_["h"]], PL_["g"], PL_["floor"], sh_["mix"])
+    else:
+        logits[:, si_] += hm_.np_pull(PL_["odds"][:, PL_["h"]], PL_["g"], PL_["floor"])
     return logits
+
+
+def slow_on(P):
+    """(2.1e) the picked slow half plays: its read-back's gate above 0, or the pull plays with its source's mix above 0 (test_suite.Policy.sh_on)"""
+    sh_ = P.get("_shalf")
+    return sh_ is not None and (sh_["back"] > 0 or (pull_on(P) and sh_["mix"] > 0))
 
 
 def goal_on(P):
@@ -644,7 +670,11 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
         if first_:
             HD_ = P["_hd"] = dict(g=np.zeros((B_, si_.stop - si_.start), np.float32), on=np.zeros(B_, bool), t=0, rng=np.random.default_rng(2121))
         fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (HD_["t"] % 40 == 0)) | first_
-        if pull_on(P):                                                          # (2.1d) the pull on his target scores before the held
+        if slow_on(P):                                                          # (2.1e) the slow half's ticks (clock, the roll moment, a
+            kr_s = P.get("_k_r")                                                # change of mind), before the pull and the head's tick
+            P["_shalf"]["st"].step(kf[:, 2], fr_, np.asarray(kr_s, bool) if (kr_s is not None and len(kr_s) == B_) else None, h2s,
+                                   P["_head2"][2].np_goal_u(P["_head2"][0], kf, HD_["on"]))
+        if pull_on(P):                                                        # (2.1d) the pull on his target scores before the held
             logits = _pull(P, logits, si_, h2s, fr_)                            # draw's pick and the draw
         li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
         lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
@@ -773,7 +803,10 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
                                   ins=(hm2.np_ins_held_u(P["_ins"]["I"], P["_ist"][tkd_]) if (P.get("_ins") is not None and P.get("_ist") is not None
                                                                                             and len(P["_ist"]) == len(tkd_)) else None),
                                   goal=(hm2.np_goal_u(lay2, np.asarray(kf)[tkd_], P["_hon_prev"][tkd_])     # (2.1c) the goal he holds
-                                        if (hm2.has_goal(lay2) and kf is not None and P.get("_hon_prev") is not None) else None))
+                                        if (hm2.has_goal(lay2) and kf is not None and P.get("_hon_prev") is not None) else None),
+                                  slowback=(np.float32(P["_shalf"]["back"]) * P["_shalf"]["st"].s[tkd_]   # (2.1e, channel 3) the read-back
+                                            if (slow_on(P) and P["_shalf"]["back"] > 0 and P["_shalf"]["st"].s is not None
+                                                and len(P["_shalf"]["st"].s) == len(tkd_)) else None))
                 h2s = h2s.copy()
                 h2s[tkd_] = hm2.np_tick(W2, lay2, u_, h2s[tkd_])
         hb = P["_brain"][2].pack(br_, tk_)

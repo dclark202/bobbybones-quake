@@ -164,6 +164,15 @@ if ck.get("head2") is not None:                              # (its value is the
         print("the slow plan inside the head (2.1d): horizons {}, the pull's strength {:.4f} on horizon {}, floor {}, refresh every {}".format(   # names
             ck["head2"]["slowplan"]["horizons"], float(head2["head2.pull_g"]), int(round(float(head2["head2.pull_h"]))),                         # its settings)
             ck["head2"]["slowplan"]["floor"], ck["head2"]["slowplan"]["every"]))
+    if ck["head2"].get("slowhalf"):                          # (2.1e) the slow halves inside the head: every half's layers and the three dials go
+        nk_ = len(ck["head2"]["slowhalf"]["clocks"])         # with the head's (the layout names their clocks; the read-back is the inp's columns)
+        assert all("head2.slow.{}.{}.{}".format(k_, l_, w_) in head2 for k_ in range(nk_) for l_ in ("inp", "l2", "l3") for w_ in ("weight", "bias")) \
+            and all("head2.slow.{}.gru.{}".format(k_, w_) in head2 for k_ in range(nk_) for w_ in ("weight_ih", "weight_hh", "bias_ih", "bias_hh")) \
+            and all("head2." + b_ in head2 for b_ in ("slow_mix", "slow_back", "slow_pick")), \
+            "the head names the slow halves and the checkpoint has not their weights or their dials"
+        print("the slow halves inside the head (2.1e): clocks {} head ticks, the pull's source mix {:.4f}, the read-back's gate {:.4f}, the half "
+              "that plays {}".format(ck["head2"]["slowhalf"]["clocks"], float(head2["head2.slow_mix"]), float(head2["head2.slow_back"]),
+                                     int(round(float(head2["head2.slow_pick"])))))
 else:
     assert a.head2_gate < 0, "--head2-gate: this network has no strategy head"
 if head2 and (ck.get("head2") or {}).get("keepq") and "head2.keepq.weight" in sd and ck.get("stay") is not None:   # (2.1, sim/stay.py) the stay

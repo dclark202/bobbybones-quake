@@ -94,7 +94,9 @@ import os
 import numpy as np
 
 VERSION = 1
-PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "wv", "obs", "hands", "ins", "goal", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide);
+PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "wv", "obs", "hands", "ins", "goal", "slowback", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide);
+#                                                          (2.1e) slowback: the read-back, slow_back x the picked slow half's state (sim/slowhalf.py;
+#                                                          without: 0 wide), after "goal": the end of what inp reads
 #                                                          (1.7b) fight: the brain's fight odds, two chances - 0.5 (sim/fightodds.py; without: 0 wide)
 #                                                          (1.9a) wv: his own reading of his chance of winning beyond what the score and the clock say
 #                                                          (the shadow win value, sim/win_value.py, on the brain's state and his hands' memory; one
@@ -285,6 +287,44 @@ def np_pull(odds_h, g, floor):
     return (np.float32(g) * np.log(np.maximum(np.asarray(odds_h, np.float32), np.float32(floor)))).astype(np.float16).astype(np.float32)
 
 
+def add_slowhalf(L, clocks=(5, 10, 20), hid=128, horizons=None):
+    """(2.1e, the slow halves; docs/runs/2.1/2.1e) a layout with the slow halves inside the head (sim/slowhalf.py: head2.slow.<k>.*, one per
+    clock, in head ticks) and the read-back part "slowback" (hid columns at the end of what inp reads: zero weights at the start,
+    tools/slow_init.py add). Needs the part "goal" (their input) and the slow plan inside (their horizons, its floor)"""
+    assert not has_slowhalf(L), "the head has the slow halves already"
+    assert has_goal(L) and has_slowplan(L), "the slow halves read the part 'goal' and forecast at the slow plan's horizons: a 2.1d network"
+    hz = [int(h_) for h_ in (horizons if horizons is not None else L["slowplan"]["horizons"])]
+    ck = [int(c_) for c_ in clocks]
+    assert 1 <= len(ck) <= 3 and all(c_ >= 1 for c_ in ck), "the slow halves: one to three clocks of at least one head tick"
+    return dict(L, widths=dict(L["widths"], slowback=int(hid)), on=dict(L["on"], slowback=1),
+                slowhalf=dict(version=1, clocks=ck, hid=int(hid), horizons=hz))
+
+
+def has_slowhalf(L):
+    """(2.1e) the layout has the slow halves inside the head"""
+    return bool(L is not None and L.get("slowhalf"))
+
+
+def slowhalf_layout(L):
+    """(2.1e) sim/slowhalf.py's layout of the head's slow halves"""
+    import slowhalf as slowhalf_
+    P = L["slowhalf"]
+    return slowhalf_.layout(head=int(L["size"]), goal=int(L["widths"]["goal"]), n_target=int(L["n_target"]), hid=int(P["hid"]),
+                            horizons=tuple(P["horizons"]), clocks=tuple(P["clocks"]))
+
+
+def has_slow(mod):
+    """(2.1e) the module has the slow halves (head2.slow.*, the buffers slow_mix, slow_back, slow_pick)"""
+    return mod is not None and hasattr(mod, "slow") and hasattr(mod, "slow_mix")
+
+
+def slow_dials(mod):
+    """(2.1e) (mix, back, pick) of a module with the slow halves (python numbers), (0, 0, 1) without"""
+    if not has_slow(mod):
+        return 0.0, 0.0, 1
+    return float(mod.slow_mix), float(mod.slow_back), int(round(float(mod.slow_pick)))
+
+
 def np_kf_end(env):
     """(2.1c) the simulator's keep_feat() rows with one more column: his target ended (reached and not an arrival, gone, a spawn):
     what the held draw's players read (test_suite.Policy.act, plugins/netpass.py)"""
@@ -315,7 +355,9 @@ def n_weights(L):
         ((S * CMB_NK + CMB_NCTX * CMB_NK + CMB_NK + S * CMB_HID + CMB_F * CMB_HID + 2 * CMB_HID + 1) if L.get("cmb") else 0) + \
         ((S * 2 + 2) if L.get("fire") else 0) + \
         ((lambda I_: 2 * (S + int(I_["xf"]) + 2) * int(I_["hid"]) + (int(I_["a"]) + 1) * int(I_["hid"]) + int(I_["hid"]) + 1
-          + (int(I_["hid"]) + 1) * int(I_["nw"]) + ((int(I_["hid"]) + 1) if I_.get("quiet") else 0))(L["ins"]) if L.get("ins") else 0)
+          + (int(I_["hid"]) + 1) * int(I_["nw"]) + ((int(I_["hid"]) + 1) if I_.get("quiet") else 0))(L["ins"]) if L.get("ins") else 0) + \
+        ((lambda Hs_, In_, Out_: len(L["slowhalf"]["clocks"]) * ((In_ + 1) * Hs_ + 6 * Hs_ * Hs_ + 6 * Hs_ + (Hs_ + 1) * Hs_ + (Hs_ + 1) * Out_))(
+            int(L["slowhalf"]["hid"]), S + int(L["widths"]["goal"]), len(L["slowhalf"]["horizons"]) * N) if L.get("slowhalf") else 0)
 
 
 def describe(L):
@@ -332,7 +374,11 @@ def describe(L):
          ("; the keep choice (1.7a's)" if L.get("keep") else "")) + \
         ("; the slow plan inside (2.1d): {} -> {} -> {} -> {} horizons {} x {} targets, refreshed every {} keep readings, the pull's floor {}".format(
             L["size"], L["slowplan"]["hid"], L["slowplan"]["hid"], len(L["slowplan"]["horizons"]), L["slowplan"]["horizons"], L["n_target"],
-            L["slowplan"]["every"], L["slowplan"]["floor"]) if has_slowplan(L) else "")
+            L["slowplan"]["every"], L["slowplan"]["floor"]) if has_slowplan(L) else "") + \
+        ("; the slow halves inside (2.1e): {} of {} (head state + goal -> {} -> GRU {} -> {} -> horizons {} x {}), clocks {} head ticks, the "
+         "read-back {} columns".format(len(L["slowhalf"]["clocks"]), L["slowhalf"]["hid"], L["slowhalf"]["hid"], L["slowhalf"]["hid"],
+                                       L["slowhalf"]["hid"], L["slowhalf"]["horizons"], L["n_target"], L["slowhalf"]["clocks"],
+                                       L["widths"].get("slowback", 0)) if has_slowhalf(L) else "")
 
 
 def _offs(L):
@@ -437,8 +483,18 @@ def make_module(L, seed=4044):
                 self.plan = slowplan_.make_module(slowplan_layout(L))    # the pull's strength and its horizon (an index)
                 self.register_buffer("pull_g", torch.zeros(()))
                 self.register_buffer("pull_h", torch.zeros(()))
+            if L.get("slowhalf"):                            # (2.1e) the slow halves: sim/slowhalf.py's (each its own random stream: every older
+                import slowhalf as slowhalf_                 # layer's draw as before; its plan's last layer at zero); the pull's source mix, the
+                self.slow = slowhalf_.make_halves(slowhalf_layout(L))    # read-back's gate, the half that plays (0, 0, 1)
+                self.register_buffer("slow_mix", torch.zeros(()))
+                self.register_buffer("slow_back", torch.zeros(()))
+                self.register_buffer("slow_pick", torch.ones(()))
 
         def _load_from_state_dict(self, state_dict, prefix, *args, **kw):
+            if L.get("slowhalf"):                            # (2.1e) no dials in the file: mix 0, back 0, the second half
+                for k_, v_ in (("slow_mix", 0.0), ("slow_back", 0.0), ("slow_pick", 1.0)):
+                    if prefix + k_ not in state_dict:
+                        state_dict[prefix + k_] = torch.tensor(v_)
             if L.get("slowplan"):                            # (2.1d) no pull in the file: strength 0, the first horizon
                 for k_ in ("pull_g", "pull_h"):
                     if prefix + k_ not in state_dict:
@@ -467,12 +523,13 @@ def make_module(L, seed=4044):
         return Head2()
 
 
-def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None, goal=None):
+def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None, goal=None, slowback=None):
     """u [B, u_width] (float32 holding half-precision numbers) from the parts (a part None or off: zeros). obs: his
     normalised inputs [B, all inputs] (the columns are taken here). (2.1) ins: the instruction he is on (ins_u; before wobs: what
     inp reads; a layout without the part: 0 wide)"""
     import torch
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv, goal=goal)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv, goal=goal,
+               slowback=slowback)                            # (2.1e: the read-back, slow_back x the picked half's state; None: zeros)
     ref = next(v for v in src.values() if v is not None)
     B = ref.shape[0]
     cols = []
@@ -1092,9 +1149,10 @@ def np_fight(P, s_brain, hands):
     return (1.0 / (1.0 + np.exp(-np_mlp(P, x))) - 0.5).astype(np.float32)
 
 
-def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None, goal=None):
+def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None, goal=None, slowback=None):
     """feats() in numpy"""
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv, goal=goal)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv, goal=goal,
+               slowback=slowback)
     B = len(next(v for v in src.values() if v is not None))
     cols = []
     for p in PARTS:

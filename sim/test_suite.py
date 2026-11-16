@@ -260,6 +260,13 @@ class Policy:
             self.pull_h = int(round(float(np.asarray(self.h2W.get("pull_h", 0.0)))))
             self.pull_floor = float(self.h2["slowplan"]["floor"])
             self.plan_every = int(self.h2["slowplan"]["every"])
+        self.shL = self.shP = self.sh = None                 # (2.1e, the slow halves inside the head: sim/slowhalf.py) the layout, the picked
+        self.sh_mix, self.sh_back, self.sh_pick = 0.0, 0.0, 1    # half's arrays and its per-seat state (NpState); the file's head2.slow_mix
+        if self.h2 is not None and head2_g.has_slowhalf(self.h2):    # (the pull's source), slow_back (the read-back's gate), slow_pick
+            self.shL = head2_g.slowhalf_layout(self.h2)      # (set_slow_mix, set_slow_back, set_slow_pick)
+            self.sh_mix = float(np.asarray(self.h2W.get("slow_mix", 0.0)))
+            self.sh_back = float(np.asarray(self.h2W.get("slow_back", 0.0)))
+            self.set_slow_pick(int(round(float(np.asarray(self.h2W.get("slow_pick", 1.0))))))
         self.hrng = np.random.default_rng(int(seed) + 2121)  # ... its numbers and coins: a stream of their own
         self.hd_g = self.hd_on = self.held_pick = None       # ... each seat's held numbers, its trip's coin; this frame's targets under it
         self.hd_t = 0
@@ -416,7 +423,9 @@ class Policy:
         if self.pl_odds is not None and len(self.pl_odds) == len(h):    # (2.1d) the plan's held odds of these seats: even (the trainer's reset)
             self.pl_odds = self.pl_odds.copy()
             self.pl_odds[r] = np.float32(1.0 / self.pl_odds.shape[-1])
-        if self.brain_at is not None:                        # (v0.4.1) the brain and its answer, by the same flag (its own clear)
+        if self.sh is not None and self.sh.s is not None and len(self.sh.s) == len(h):   # (2.1e) the slow half of these seats: zeros, even
+            self.sh.clear(rows)                                                        # odds, its clock from naught (the trainer's reset)
+        if self.brain_at is not None:                      # (v0.4.1) the brain and its answer, by the same flag (its own clear)
             import btoken as btoken_
             btoken_.packed_clear(h[:, self.brain_at:], rows, self.brainP["H"])
         if self.head is None:                                # (the strategy head's state is cleared with it: zeros)
@@ -537,8 +546,43 @@ class Policy:
             self.pl_odds = self.pl_odds.copy()
             self.pl_odds[rf_] = head2_.np_plan_odds(self.planW, self.h2, np.asarray(h2s)[rf_])
         logits = logits.copy()
-        logits[:, si_] += head2_.np_pull(self.pl_odds[:, self.pull_h], self.pull_g, self.pull_floor)
+        if self.sh_on and self.sh_mix > 0:                   # (2.1e, channel 2) the pull's source mixed: (1 - mix) x the fast plan's log-odds +
+            import slowhalf as slowhalf_                     # mix x the picked slow half's, the same horizon (slowhalf.np_pull_mix)
+            logits[:, si_] += slowhalf_.np_pull_mix(self.pl_odds[:, self.pull_h], self.sh.odds[:, self.pull_h], self.pull_g, self.pull_floor,
+                                                    self.sh_mix)
+        else:
+            logits[:, si_] += head2_.np_pull(self.pl_odds[:, self.pull_h], self.pull_g, self.pull_floor)
         return logits
+
+    @property
+    def sh_on(self):
+        """(2.1e) the picked slow half plays: the network has the halves and its read-back's gate is above 0, or the pull plays with its
+        source's mix above 0 (otherwise nothing of them is read: they are not stepped)"""
+        return self.shL is not None and (self.sh_back > 0 or (self.pull_on and self.sh_mix > 0))
+
+    def set_slow_mix(self, m):
+        """(2.1e, the checks and tests) the pull's source mix (0: the fast plan alone, 1: the slow half alone), in place of the file's"""
+        assert self.shL is not None, "set_slow_mix: this network has no slow halves inside its head"
+        assert 0.0 <= float(m) <= 1.0, "set_slow_mix: 0 .. 1"
+        self.sh_mix = float(m)
+
+    def set_slow_back(self, b):
+        """(2.1e, the checks and tests) the read-back's gate, in place of the file's"""
+        assert self.shL is not None, "set_slow_back: this network has no slow halves inside its head"
+        assert 0.0 <= float(b) <= 1.0, "set_slow_back: 0 .. 1"
+        self.sh_back = float(b)
+
+    def set_slow_pick(self, k):
+        """(2.1e) the half that plays (0, 1, 2: the clocks of the layout), in place of the file's; its state starts afresh"""
+        import head2 as head2_
+        import slowhalf as slowhalf_
+        assert self.shL is not None, "set_slow_pick: this network has no slow halves inside its head"
+        k = int(k)
+        assert 0 <= k < len(self.shL["clocks"]), "set_slow_pick: one of 0 .. {}".format(len(self.shL["clocks"]) - 1)
+        self.sh_pick = k
+        self.shP = slowhalf_.np_params(head2_.params_np(self.h2W, prefix=""), k)
+        assert self.shP is not None, "the layout names the slow halves and the file has no head2.slow.{}.* weights".format(k)
+        self.sh = slowhalf_.NpState(self.shL, k, self.shP)
 
     def set_keepq_g(self, g):
         """(2.1, the checks) the quiet layer's share (its coin), in place of the file's (a network without it: refused). It acts only in
@@ -715,7 +759,10 @@ class Policy:
             if self.hd_g is None or len(self.hd_g) != B_:                              # highest of its scores plus its numbers, read at
                 self.hd_g, self.hd_on, first_ = np.zeros((B_, si_.stop - si_.start), np.float32), np.zeros(B_, bool), True   # every keep
             fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (self.hd_t % 40 == 0)) | first_     # reading (the column: d 1, c 1)
-            if self.pull_on:                                                           # (2.1d) the pull on his target scores before the
+            if self.sh_on:                                                             # (2.1e) the slow half's ticks (clock, the roll moment,
+                self.sh.step(kf[:, 2], fr_, self.k_r if (self.k_r is not None and len(self.k_r) == B_) else None, h2s,   # a change of mind),
+                             head2_.np_goal_u(self.h2, kf, self.hd_on))                # before the pull and the head's tick read it
+            if self.pull_on:                                                         # (2.1d) the pull on his target scores before the
                 logits = self._pull(logits, si_, h2s, fr_)                             # held draw's pick and the draw
             li_ = logits[:, si_]
             li_ = li_ - li_.max(1, keepdims=True)
@@ -794,7 +841,10 @@ class Policy:
                                      obs=xa[tk_], hands=hfast[tk_],
                                      ins=(self._ins_u(ist[tk_]) if ist is not None else None),
                                      goal=(head2_.np_goal_u(self.h2, np.asarray(kf)[tk_], hon_prev[tk_])    # (2.1c) the goal he holds
-                                           if (self.goal_on and kf is not None and hon_prev is not None) else None))
+                                           if (self.goal_on and kf is not None and hon_prev is not None) else None),
+                                     slowback=(np.float32(self.sh_back) * self.sh.s[tk_]     # (2.1e, channel 3) the read-back: the gate x the
+                                               if (self.sh_on and self.sh_back > 0 and self.sh.s is not None and len(self.sh.s) == len(tk_))
+                                               else None))                                   # picked half's state after this frame's ticks
                 h2s = h2s.copy()
                 h2s[tk_] = head2_.np_tick(self.h2W, self.h2, u_, h2s[tk_])
             h = np.concatenate([h, h2s.astype(np.float32)], 1)
