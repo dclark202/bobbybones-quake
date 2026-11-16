@@ -154,7 +154,7 @@ Not run: the eval tools themselves (the state lives in the shared player, which 
 | The silent stage (updates 1 to 20) | the three halves' forecasts of his goals 2 s ahead: error 1.09 at update 6, 0.73 to 0.75 at update 19, against 0.61 to 0.67 for the fast plan; the three speeds nearly alike (most of their refreshes come from events, not the clock). The pick left on the 2-second half (owner: "2s is fine") |
 | The pull's source moved (20 to 50) | by update 41 the slow half's forecast matched the fast plan's (0.67 against 0.66) and stayed level with it (0.67 / 0.67 at update 50). No better |
 | His changes of mind as it took over | of his mid-trip changes: no news and taken back within 2 s 7% (source one third moved) → 8% (90% moved); after news and taken back 29% → 30%; after news and stuck 44% → 45%; no news and stuck 19% → 17%. Mid-trip changes 34 to 43 a seat-minute throughout |
-| Checks against 2.1d's end (200 games) | update 10 (silent): 103-97 = 51.5%; update 30: 105-95 = 52.5%; UPDATE50 |
+| Checks against 2.1d's end (200 games) | update 10 (silent): 103-97 = 51.5%; update 30: 105-95 = 52.5%; update 50 (the slow half driving 90% of the pull): 106-94 = 53.0%, frag share 50.8% |
 | Fighting | 1.9 to 2.0 frags a match-minute before the midday restart, 1.7 to 2.0 after (0.99 on the restart's first update, as after every restart) |
 | The read-back (50 to 80) | not run: stopped at its first step |
 | The proof | 0.0001 to 0.003 throughout, one spike of 0.0441 at update 41 (a MAJOR line; the nine updates after it at the floor; cause not traced: 2.1f's build names the worst frame) |

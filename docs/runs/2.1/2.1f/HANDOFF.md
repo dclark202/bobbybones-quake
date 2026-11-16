@@ -13,7 +13,7 @@ The hard rules of `CLAUDE.md` apply; rules 15 and 16 were added on 11-15 and mat
 | main | everything of 2.1c, 2.1d, 2.1e, half precision everywhere (`bhalf`), the slow halves (`b21e`) and the readouts of his changes of mind (`b22r`) is merged. **Not pushed** |
 | The worktree | `C:\Users\dacla\Documents\gh\BobbyBones-21d`, branch **`b21f`** (on `b22r`). No `data/` there: tools read data through `QLBOT_ROOT=<the main checkout>` |
 | **The 2.1f build** | **done and tested on `b21f` (commits `f183db2`, `520dbb6`), not merged**: see "The build's report" below. Not yet done: the diff review, the merge, a full-size update on the graphics card |
-| Processes that may still run | 2.1e's watcher (`tools/run/watch.py duel_gru_2_1e`) finishing its update-50 check (to about 15:55); it is idle after and can be stopped (match its own command line; `docker stop` never `rm`; nothing is deleted) |
+| Processes | **none of any run is alive** (2.1e's watcher finished its update-50 check at 15:57 and ended itself: 106-94 = 53.0% against 2.1d's end) |
 
 ## What the build was asked for
 
