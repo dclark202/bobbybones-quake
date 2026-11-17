@@ -34,6 +34,8 @@ that reading's inputs and held to the next. Rule 11: the decay of l3 at H2_L2 fr
 
 Numpy at the top level (the game server imports this file); torch inside the torch functions.
 """
+import os
+
 import numpy as np
 
 VERSION = 1
@@ -50,6 +52,8 @@ MS_NAMES = ("hand_dealt", "hand_taken", "rockets_dealt", "rockets_taken", "rail_
 MS_N = len(MS_NAMES)
 OTHER_W = 3                                                   # ("other": the weapon in his hand if it is one, else the machine gun)
 N_T = 17
+CMB_VALID = 8                                                 # (order_feat()'s column "valid": sim/duel_env.py CMB_FEAT)
+IN_CLIP = 10.0                                                # (every standardised new input clipped to +- this before the half-precision rounding)
 
 
 def sit_names():
@@ -170,11 +174,13 @@ def raw_inputs(L, oxX, oxC, oxP, has, wpn, en_own, trk_read, tok_P, tok_ok, tok_
 
 
 def np_inputs(L, sit_raw, tgt_raw):
-    """standardised by the layout's measured norm, rounded to half precision (the one source; the masks are the siblings')"""
+    """standardised by the layout's measured norm, clipped to +- IN_CLIP, rounded to half precision (the one source; the masks are the
+    siblings')"""
     N_ = L["norm"]
     sit = (np.asarray(sit_raw, np.float32) - np.asarray(N_["sit_mean"], np.float32)) / np.asarray(N_["sit_sd"], np.float32)
     tgt = (np.asarray(tgt_raw, np.float32) - np.asarray(N_["tgt_mean"], np.float32)) / np.asarray(N_["tgt_sd"], np.float32)
-    return sit.astype(np.float16).astype(np.float32), tgt.astype(np.float16).astype(np.float32)
+    c_ = np.float32(IN_CLIP)
+    return np.clip(sit, -c_, c_).astype(np.float16).astype(np.float32), np.clip(tgt, -c_, c_).astype(np.float16).astype(np.float32)
 
 
 def inputs(L, sit_raw, tgt_raw):
@@ -184,7 +190,7 @@ def inputs(L, sit_raw, tgt_raw):
     d_ = sit_raw.device
     sit = (sit_raw.float() - torch.as_tensor(N_["sit_mean"], dtype=torch.float32, device=d_)) / torch.as_tensor(N_["sit_sd"], dtype=torch.float32, device=d_)
     tgt = (tgt_raw.float() - torch.as_tensor(N_["tgt_mean"], dtype=torch.float32, device=d_)) / torch.as_tensor(N_["tgt_sd"], dtype=torch.float32, device=d_)
-    return sit.half().float(), tgt.half().float()
+    return sit.clamp(-IN_CLIP, IN_CLIP).half().float(), tgt.clamp(-IN_CLIP, IN_CLIP).half().float()
 
 
 def masked(L, sib, sit, tgt):
@@ -231,12 +237,31 @@ def np_term(PW, L, s, sit, tgt, g, pick):
     return outlook_.np_term(o_[:, int(pick)], g, float(L["clip"]))
 
 
-def term(mods, L, s, sit, tgt, g, pick):
+def term(mods, L, s, sit, tgt, g, pick, nonfinite=None):
+    """(nonfinite: a list whose first number counts the seats whose outlook is not finite: their term is 0)"""
     import torch
     import outlook as outlook_
     with torch.no_grad():
         o_, _ = forward(mods, L, "desc", s, sit, tgt)
+        if nonfinite is not None:
+            nonfinite[0] += outlook_.nonfinite_rows(o_[:, int(pick)])
         return outlook_.term(o_[:, int(pick)], g, float(L["clip"]))
+
+
+def need_om(env):
+    """(the review of 2026-11-16) the description needs the order's map numbers in the simulator: raise when they are missing"""
+    if getattr(env, "om", None) is None:
+        raise RuntimeError("2.2a: the description of the targets is asked of a simulator without the order's map numbers (DESC_OX=1 not set when "
+                           "the module was imported, or no sim/order_maps/<map>.npz): it would read all zeros; refused")
+
+
+def check_blank(X):
+    """(the readers and the trainer) a description whose target 'nothing' is not valid on some seat is blank (order_feat() without the map's
+    numbers gives zeros): raise"""
+    v_ = np.asarray(X)[:, 0, CMB_VALID]
+    if not bool((np.asarray(v_, np.float32) > 0.5).all()):
+        raise RuntimeError("2.2a: a blank description (the target 'nothing' not valid on {} of {} seats): the simulator gives no map numbers "
+                           "(DESC_OX?); refused".format(int((np.asarray(v_, np.float32) <= 0.5).sum()), len(v_)))
 
 
 # ------------------------------------------------------------------------------------------------------------------ the readers' tick
@@ -253,7 +278,9 @@ class NpState:
 
 def env_ox(env, rows=N_T):
     """the simulator's numbers the description reads at a keep reading, for these seats (after the frame before): order_feat()'s targets'
-    rows, situation and places (the first `rows` rows), the weapons he owns, the weapon in his hand. -> a tuple (X, C, P, has, weapon)"""
+    rows, situation and places (the first `rows` rows), the weapons he owns, the weapon in his hand. -> a tuple (X, C, P, has, weapon).
+    A simulator without the order's map numbers (DESC_OX unset, or no sim/order_maps/<map>.npz) cannot give it: RAISES (never zeros)"""
+    need_om(env)
     X, C, P = env.order_feat()
     n = env.n
     return (np.asarray(X)[:, :rows].astype(np.float16), np.asarray(C).astype(np.float16), np.asarray(P)[:, :rows].astype(np.float16),
@@ -297,13 +324,28 @@ class NpDesc:
         sr_, tr_ = raw_inputs(self.DL, ox[0], ox[1], ox[2], ox[3], ox[4], eo_, trr_, tokP, tokok, tokhand, fwd_, self.msL,
                               self.tables(maps) if self.msL is not None else {}, np.asarray(maps))
         si_, tg_ = np_inputs(self.DL, sr_, tr_)
+        self.last_raw = (sr_, tr_)
         return si_, tg_, trr_
 
     def reading(self, rows, h2s_rows, brain_s, xa, tokP, tokok, tokhand, trk_brain, ox, maps, g, pick, n):
         """at a keep reading of rows (indices of n seats): the held term of those rows made anew"""
         self.st.grow(n)
+        check_blank(ox[0])
         si_, tg_, _ = self.inputs_rows(brain_s, xa, tokP, tokok, tokhand, trk_brain, ox, maps)
-        self.st.term[rows] = np_term(self.dscW, self.DL, h2s_rows, si_, tg_, g, pick)
+        t_ = np_term(self.dscW, self.DL, h2s_rows, si_, tg_, g, pick)
+        bad_ = ~np.isfinite(t_).all(1)                       # (a non-finite outlook: no term for that seat, counted, loud)
+        if bad_.any():
+            self.nonfinite = getattr(self, "nonfinite", 0) + int(bad_.sum())
+            print("MAJOR PROBLEM: the desc term is not finite on {} seats (counted {}): 0 for them".format(int(bad_.sum()), self.nonfinite), flush=True)
+            t_[bad_] = 0.0
+        self.st.term[rows] = t_
+        tp_ = os.environ.get("DESC22_TRACE")                 # (a test's trace: the first readings' raw inputs, head states and terms, by process)
+        if tp_ and getattr(self, "n_trace", 0) < 20:
+            self.n_trace = getattr(self, "n_trace", 0) + 1
+            self.trace = getattr(self, "trace", []) + [(np.asarray(h2s_rows, np.float32), self.last_raw[0], self.last_raw[1], t_.copy(), float(g),
+                                                        int(pick), np.asarray(ox[0], np.float32)[:, :, CMB_VALID])]
+            np.savez(tp_ + "_{}.npz".format(os.getpid()), **{"{}_{}".format(k_, i_): v_ for i_, r_ in enumerate(self.trace)
+                                                             for k_, v_ in zip(("h", "sit", "tgt", "term", "g", "pick", "valid"), r_)})
 
     def term(self, n):
         self.st.grow(n)

@@ -127,7 +127,9 @@ def auto_decide(lines, cfg):
     update u is lines[u - 1]); the window is updates at - window + 1 .. at. -> the decision dict (passed, src, mark, the candidates' numbers)"""
     at_, w_ = int(cfg["at"]), int(cfg["window"])
     win_ = lines[max(0, at_ - w_):at_]
-    out = dict(at=at_, window=[at_ - w_ + 1, at_], settings=dict(cfg), candidates={})
+    out = dict(at=at_, window=[at_ - w_ + 1, at_], settings=dict(cfg), candidates={},
+               desc_missing=[at_ - w_ + 1 + k_ for k_, m_ in enumerate(win_) if not cand_numbers(m_, "desc", cfg["kind"])[2]
+                             or (m_.get("out22") or {}).get("desc_skipped")])
     for nm_ in ("desc", "built"):
         dec_, sty_, rp_ = [], [], []
         for m_ in win_:
@@ -220,6 +222,17 @@ def out22_lines(m_, u_, log):
         return
     if o2_.get("off"):
         log("MAJOR PROBLEM update {}: 2.2a'S SILENT LESSONS OR READOUTS FAILED in the trainer (off for the rest of the run): see its log".format(u_))
+    if o2_.get("parts_off"):
+        log("MAJOR PROBLEM update {}: 2.2a's parts turned OFF by an out-of-memory: {}".format(u_, o2_.get("parts_off")))
+    dd_ = (o2_.get("desc") or {}).get("desc") or {}
+    if o2_.get("desc_skipped") or not dd_.get("kind"):
+        log("MAJOR PROBLEM update {}: THE DESC OUTLOOK'S LESSON DID NOT RUN this update ({}; {} updates so far): its readouts are missing".format(
+            u_, o2_.get("desc_skipped") or "no desc record", o2_.get("desc_skipped_total")))
+    if o2_.get("rows_failed"):
+        log("MAJOR PROBLEM update {}: 2.2a's rows failed in the rollout (none kept this update)".format(u_))
+    if (o2_.get("nonfinite_built") or 0) > 0 or (o2_.get("nonfinite_desc") or 0) > 0:
+        log("MAJOR PROBLEM update {}: AN OUTLOOK NOT FINITE on some seats (their term 0): built {} desc {} seat-readings".format(
+            u_, o2_.get("nonfinite_built"), o2_.get("nonfinite_desc")))
     q_ = lambda d_, *ks: (lambda x_: x_)(_dig(d_, ks))        # noqa: E731
     ol_ = m_.get("outlook") or {}
     for kn_ in ("seg", "segw", "ret", "win8", "winit8"):
@@ -537,8 +550,13 @@ def main():
             return 0.0
 
     def keep(name):
+        """a save with its optimizer; NEVER written over (the review: the end on a mark's update keeps the mark's files)"""
+        if os.path.exists(os.path.join(KEEP, name)) or os.path.exists(os.path.join(KEEP, name.replace("policy_", "opt_", 1))):
+            log("keep/{} is there already: kept as it is (never written over)".format(name))
+            return False
         shutil.copy2(POL, os.path.join(KEEP, name))
         shutil.copy2(OPT, os.path.join(KEEP, name.replace("policy_", "opt_", 1)))
+        return True
 
     MK_ = dict(cur=None, seen=None)                           # (the owner's mark in force, the file's last content seen)
     AP_ = os.path.join(WD, "out_mark_auto.json")
@@ -587,13 +605,15 @@ def main():
         nums_ = " | ".join("{}: decision gain {} stay gain {} (positive in {} of {}) replay {} {}".format(
             k_, _r(v_["decision_gain_mean"]), _r(v_["stay_gain_mean"]), v_["decision_positive"], v_["updates"],
             {g_: _r(s_) for g_, s_ in v_["replay"].items()}, "PASSED" if v_["passed"] else "not passed") for k_, v_ in c_.items())
+        miss_ = " | THE DESC OUTLOOK'S LESSON DID NOT RUN in updates {} of the window (each counted as not above 0)".format(d_["desc_missing"]) \
+            if d_.get("desc_missing") else ""
         if not d_["passed"]:
-            log("MAJOR PROBLEM update {}: THE OUTLOOK DID NOT PASS ITS GATE: the dial stays shut (updates {} to {}): {}".format(
-                d_["at"], d_["window"][0], d_["window"][1], nums_))
+            log("MAJOR PROBLEM update {}: THE OUTLOOK DID NOT PASS ITS GATE: the dial stays shut (updates {} to {}): {}{}".format(
+                d_["at"], d_["window"][0], d_["window"][1], nums_, miss_))
         else:
             log("THE AUTOMATIC MARK at update {} (updates {} to {}): {} plays (OUT_SRC {}) at the mark {} ({}); OUT_G 0 -> {} over updates {} to {}{}: {}".format(
                 d_["at"], d_["window"][0], d_["window"][1], d_["src_name"], d_["src"], d_["mark"], d_["mark_how"], d_["mark"], d_["open"][0], d_["open"][1],
-                " (THE OWNER'S MARK FILE IS PRESENT: it wins)" if d_["owner_mark_present"] else "", nums_))
+                " (THE OWNER'S MARK FILE IS PRESENT: it wins)" if d_["owner_mark_present"] else "", nums_ + miss_))
 
     def write(clock):
         """the dials of this clock into live.json (re-read: every other name kept as the file has it)"""

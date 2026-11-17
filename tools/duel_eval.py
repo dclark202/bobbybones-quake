@@ -304,6 +304,7 @@ def play(job):
         if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False) or dd_):
             ox_ = env.order_feat()                                              # (a keep reading of some seat: its head ticked on that frame)
             if dd_:                                                             # (2.2a: + his weapons and the weapon in his hand, sim/desc22.py env_ox;
+                __import__("desc22").need_om(env)                               # (no map numbers: raise, never zeros)
                 ox_ = tuple(ox_) + (np.asarray(env.has[:env.n, :9], bool).copy(), np.asarray(env.weapon[:env.n], np.int64).copy())   # the map's name
                 for p_m in (pol, opp_pol):                                      # for the map sense's table)
                     if p_m is not None and hasattr(p_m, "set_maps"):

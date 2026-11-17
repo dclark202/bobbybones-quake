@@ -35,6 +35,7 @@ CMB_FEAT = ("k_none", "k_item", "k_enemy", "k_hold", "k_cut", "k_spam", "k_out",
             "item_up", "item_back", "pro_rl", "pro_gl", "pro_pg", "pro_hold", "pass_1", "pass_2", "pass_4")     # (sim/duel_env.py's, checked below)
 CMB_CTX = ("contact", "seen_ago", "health", "armor", "en_health", "en_armor", "ahead_ok", "belief_ok", "ahead_range", "ahead_height",
            "w_rl", "w_lg", "w_rg", "w_other")
+NEAR_CONST = 1e-3                                             # (a column whose measured spread is under this: spread 1)
 CONTROL_D, FIGHT_D = 3600, 200                                # (the simulator's CONTROL_H 90 s, FIGHT_H 5 s at 40 frames a second; the trainer checks)
 
 
@@ -107,7 +108,7 @@ def norm_of(samples, rt, st, ctl):
     const = []
     for nm_, m_, s_ in ((sn, sm, ss), (tn, tm, ts)):
         for k_, x_ in enumerate(s_):
-            if not x_ > 1e-6:
+            if not x_ > NEAR_CONST:                       # (the review: a constant or nearly constant column gets spread 1)
                 const.append(nm_[k_])
                 s_[k_] = 1.0
     # the tracker's: by design from the base rates
@@ -154,6 +155,8 @@ def add(a):
     oc = list(L["obs_cols"]) + [c_ for c_ in xc if c_ not in L["obs_cols"]]
     TL = TR.layout(oc, [names[c_] for c_ in oc], bel=int(ck["belief"]["hid"]), ctl_d=CONTROL_D, fight_d=FIGHT_D)
     samples = [np.load(p_) for p_ in a.samples.split(",") if p_]
+    got_ = sorted(str(z_["map"]) for z_ in samples)
+    assert got_ == sorted(MAPS), "the norm is measured on all ten training maps (the review): the samples have {}".format(got_)
     rt, st = rates(samples)
     ctl, cu, cf = ctl_rates(a.metrics)
     nm = norm_of(samples, rt, st, ctl)
@@ -176,6 +179,7 @@ def add(a):
             tuple("dsc.{}.l3.{}".format(s_, w_) for s_ in DL["sibs"] for w_ in ("weight", "bias")):
         assert float(ck["model"]["head2." + nm_].abs().sum()) == 0.0, nm_ + " not at zero"
     ck["head2"] = L2
+    ck["env_vars"] = dict(ck.get("env_vars") or {}, DESC_OX="1")   # (the checks and the servers: the file's readers load the order's map numbers)
     tabs, mmiss = MS.load_tables(DATA and os.path.dirname(DATA), MAPS)
     assert not mmiss, "the map sense's tables missing: {}".format(mmiss)
     msL = MS.layout(tabs)

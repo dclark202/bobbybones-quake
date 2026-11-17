@@ -82,6 +82,8 @@ def settings(ps, pol=None):
             S_["SPACE_IN"] = "1"                             # without it the check's simulator gives him zeros there (a network without
             if ev_.get("SPACE_GATE") not in (None, ""):      # the inputs takes the first columns and plays as before)
                 S_["SPACE_GATE"] = str(ev_["SPACE_GATE"])
+        if ev_.get("DESC_OX") not in (None, "", "0", 0, "0.0"):   # (2.2a) and the order's map numbers: a network whose desc term plays reads
+            S_["DESC_OX"] = "1"                              # the description of the targets (without them it would read zeros: the readers raise)
         if ev_.get("DODGE_IN") not in (None, "", "0", 0, "0.0"):   # (2.0d) and the dodge inputs: without it the check's simulator gives him
             S_["DODGE_IN"] = "1"                             # zeros there (the other seat, reading its columns by name, is not touched),
             if ev_.get("DODGE_G") not in (None, ""):         # at the gate the save trained at (both seats see it: one simulator)

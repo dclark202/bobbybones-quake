@@ -202,6 +202,30 @@ def test_desc():
         and abs(float(T1.mean(-1).abs().max())) < 0.05, float(np.abs(T1.numpy() - T2).max()))
 
 
+def test_nonfinite():
+    o = torch.randn(4, 18)
+    o[1, 3] = float("nan")
+    o[2, 5] = float("inf")
+    t = OL.term(o, 1.0)
+    tn = OL.np_term(o.numpy(), 1.0)
+    chk("a non-finite outlook gives a term of 0 for that seat (torch and numpy), the others as before; counted {}".format(OL.nonfinite_rows(o)),
+        bool(torch.isfinite(t).all()) and float(t[1].abs().sum()) == 0 and float(t[2].abs().sum()) == 0 and np.isfinite(tn).all()
+        and np.abs(tn[[1, 2]]).sum() == 0 and torch.equal(t[[0, 3]], OL.term(o[[0, 3]], 1.0)) and OL.nonfinite_rows(o) == 2)
+    sr = np.zeros((2, len(D.sit_names())), np.float32)
+    sr[0, 0] = 1e6
+    L = D.layout(OL.KINDS22, OL.FACTS)
+    si, tg = D.np_inputs(L, sr, np.zeros((2, 17, len(D.tgt_names())), np.float32))
+    si2, tg2 = D.inputs(L, torch.from_numpy(sr), torch.zeros(2, 17, len(D.tgt_names())))
+    chk("the new inputs clipped to +- {} before the rounding, the same in torch and numpy".format(D.IN_CLIP), float(si.max()) == D.IN_CLIP
+        and np.array_equal(si, si2.numpy()))
+    X = np.zeros((3, 17, 34), np.float16)
+    try:
+        D.check_blank(X)
+        chk("a blank description raises", False)
+    except RuntimeError:
+        chk("a blank description (the simulator without its map numbers) raises", True)
+
+
 def ramp_module():
     sp = importlib.util.spec_from_file_location("ramp22a", os.path.join(HERE, "ramp_22a.py"))
     R = importlib.util.module_from_spec(sp)
@@ -306,6 +330,16 @@ def test_ramp_live(scratch):
     chk("the owner's mark of 0 wins over the automatic one: OUT_G 0", abs(lv4["OUT_G"]) < 1e-9, (lv4, e4))
     wl = open(os.path.join(D, "watch", "watch.log")).read()
     chk("watch.log: the automatic mark's line once, the owner's mark line", wl.count("THE AUTOMATIC MARK at update 60") == 1 and "THE OWNER'S MARK" in wl)
+    n_ = len(open(os.path.join(D, "metrics.jsonl")).read().splitlines())      # (the end on a mark's update: the mark's files kept)
+    for nm_, tx_ in (("policy.pt", "END"), ("opt.pt", "ENDOPT"), (os.path.join("keep", "policy_u{}.pt".format(n_)), "MARK"),
+                     (os.path.join("keep", "opt_u{}.pt".format(n_)), "MARKOPT")):
+        open(os.path.join(D, nm_), "w").write(tx_)
+    open(os.path.join(scratch, "scratch.log"), "w").write("update=1" + chr(10) + "exit 0" + chr(10))
+    run_ramp(D, ["--resume"], 6)
+    rd_ = lambda f_: open(os.path.join(D, "keep", f_)).read() if os.path.exists(os.path.join(D, "keep", f_)) else None    # noqa: E731
+    chk("the end on a mark's update: the mark's files kept as they were, the end's own files written", rd_("policy_u{}.pt".format(n_)) == "MARK"
+        and rd_("opt_u{}.pt".format(n_)) == "MARKOPT" and rd_("policy_end_22a.pt") == "END" and rd_("opt_end_22a.pt") == "ENDOPT",
+        (rd_("policy_u{}.pt".format(n_)), rd_("policy_end_22a.pt")))
 
 
 def main():
@@ -317,6 +351,7 @@ def main():
     test_near()
     test_quantiles()
     test_desc()
+    test_nonfinite()
     test_rule()
     if a.scratch:
         if os.path.exists(a.scratch):

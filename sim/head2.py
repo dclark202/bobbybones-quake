@@ -372,10 +372,17 @@ def out_vec(mod, s, L):
         return outlook_.term(outlook_.outlook(mod.out, s)[:, k_], g_, float(L["outlook"]["clip"]))
 
 
+NONFINITE = [0]                                             # (the readers' count of seats whose built outlook was not finite)
+
+
 def np_out_vec(PW, L, hs, g, pick):
     """(2.1f) out_vec() in numpy: PW from outlook.np_params(the head's weights), L the head's layout, hs [B, np_state_width] -> [B, n_target]"""
     import outlook as outlook_
     o_ = outlook_.np_outlook(PW, outlook_layout(L), hs)[:, int(pick)]
+    bad_ = int((~np.isfinite(o_[:, :-1]).all(-1)).sum())    # (2.2a, the review: a non-finite outlook gives no term, counted and loud)
+    if bad_:
+        NONFINITE[0] += bad_
+        print("MAJOR PROBLEM: the outlook's term is not finite on {} seats (counted {}): 0 for them".format(bad_, NONFINITE[0]), flush=True)
     return outlook_.np_term(o_, g, float(L["outlook"]["clip"]))
 
 

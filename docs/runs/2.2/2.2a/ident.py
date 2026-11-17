@@ -5,7 +5,8 @@ smoke's small CPU trainer at a fixed seed (--seed 7, 2 updates, --dump-acts; no 
      with the built outlook's, desc's and the tracker's last layers made NON-ZERO (smoke.nonzero: they learn and answer, but must not play),
      OUT_G 0, OUT_TRIAL 0, OUT_SRC 1
 PASS: both updates' actions, log-probabilities (the hands' and the head's target), the hands' and the head's values, the pay, the round ends:
-equal to the bit; the ledger (rec pay_terms) equal.
+equal to the bit; the ledger (rec pay_terms) equal. SMOKE_OVERLAP=1: both arms with --overlap 1 --learn-nosync 1, as train.cmd has them (the review).
+SAME_ARM=x: the second arm is X again (does the trainer repeat itself at this seed and setting?)
     set QLBOT_ROOT=...; <anaconda python> docs/runs/2.2/2.2a/ident.py <2.1d's end> <its opt> <the start file> <anchor a> <anchor b>"""
 import json
 import os
@@ -33,7 +34,10 @@ def main():
     import torch
     s21, o21, s22, a1, a2 = sys.argv[1:6]
     DX = arm("x", s21, o21, a1, a2, dict(SMOKE_CMD=os.path.join(CODE, "docs", "runs", "2.1", "2.1d", "train.cmd"), SMOKE_NO_OUT="1", SMOKE_NONZERO="0"))
-    DY = arm("y", s22, o21, a1, a2, dict(SMOKE_SRC="1", SMOKE_NONZERO="1"))
+    if os.environ.get("SAME_ARM") == "x":
+        DY = arm("x2", s21, o21, a1, a2, dict(SMOKE_CMD=os.path.join(CODE, "docs", "runs", "2.1", "2.1d", "train.cmd"), SMOKE_NO_OUT="1", SMOKE_NONZERO="0"))
+    else:
+        DY = arm("y", s22, o21, a1, a2, dict(SMOKE_SRC="1", SMOKE_NONZERO="1"))
     ok = True
     for u in (1, 2):
         px, py = os.path.join(DX, "acts_{}.pt".format(u)), os.path.join(DY, "acts_{}.pt".format(u))

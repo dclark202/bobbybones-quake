@@ -123,8 +123,17 @@ def zed(o, clip=CLIP):
 
 
 def term(o, g, clip=CLIP):
-    """the term on the target's logits [B, n_target]: g x z, rounded to half precision. g: a number or [B, 1]"""
-    return (g * zed(o, clip)).half().float()
+    """the term on the target's logits [B, n_target]: g x z, rounded to half precision. g: a number or [B, 1]. (2.2a, the review) a seat whose
+    outlook is not finite gets no term (0); count them with nonfinite_rows()"""
+    import torch
+    t_ = (g * zed(o, clip)).half().float()
+    return torch.where(torch.isfinite(o[..., :-1].float()).all(-1, keepdim=True), t_, torch.zeros_like(t_))
+
+
+def nonfinite_rows(o):
+    """the seats whose outlook [B, n_target + 1] has a number that is not finite (their term is 0)"""
+    import torch
+    return int((~torch.isfinite(o[..., :-1].float()).all(-1)).sum())
 
 
 def gumbel_given_top(phi, k, gen):
@@ -163,7 +172,9 @@ def np_term(o, g, clip=CLIP):
     """term() in numpy: [B, n_target] float32 holding half-precision numbers"""
     o_ = np.asarray(o, np.float32)[..., :-1]
     z_ = np.clip(o_ - o_.mean(-1, keepdims=True), -np.float32(clip), np.float32(clip))
-    return (np.float32(g) * z_).astype(np.float16).astype(np.float32)
+    t_ = (np.float32(g) * z_).astype(np.float16).astype(np.float32)
+    ok_ = np.isfinite(o_).all(-1, keepdims=True)              # (2.2a, the review: a non-finite outlook gives no term)
+    return np.where(ok_, t_, np.float32(0.0)).astype(np.float32)
 
 
 # ------------------------------------------------------------------------------------------------------------------ the labels

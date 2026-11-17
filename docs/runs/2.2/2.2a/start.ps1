@@ -38,7 +38,7 @@ $MSS = Join-Path $SR "space\mapsense_start.pt"
 $ITEMS = Join-Path $HERE "items_22a.json"
 $AUTO = Join-Path $HERE "auto_mark.json"
 $LIVE0 = Join-Path $R0 "live.json"; $LSE = Join-Path $R0 "live_settings.env"
-$MAPS = "bloodrun", "aerowalk", "campgrounds", "toxicity", "hektik", "sinister"
+$MAPS = "bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure"
 $SAMP = @($MAPS | ForEach-Object { Join-Path $Samples ("s_" + $_ + ".npz") })
 $FRAMES = Join-Path $Samples "s_bloodrun_frames.npz"
 foreach ($p in @($From, $FromOpt, $C20E, $JUDGE, $MSS, $AUTO, $LIVE0, $LSE, $FRAMES) + $SAMP) { if (-not (Test-Path $p)) { Log "MISSING ${p}: not started"; exit 1 } }
@@ -113,7 +113,7 @@ if ($null -eq $st -or $st.status -ne "applied") {
 Log ("live.json applied by the trainer before its first rollout (" + $st.time + ")")
 $WD = Join-Path $R1 "watch"
 $env:CTRL_PREV = $CK; $env:CTRL_PREV_LABEL = "the control (2.1d's end)"
-$env:PANEL_SETS = "AIM_LEVEL=3,PERCEPT_SPEED=0,AIM2=1,AIM2_SPLIT=1,AIM2_FOCUS=1,AIM2_FLINCH=1,PERCEPT_SIGMA=0.9,PERCEPT_TAU=0.15,SURPRISE_MS=0,MOTOR_NOISE=0.10,MOTOR_BASE=0.05,AIM2_W=1,AIM2_SPLIT_W=1,AIM2_FOCUS_GAIN=0,AIM2_FOCUS_SIG=1.0,AIM2_C_SLIP=0.023,AIM2_S0=5,AIM2_CAP_SLIP=2.1,AIM2_C_ECC=0.06,AIM2_E0=0,AIM2_CAP_ECC=2.8,FLINCH_PER_DMG=0.012,FLINCH_MAX=0.7,FLINCH_TAU=0.3,VEL_DELAY_MS=200,VEL_WEBER=0.2,RANGE_WEBER=0.19,AIM3=1,AIM3_W=1,AIM3_SIZE_A=0.39,AIM3_SIZE_B=0.355,AIM3_PURSUIT_TAU=0.125,AIM3_PURSUIT_GAIN=1.0,AIM3_FIX_TAU=0.05,AIM3_LEAD=1,AIM3_RELOAD=0,KNOCK_QL=1,KNOCK_NOW=1,KEEP_ZONE=1,KEEP_SIG=1"
+$env:PANEL_SETS = "AIM_LEVEL=3,PERCEPT_SPEED=0,AIM2=1,AIM2_SPLIT=1,AIM2_FOCUS=1,AIM2_FLINCH=1,PERCEPT_SIGMA=0.9,PERCEPT_TAU=0.15,SURPRISE_MS=0,MOTOR_NOISE=0.10,MOTOR_BASE=0.05,AIM2_W=1,AIM2_SPLIT_W=1,AIM2_FOCUS_GAIN=0,AIM2_FOCUS_SIG=1.0,AIM2_C_SLIP=0.023,AIM2_S0=5,AIM2_CAP_SLIP=2.1,AIM2_C_ECC=0.06,AIM2_E0=0,AIM2_CAP_ECC=2.8,FLINCH_PER_DMG=0.012,FLINCH_MAX=0.7,FLINCH_TAU=0.3,VEL_DELAY_MS=200,VEL_WEBER=0.2,RANGE_WEBER=0.19,AIM3=1,AIM3_W=1,AIM3_SIZE_A=0.39,AIM3_SIZE_B=0.355,AIM3_PURSUIT_TAU=0.125,AIM3_PURSUIT_GAIN=1.0,AIM3_FIX_TAU=0.05,AIM3_LEAD=1,AIM3_RELOAD=0,KNOCK_QL=1,KNOCK_NOW=1,KEEP_ZONE=1,KEEP_SIG=1,DESC_OX=1"
 $env:CTRL_REF = $CR; $env:CTRL_REF_LABEL = "2.0e's end (the long-term control)"
 Remove-Item Env:\CTRL_TABLE -ErrorAction SilentlyContinue
 $env:PANEL_RUN = $RUN; $env:PANEL_CTRL = $CK; $env:CHECK_RULE = "0"

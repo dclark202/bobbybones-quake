@@ -4335,6 +4335,9 @@ def main():
     O22 = bool(a.out22)
     O22_HAS = bool(H2 and head2_.has_parts22(H2L))
     TRK_L = DSC_L = TRK_OPT = DSC_OPT = VW_OPT = FSTATS = TRK_GEN = DSC_GEN = None
+    O22_FAULT = os.environ.get("O22_FAULT") or ""             # ... (tests of the guards only: rows, oom)
+    O22_PARTOFF = set()                                      # ... (the review) the parts turned off by an out-of-memory, by name
+    O22_SKIPS = [0]                                          # ... the updates whose desc lesson did not run
     O22_OFF = [False]                                        # ... a failure in its lessons or readouts: off for the rest of the run (a desc term plays on)
     O22_ST = [None]                                          # ... the update's readouts, for the record
     OUT_SR = [0]                                             # ... live OUT_SRC
@@ -4409,6 +4412,7 @@ def main():
         """(2.2a) at a keep reading, every seat: the desc outlooks' inputs (normalised, rounded at their source) and the tracker's readable
         outputs: the tracker on the brain's state and his inputs of this frame; the brain's chances of the enemy's weapons; the map sense (the
         rollout's copy) at each target's place and his own against where the brain believes the enemy"""
+        desc22_.check_blank(dox_[0])                         # (the review: a blank description, the simulator without its map numbers: raise)
         trr_ = tracker_.readable(net_.head2.trk(tracker_.inp(TRK_L, sb_, x_)))
         eo_ = torch.sigmoid(net_.track(sb_)[:, desc22_.TRK_OWN].float())
         sr_, tr_ = desc22_.raw_inputs(DSC_L, dox_[0], dox_[1], dox_[2], dox_[3], dox_[4], eo_.cpu().numpy(), trr_.cpu().numpy(),
@@ -4500,62 +4504,107 @@ def main():
         cb_ = dict(X=torch.cat(XC_), Y=torch.cat(YC_), M=torch.cat(MC_)) if XC_ else None
         return nb_, cb_, ctt_
 
+    def o22_part(name):
+        """(the review) a failure in one of 2.2a's lessons: an out-of-memory turns that part off alone (MAJOR, named); anything else turns
+        2.2a's silent parts off (o22_fail). Never the built outlook, never the run"""
+        e_ = sys.exc_info()[1]
+        if isinstance(e_, getattr(torch.cuda, "OutOfMemoryError", ())) or "out of memory" in str(e_).lower():
+            O22_PARTOFF.add(name)
+            if dev.type == "cuda":
+                torch.cuda.empty_cache()
+            print("MAJOR PROBLEM: OUT OF MEMORY in 2.2a's {}: that part is OFF for the rest of the run (the others go on): {}".format(name, str(e_)[:300]),
+                  flush=True)
+        else:
+            o22_fail()
+
     def o22_learn(R, T_o, I_o, S_o, G_o, B_o, D_o, TR_o, C_o, Zp_, Zn_, OK_o, FZp_, FZn_, FM_o, out_now, b_done_, T_):
-        """(2.2a, the learner) the desc outlooks (scored before, then each its lesson), the head's second value, the attack readouts"""
+        """(2.2a, the learner) the desc outlooks (scored before, then each its lesson, one after another; their rows stay on the host and go to
+        the card a minibatch at a time), the head's second value, the attack readouts. A desc lesson that cannot run is recorded with its reason"""
         t0_ = time.time()
         st_ = O22_ST[0]
         rw_ = R.get("o22_rows")
         EN_ = int(E_.EN_INTENT)
         pick_ = int((OUT_ST[0] or {}).get("pick") or 0)
-        ctrl_ = C_o if bool((OUT_ST[0] or {}).get("ctrl")) else None
-        trial_ = TR_o if bool(TR_o.any()) else None
         st_["desc"] = {}
         eb_ = None
-        if rw_ is not None and len(rw_["sit"]) == len(G_o):
-            SIT_, TGT_ = rw_["sit"].to(dev), rw_["tgt"].to(dev)
-            okd_ = rw_["ok"].to(dev).bool()
-            eb_ = rw_["eb"].to(dev).long()
-            OKd_ = OK_o & okd_[:, None]
-            FMd_ = (FM_o & okd_[:, None]) if FM_o is not None else None
+        if rw_ is None:
+            st_["desc_skipped"] = "no desc rows from the rollout ({})".format("its rows failed" if (R.get("o22") or {}).get("rows_failed") else "none made")
+        elif len(rw_["sit"]) != len(G_o):
+            st_["desc_skipped"] = "the desc rows ({}) do not line up with the outlook's ({})".format(len(rw_["sit"]), len(G_o))
+        else:
+            SIT_, TGT_ = rw_["sit"], rw_["tgt"]                  # (host, half precision)
+            okd_ = rw_["ok"].bool()
+            eb_ = rw_["eb"].long()
+            G_c, D_c, B_c, Zp_c = G_o.cpu(), D_o.cpu(), B_o.cpu(), Zp_.cpu()
+            OKd_c = OK_o.cpu() & okd_[:, None]
+            FMd_c = (FM_o.cpu() & okd_[:, None]) if FM_o is not None else None
+            FZp_c = FZp_.cpu() if FZp_ is not None else None
+            ctrl_c = C_o.cpu() if bool((OUT_ST[0] or {}).get("ctrl")) else None
+            trial_c = TR_o.cpu() if bool(TR_o.any()) else None
+            OKd_ = OKd_c.to(dev)
+            FMd_ = FMd_c.to(dev) if FMd_c is not None else None
             for sib_ in DSC_L["sibs"]:
-                with torch.no_grad():
-                    ps_ = [desc22_.forward(pol.head2.dsc, DSC_L, sib_, S_o[i_:i_ + 4096], SIT_[i_:i_ + 4096], TGT_[i_:i_ + 4096]) for i_ in range(0, len(S_o), 4096)]
-                    od_ = torch.cat([p_[0] for p_ in ps_])
-                    fd_ = torch.cat([p_[1] for p_ in ps_])
-                    ps_ = None
-                    ro_ = outlook_.readouts(od_, G_o, Zp_, OKd_, dec=D_o, ctrl=ctrl_, trial=trial_, base=B_o, clip=float(DSC_L["clip"]))
-                    rf_ = outlook_.facts_readouts(fd_, G_o, FZp_, FMd_, dec=D_o) if FZp_ is not None else None
-                    if sib_ == "desc":
-                        st_["atk_desc"] = o22_atk_out(od_, pick_, EN_, eb_)
-                    od_ = fd_ = None
-                with PLAN_LOCK, torch.enable_grad():
-                    l_ = outlook_.learn2(list(pol.head2.dsc[sib_].parameters()), DSC_OPT[sib_],
-                                         lambda j_, s__=sib_: desc22_.forward(pol.head2.dsc, DSC_L, s__, S_o[j_.to(dev)], SIT_[j_.to(dev)], TGT_[j_.to(dev)]),
-                                         len(G_o), G_o, Zn_, OKd_, FZn_, FMd_, epochs=2, mb=4096, gen=DSC_GEN, clip=1.0, decay=H2_L2_[0],
-                                         decay_w=[pol.head2.dsc[sib_].l3.weight])
-                for p_ in pol.head2.dsc[sib_].parameters():
-                    p_.grad = None
-                st_["desc"][sib_] = dict(kind={k_: ro_[i_] for i_, k_ in enumerate(DSC_L["kinds"])}, facts=rf_,
-                                         loss=round(l_, 5) if l_ is not None else None, rows=int(okd_.sum()),
-                                         l3=round(float(pol.head2.dsc[sib_].l3.weight.norm()), 5))
-            SIT_ = TGT_ = None
+                if "desc:" + sib_ in O22_PARTOFF:
+                    st_["desc"][sib_] = dict(off="out of memory earlier")
+                    continue
+                try:
+                    if O22_FAULT == "oom" and sib_ == "desc_notrk":  # (a test's injected fault: tests of the guards only)
+                        raise RuntimeError("CUDA out of memory. (O22_FAULT=oom: a fault injected into desc_notrk's lesson)")
+                    with torch.no_grad():
+                        od_, fd_ = [], []
+                        for i_ in range(0, len(S_o), 4096):
+                            o1_, f1_ = desc22_.forward(pol.head2.dsc, DSC_L, sib_, S_o[i_:i_ + 4096], SIT_[i_:i_ + 4096].to(dev), TGT_[i_:i_ + 4096].to(dev))
+                            od_.append(o1_.cpu())
+                            fd_.append(f1_.cpu())
+                        od_, fd_ = torch.cat(od_), torch.cat(fd_)
+                        ro_ = outlook_.readouts(od_, G_c, Zp_c, OKd_c, dec=D_c, ctrl=ctrl_c, trial=trial_c, base=B_c, clip=float(DSC_L["clip"]))
+                        rf_ = outlook_.facts_readouts(fd_, G_c, FZp_c, FMd_c, dec=D_c) if FZp_c is not None else None
+                        if sib_ == "desc":
+                            st_["atk_desc"] = o22_atk_out(od_, pick_, EN_, eb_)
+                        od_ = fd_ = None
+                    with PLAN_LOCK, torch.enable_grad():
+                        l_ = outlook_.learn2(list(pol.head2.dsc[sib_].parameters()), DSC_OPT[sib_],
+                                             lambda j_, s__=sib_: desc22_.forward(pol.head2.dsc, DSC_L, s__, S_o[j_.to(dev)], SIT_[j_].to(dev), TGT_[j_].to(dev)),
+                                             len(G_o), G_o, Zn_, OKd_, FZn_, FMd_, epochs=2, mb=4096, gen=DSC_GEN, clip=1.0, decay=H2_L2_[0],
+                                             decay_w=[pol.head2.dsc[sib_].l3.weight])
+                    st_["desc"][sib_] = dict(kind={k_: ro_[i_] for i_, k_ in enumerate(DSC_L["kinds"])}, facts=rf_,
+                                             loss=round(l_, 5) if l_ is not None else None, rows=int(okd_.sum()),
+                                             l3=round(float(pol.head2.dsc[sib_].l3.weight.norm()), 5))
+                except Exception:
+                    st_["desc"][sib_] = dict(off="failed")
+                    o22_part("the desc outlook " + sib_)
+                    if O22_OFF[0]:
+                        raise
+                finally:
+                    for p_ in pol.head2.dsc[sib_].parameters():
+                        p_.grad = None
+            SIT_ = TGT_ = OKd_ = FMd_ = None
+            if "desc" not in st_["desc"] or "kind" not in st_["desc"].get("desc", {}):
+                st_["desc_skipped"] = "the desc sibling's lesson did not run ({})".format(st_["desc"].get("desc"))
         if eb_ is not None:
-            st_["atk_built"] = o22_atk_out(out_now, pick_, EN_, eb_)
+            st_["atk_built"] = o22_atk_out(out_now.cpu() if out_now is not None else None, pick_, EN_, eb_) if out_now is not None else None
         bowi_, bvwi_ = R.get("b_owi"), R.get("b_vwi")             # the head's second value: the return of the win chance with the items
-        if bowi_ is not None and bvwi_ is not None:
-            _, rw2_ = head2_.gae(bowi_, bvwi_, b_done_[:T_].float(), float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else a.lam)
-            with PLAN_LOCK, torch.enable_grad():
-                l0_, l1_ = outlook_.value_learn(pol.head2.vw, VW_OPT, S_o, rw2_[T_o, I_o].detach(), epochs=2, mb=4096, gen=DSC_GEN)
-            for p_ in pol.head2.vw.parameters():
-                p_.grad = None
-            yv_ = rw2_[T_o, I_o].double()
-            st_["vw"] = dict(loss_before=round(l0_, 6) if l0_ is not None else None, loss_after=round(l1_, 6) if l1_ is not None else None,
-                             ret_mean=round(float(yv_.mean()), 5), ret_sd=round(float(yv_.std()), 5), l2=round(float(pol.head2.vw.l2.weight.norm()), 5))
+        if bowi_ is not None and bvwi_ is not None and "vw" not in O22_PARTOFF:
+            try:
+                _, rw2_ = head2_.gae(bowi_, bvwi_, b_done_[:T_].float(), float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else a.lam)
+                with PLAN_LOCK, torch.enable_grad():
+                    l0_, l1_ = outlook_.value_learn(pol.head2.vw, VW_OPT, S_o, rw2_[T_o, I_o].detach(), epochs=2, mb=4096, gen=DSC_GEN)
+                yv_ = rw2_[T_o, I_o].double()
+                st_["vw"] = dict(loss_before=round(l0_, 6) if l0_ is not None else None, loss_after=round(l1_, 6) if l1_ is not None else None,
+                                 ret_mean=round(float(yv_.mean()), 5), ret_sd=round(float(yv_.std()), 5), l2=round(float(pol.head2.vw.l2.weight.norm()), 5))
+            except Exception:
+                o22_part("the second value")
+                if O22_OFF[0]:
+                    raise
+            finally:
+                for p_ in pol.head2.vw.parameters():
+                    p_.grad = None
         st_["secs_outlooks"] = round(time.time() - t0_, 3)
 
     def o22_atk_out(o_, pick_, EN_, eb_):
         """(2.2a, the attack readout 2) the played kind's centred outlook of the enemy target, by the stack edge's bin"""
         z_ = outlook_.zed(o_[:, pick_].float(), float(OUT_L["clip"]))[:, EN_].double()
+        eb_ = eb_.to(z_.device)
         n_ = torch.bincount(eb_, minlength=5)[:5].double()
         s_ = torch.zeros(5, dtype=torch.float64, device=z_.device).index_add_(0, eb_, z_)
         return {EB_NAMES[k_]: (round(float(s_[k_] / n_[k_]), 4) if float(n_[k_]) > 0 else None) for k_ in range(5)}
@@ -5945,6 +5994,7 @@ def main():
         O22_PLAY = bool(O22 and OUT_PLAY)                                # (2.2a, --out22) the description's numbers asked of the simulators at each
         WOX_ = bool(CMB or O22_PLAY)                                     # tick's frame; the desc term (made at a keep reading, held to the next); his
         DOX_ = DSC_ = b_o22 = b_owi = b_vwi = O22_R = O22_ROWS = TRK_NB = TRK_CB = TRK_CT = None   # seats' rows' desc inputs; the truths a frame;
+        NF_B, NF_D, DR_FAIL = [0], [0], [False]                         # (the review: the seats with a non-finite outlook a reading; 2.2a's rows failed)
         if O22_PLAY:                                                     # the rings of the tracker; the attack readouts
             DOX_ = C.get("dox")
             DSC_ = C.get("dsc") or dict(term=torch.zeros(N, NI_H, device=dev), term_o=torch.zeros(N, NI_H, device=dev), sit=None, tgt=None, trk=None)
@@ -5953,13 +6003,15 @@ def main():
             O22_NOW = C.get("o22now")
             if O22_NOW is None:
                 O22_NOW = np.zeros((N, len(tracker_.O22)), np.float32)
-            b_o22 = torch.zeros(T, N, len(tracker_.O22))                 # (host: each seat's numbers after each step)
+            b_o22 = torch.zeros(T, N, len(tracker_.O22), dtype=torch.float16)   # (host, half precision: each seat's numbers after each step; the
+            #                                                              two win streams at full precision in b_ow, b_owi)
             b_owi = torch.zeros(T, N, device=dev)                        # the win chance with the items x the gain (segw, winit8)
             b_vwi = torch.zeros(T + 1, N, device=dev)                    # the head's second value a frame (segw's bootstrap; its own lesson's GAE)
             DR_SIT, DR_TGT, DR_EB, DR_OK = [], [], [], []                # (aligned with OR_*: the desc inputs of each row, its stack edge's bin, inputs or not)
             ATK_ = torch.zeros(5, 6, dtype=torch.float64, device=dev)    # by stack edge bin: his readings, on the enemy target, the tracker's he-dies-first
             #                                                              sum, I-die-first sum, the readings with them, (spare)
             O22_IX = {c_: list(E_.AUX_COLS).index(c_) for c_ in ("died", "en_in_view", "en_alive", "fo_win", "fo_lose", "ctl_lab", "ctl_one", "ctl_mh", "ctl_ra")}
+            DPLAY_ = bool((OG_P > 0 and OS_P == 1) or (OO_ON and OS_O == 1))     # (desc's term plays this rollout: its inputs are part of play)
             FOE_ = np.arange(N) ^ 1
             TRK_G0[upd] = TRK_G[0]
             if TRK_RING[0] is None:
@@ -6076,14 +6128,22 @@ def main():
                 b_ev[t // HD_K] = ev_
             O22_FR = O22_NOW if O22_PLAY else None                       # (2.2a) the truths at this frame (after the step before)
             with torch.no_grad():
-                if O22_PLAY and t % BK == 0 and DOX_ is not None:        # (2.2a) A KEEP READING: the description of every seat's 17 targets and the
-                    sit_, tgt_, trr_ = o22_inputs(net, BS_.s, x, TOK_, DOX_)     # situation (the simulators' numbers after the tick's frame, the brain's
-                    DSC_ = dict(DSC_, sit=sit_, tgt=tgt_, trk=trr_)              # state and token of that tick, his inputs of this frame), the desc term
-                    if OG_P > 0 and OS_P == 1:                                   # of the seats whose network plays it, held to the next reading
-                        DSC_["term"] = desc22_.term(net.head2.dsc, DSC_L, H2S.s, sit_, tgt_, OG_P, OK_P)
-                    if OO_ON and OS_O == 1:
-                        sio_ = o22_league_sit(onet, BS_.s, x, sit_, DOX_)
-                        DSC_["term_o"] = desc22_.term(onet.head2.dsc, DSC_L, H2O.s, sio_, tgt_, OG_O, OK_O)
+                if O22_PLAY and t % BK == 0 and DOX_ is not None and (DPLAY_ or not O22_OFF[0]):   # (2.2a) A KEEP READING: the description of every
+                    try:                                                 # seat's 17 targets and the situation (the simulators' numbers after the tick's
+                        sit_, tgt_, trr_ = o22_inputs(net, BS_.s, x, TOK_, DOX_)     # frame, the brain's state and token of that tick, his inputs of
+                        DSC_ = dict(DSC_, sit=sit_, tgt=tgt_, trk=trr_)              # this frame), the desc term of the seats whose network plays it,
+                        if OG_P > 0 and OS_P == 1:                                   # held to the next reading
+                            DSC_["term"] = desc22_.term(net.head2.dsc, DSC_L, H2S.s, sit_, tgt_, OG_P, OK_P, nonfinite=NF_D)
+                        if OO_ON and OS_O == 1:
+                            sio_ = o22_league_sit(onet, BS_.s, x, sit_, DOX_)
+                            DSC_["term_o"] = desc22_.term(onet.head2.dsc, DSC_L, H2O.s, sio_, tgt_, OG_O, OK_O, nonfinite=NF_D)
+                    except Exception:
+                        if DPLAY_:                                       # (desc's term plays: part of play, a failure stops the run as the built
+                            raise                                        # outlook's would)
+                        DSC_ = dict(DSC_, sit=None, tgt=None, trk=None)
+                        o22_fail()
+                if OUT_PLAY and OT_ON and t % BK == 0 and not (O22_PLAY and OS_P == 1) and OG_P > 0:   # (the review: the built term's seats whose
+                    NF_B[0] += outlook_.nonfinite_rows(outlook_.outlook(net.head2.out, H2S.s)[:, OK_P])   # outlook is not finite: 0, counted)
                 OT_ = CMB and t % BK == 0 and OX_ is not None            # (1.7) a keep reading (the frame after the head's tick): the order made
                 if OT_:                                                  # before the frame's step from the candidates the simulators made after
                     X_ = torch.from_numpy(OX_[0]).to(dev).float()       # the tick's frame, the brain's odds written in (its state is the tick's),
@@ -6151,6 +6211,7 @@ def main():
                 if bt_ and SPR_ON and SPR_RING[0].kept(SPR_G0[upd] + t):  # (--space-read) the state of this tick, kept every --space-every ticks
                     SPR_RING[0].push(SPR_G0[upd] + t, torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if bt_ and O22_PLAY and not O22_OFF[0]:                  # (2.2a) the tracker's rows: its input at this tick and the truths of this frame
+                  try:                                                   # (its own guard: a failure turns 2.2a's silent parts off, never the run)
                     if TRK_RING[0].kept(TRK_G0[upd] + t):                # (the enemy's health and armor, the rule's belief of them, the seconds
                         o_f_ = torch.from_numpy(O22_FR)                  # since he saw him, he alive, the enemy alive)
                         al_ = torch.from_numpy(np.asarray(aux[:, O22_IX["en_alive"]], np.float32))
@@ -6159,6 +6220,8 @@ def main():
                         TRK_RING[0].push(TRK_G0[upd] + t, torch.cat([tracker_.inp(TRK_L, BS_.s, x).cpu(), tr_], 1))
                     if TRKC_RING[0].kept(TRK_G0[upd] + t):              # (the in-control rows: his columns; the brain's state is the control ring's)
                         TRKC_RING[0].push(TRK_G0[upd] + t, x[:, torch.as_tensor(TRK_L["obs_cols"], dtype=torch.long, device=dev)])
+                  except Exception:
+                    o22_fail()
                 if bt_ and CTL_ON and CTL_RING[0].kept(CTL_G0[upd] + t):  # (--control) the state of this tick, kept every --control-every ticks
                     CTL_RING[0].push(CTL_G0[upd] + t, BS_.s if int(CTL_L["mem"]) == 0 else torch.cat([BS_.s.float(), h[:, :H].float()], 1))
                 if H2 and bt_:                                           # (--head2) a tick with the brain's: what it knows, his stack, the hands' memory
@@ -6677,7 +6740,13 @@ def main():
                                 OR_TR.append(trn_now_[rw_] if trn_now_ is not None else torch.zeros(len(rw_), dtype=torch.bool, device=dev))
                                 OR_C.append(OCT_[rw_] if OCT_ is not None else torch.zeros(len(rw_), dtype=torch.bool, device=dev))
                                 OR_B.append(OBASE_[rw_].half())
-                                if O22_PLAY:                             # (2.2a) the desc inputs of the reading, the stack edge's bin
+                            except Exception:
+                                out_fail()
+                        if O22_PLAY and not OUT_OFF[0] and not O22_OFF[0] and not DR_FAIL[0]:   # (2.2a) its own guard (the review): a failure here
+                            try:                                         # turns 2.2a's parts off, never the built outlook (and the other way round)
+                                if O22_FAULT == "rows" and upd >= 2:     # (a test's injected fault: tests of the guards only)
+                                    raise RuntimeError("O22_FAULT=rows: a fault injected into 2.2a's rows")
+                                if True:                                 # the desc inputs of the reading, the stack edge's bin
                                     ok_d = DSC_.get("sit") is not None
                                     DR_OK.append(torch.full((len(rw_),), ok_d, dtype=torch.bool, device=dev))
                                     DR_SIT.append(DSC_["sit"][rw_].half().cpu() if ok_d else torch.zeros(len(rw_), len(DSC_L["sit"]), dtype=torch.float16))
@@ -6693,7 +6762,8 @@ def main():
                                         ATK_[:, 3] += torch.zeros(5, dtype=torch.float64, device=dev).index_add_(0, eb_[rmk_].long(), tk_[rmk_, 5].double())
                                         ATK_[:, 4] += torch.bincount(eb_[rmk_].long(), minlength=5)[:5].double()
                             except Exception:
-                                out_fail()
+                                DR_FAIL[0] = True                        # (the rows would no longer line up with the outlook's: none this rollout)
+                                o22_fail()
                         OHFA_ = None
                 live = torch.where(b_hon[t], live * dec_h.float(), live)
                 if OUT_PLAY and trn_now_ is not None:                    # (2.1f) a trial trip is off-policy: none of its frames in any target lesson
@@ -6999,8 +7069,9 @@ def main():
             OR_T = OR_I = OR_S = OR_G = OR_D = OR_TR = OR_C = OR_B = OG_R = OND_R = None
         if O22_PLAY:                                                     # (2.2a) carried to the next rollout: the description's numbers of the coming
             C["dox"], C["dsc"], C["o22now"] = DOX_, DSC_, O22_NOW        # reading, the held desc terms, the truths
-            O22_R = dict(src=OS_P, src_opp=OS_O, atk=ATK_.cpu().numpy().tolist())
-            if not O22_OFF[0] and OUT_ROWS is not None and DR_SIT:
+            O22_R = dict(src=OS_P, src_opp=OS_O, atk=ATK_.cpu().numpy().tolist(), nonfinite_built=int(NF_B[0]), nonfinite_desc=int(NF_D[0]),
+                         rows_failed=bool(DR_FAIL[0]))
+            if not O22_OFF[0] and not DR_FAIL[0] and OUT_ROWS is not None and DR_SIT:
                 try:
                     O22_ROWS = dict(sit=torch.cat(DR_SIT).cpu(), tgt=torch.cat(DR_TGT).cpu(), eb=torch.cat(DR_EB).cpu(), ok=torch.cat(DR_OK).cpu())
                 except Exception:
@@ -9002,17 +9073,22 @@ def main():
                         ro_ = outlook_.readouts(out_now, G_o, Zp_, OK_o, dec=D_o, ctrl=C_o if bool(OUT_ST[0].get("ctrl")) else None,
                                                 trial=TR_o if bool(TR_o.any()) else None, base=B_o, clip=float(OUT_L["clip"]))
                         FY_o = FM_o = FZp_ = FZn_ = None
-                        if O22 and R.get("b_o22") is not None:           # (2.2a) the facts of each row's segment, scored before the lesson
-                            bo22_ = R["b_o22"].to(dev)
+                        if O22 and R.get("b_o22") is not None and not O22_OFF[0] and "facts" not in O22_PARTOFF:   # (2.2a) the facts of each
+                          try:                                           # row's segment, scored before the lesson (their own guard: the review)
+                            bo22_ = R["b_o22"][..., [0, 1, 5]].to(dev).float()   # (his health, armor, reached: what the facts read)
                             dme_ = b_aux[1:T + 1, :, TRK_IXD["died"]].to(dev).float() > 0.5
                             FY_o, FM_o = outlook_.fact_labels(T_o, I_o, end_o, b_done[:T], dme_, dme_[:, torch.from_numpy(np.arange(N) ^ 1).to(dev)],
-                                                              bo22_[:, :, 5] > 0.5, bo22_[:, :, 0:2], np.arange(N) ^ 1)
+                                                              bo22_[:, :, 2] > 0.5, bo22_[:, :, 0:2], np.arange(N) ^ 1)
                             FZp_ = FSTATS.standardise(FY_o) if int(FSTATS.n[outlook_.FBIN]) > 0 else FY_o.clone()
                             fo_now = torch.cat([pol.head2.out.both(S_o[i_:i_ + 8192])[1] for i_ in range(0, len(S_o), 8192)])
                             OUT_ST[0]["facts"] = outlook_.facts_readouts(fo_now, G_o, FZp_, FM_o, dec=D_o)
                             FSTATS.update(FY_o, FM_o)
                             FZn_ = FSTATS.standardise(FY_o)
                             fo_now = bo22_ = None
+                          except Exception:
+                            FY_o = FM_o = FZp_ = FZn_ = None             # (the built outlook learns on without its facts)
+                            OUT_ST[0].pop("facts", None)
+                            o22_part("the facts")
                         raw_o = OUT_STATS.update(Y_o, OK_o)
                         Zn_ = OUT_STATS.standardise(Y_o)
                     with PLAN_LOCK, torch.enable_grad():
@@ -9042,11 +9118,16 @@ def main():
                     S_o = G_o = B_o = Y_o = Zp_ = Zn_ = out_now = None
                 except Exception:
                     out_fail()
-        if O22 and not O22_OFF[0]:                                       # (2.2a) the tracker: its rows scored, then learnt; the in-control split
+        if O22 and O22_ST[0] is not None and not (O22_ST[0].get("desc") or {}).get("desc", {}).get("kind"):   # (the review) a desc lesson that did not
+            O22_ST[0].setdefault("desc_skipped", "2.2a's parts are off" if O22_OFF[0] else    # run: its reason and the run's count, recorded
+                                 "the built outlook's lesson did not run (its rows, its labels or its lesson off)")
+            O22_SKIPS[0] += 1
+            O22_ST[0]["desc_skipped_n"] = O22_SKIPS[0]
+        if O22 and not O22_OFF[0] and "tracker" not in O22_PARTOFF:      # (2.2a) the tracker: its rows scored, then learnt; the in-control split
             try:
                 o22_tracker_learn(R)
             except Exception:
-                o22_fail()
+                o22_part("the tracker")
         if NOSYNC:                                                       # (--learn-nosync) the counters summed on the card, read once
             CHK_[:] = [None, None]
             XL_[:] = [None, None]
@@ -9666,7 +9747,7 @@ def main():
                                       fight_he_dies_first=[(round(float(atk_[k_, 2] / atk_[k_, 4]), 4) if atk_[k_, 4] > 0 else None) for k_ in range(5)],
                                       fight_i_die_first=[(round(float(atk_[k_, 3] / atk_[k_, 4]), 4) if atk_[k_, 4] > 0 else None) for k_ in range(5)],
                                       outlook_built=o2r_.pop("atk_built", None), outlook_desc=o2r_.pop("atk_desc", None))
-                o2r_.update(src_next=int(OUT_SR[0]), off=bool(O22_OFF[0]),
+                o2r_.update(src_next=int(OUT_SR[0]), off=bool(O22_OFF[0]), parts_off=sorted(O22_PARTOFF), desc_skipped_total=int(O22_SKIPS[0]),
                             sizes=dict(out_l3=round(float(pol.head2.out.l3.weight.norm()), 5),
                                        dsc_l3={s_: round(float(pol.head2.dsc[s_].l3.weight.norm()), 5) for s_ in DSC_L["sibs"]},
                                        trk_l3=round(float(pol.head2.trk.l3.weight.norm()), 5), vw_l2=round(float(pol.head2.vw.l2.weight.norm()), 5)))

@@ -45,7 +45,8 @@ def small_cmd(D, updates):
                  ("python.exe sim" + BS + "train_duel_rnn.py ", "python.exe " + os.path.join(CODE, "sim", "train_duel_rnn.py") + " "),
                  ("--workers 30 ", "--workers 2 "), ("--matches 168 ", "--matches 8 "), ("--steps 384 ", "--steps {} ".format(STEPS)),
                  ("--minibatches 360 ", "--minibatches 4 "),
-                 ("%LEARN% >> ", ("--snapshot-min 1 --overlap 1 --learn-nosync 1 --plan-every 2 " if not EXTRA else "--snapshot-min 1000 ") + EXTRA + " >> ")):
+                 ("%LEARN% >> ", ("--snapshot-min 1 --overlap 1 --learn-nosync 1 --plan-every 2 " if not EXTRA else
+                                 "--snapshot-min 1000 " + ("--overlap 1 --learn-nosync 1 " if os.environ.get("SMOKE_OVERLAP") == "1" else "")) + EXTRA + " >> ")):
         assert t.count(a) >= 1, a
         t = t.replace(a, b)
     t = t.replace("%ROOT%\\docs\\runs\\2.2\\2.2a\\items_22a.json", os.path.join(CODE, "docs", "runs", "2.2", "2.2a", "items_22a.json"))
