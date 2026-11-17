@@ -302,6 +302,14 @@ def test_rule():
             chk("auto_mark.json refused: {}".format(bad_), False)
     chk("auto_mark.json: out-of-range or unknown settings refused (6 cases); the file of the run accepted",
         R.auto_check(json.load(open(os.path.join(HERE, "auto_mark.json"))))[0] is not None)
+    g1, m1 = R.guard_src({"OUT_SRC": 1, "OUT_G": 2.0}, {"out22": {"parts_off": ["the desc outlook desc"]}, "outlook": {}})
+    g2, m2 = R.guard_src({"OUT_SRC": 1, "OUT_G": 2.0}, {"out22": {"off": True}, "outlook": {"off": True}})
+    g3, m3 = R.guard_src({"OUT_SRC": 1, "OUT_G": 2.0}, {"out22": {"parts_off": ["the desc outlook desc_notrk"]}, "outlook": {}})
+    g4, m4 = R.guard_src({"OUT_G": 1.0}, {"out22": {"off": True}, "outlook": {}}, cur_src=1)
+    chk("the ramp's guard: desc off by an out-of-memory: OUT_SRC 0, OUT_G kept; 2.2a and the built outlook both off: OUT_SRC 0, OUT_G 0; "
+        "a sibling off: as written; the live source desc with 2.2a off: OUT_SRC 0", g1 == {"OUT_SRC": 0, "OUT_G": 2.0} and len(m1) == 1
+        and g2 == {"OUT_SRC": 0, "OUT_G": 0.0} and len(m2) == 2 and g3 == {"OUT_SRC": 1, "OUT_G": 2.0} and not m3 and g4 == {"OUT_G": 1.0, "OUT_SRC": 0},
+        (g1, g2, g3, g4))
     chk("OUT_TRIAL's line: 0 at 0, 0.015 at 5, 0.03 at 10 and after", abs(R.value("OUT_TRIAL", 0)) < 1e-12 and abs(R.value("OUT_TRIAL", 5) - 0.015) < 1e-12
         and abs(R.value("OUT_TRIAL", 10) - 0.03) < 1e-12 and abs(R.value("OUT_TRIAL", 300) - 0.03) < 1e-12)
 

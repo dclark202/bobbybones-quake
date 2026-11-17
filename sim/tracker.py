@@ -232,6 +232,15 @@ class PassAcc:
                 self.d[split][h_]["P"].append(P[:, h_])
                 self.d[split][h_]["Y"].append(Y[:, h_])
 
+    def add_h(self, split, h_, P, Y, cap=400000):
+        """one horizon's scores: at most `cap` a split and horizon (the arrays and the AUC's sort stay bounded)"""
+        have_ = sum(len(x_) for x_ in self.d[split][h_]["P"])
+        if have_ >= cap:
+            return
+        k_ = cap - have_
+        self.d[split][h_]["P"].append(np.asarray(P, np.float32)[:k_])
+        self.d[split][h_]["Y"].append(np.asarray(Y, np.float32)[:k_])
+
     def record(self):
         from control import auc as auc_
         out = {}

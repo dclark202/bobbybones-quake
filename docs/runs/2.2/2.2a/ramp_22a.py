@@ -192,6 +192,27 @@ def dial_at(clock, lo, hi, v0, v1, pre):
     return v1 if clock >= hi else (pre if clock < lo else v0 + (v1 - v0) * (clock - lo) / float(hi - lo))
 
 
+def guard_src(v_, m_, cur_src=0):
+    """(the second review) the dials about to be written v_ against the last update's record m_: when desc's parts are off (2.2a's parts off,
+    or an out-of-memory named "the desc outlook desc") OUT_SRC 1 is never written (the built outlook's, 0); when the source that would play
+    (written, else the live file's cur_src) has its lesson off, OUT_G is 0. -> (the dials, the MAJOR lines' texts)"""
+    v_ = dict(v_)
+    o2_ = (m_ or {}).get("out22") or {}
+    desc_dead_ = bool(o2_.get("off")) or "the desc outlook desc" in (o2_.get("parts_off") or [])
+    built_dead_ = bool(((m_ or {}).get("outlook") or {}).get("off"))
+    msgs_ = []
+    src_ = int(v_.get("OUT_SRC", cur_src))
+    if src_ == 1 and desc_dead_:
+        msgs_.append("desc's parts are OFF ({}): OUT_SRC 1 refused, the built outlook's term instead (OUT_SRC 0)".format(
+            "2.2a's parts off" if o2_.get("off") else "an out-of-memory in desc's lesson"))
+        v_["OUT_SRC"] = 0
+        src_ = 0
+    if "OUT_G" in v_ and v_["OUT_G"] > 0 and ((src_ == 0 and built_dead_) or (src_ == 1 and desc_dead_)):
+        msgs_.append("the outlook that would play ({}) has its lesson OFF: OUT_G 0".format("desc" if src_ == 1 else "the built one"))
+        v_["OUT_G"] = 0.0
+    return v_, msgs_
+
+
 def kinds_line(ch_, u_):
     """(b22r) the kinds of his changes mid-trip in plain words (rec plan.changes; sim/change_kinds.py): no flag, no threshold"""
     if ch_.get("kinds_off"):
@@ -634,6 +655,10 @@ def main():
             v_["OUT_SRC"] = int(AUTO_D[0]["src"])
             v_["OUT_G"] = round(out_g_at(clock, (AUTO_D[0]["mark"], AUTO_D[0]["open"][0], AUTO_D[0]["open"][1])), 6)
         d = json.load(open(LIVE, encoding="utf-8"))
+        L_ = jl(MET)
+        v_, gm_ = guard_src(v_, L_[-1] if L_ else None, int(d.get("OUT_SRC", 0) or 0))
+        for g_ in gm_:
+            log("MAJOR PROBLEM clock {}: {}".format(int(clock), g_))
         d.update(v_)
         with open(LIVE + ".tmp", "w", encoding="utf-8") as fh:
             fh.write(json.dumps(d))

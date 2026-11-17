@@ -2,6 +2,7 @@
   rows   a failure in 2.2a's rows in the rollout from update 2 on: 2.2a's silent parts go off (MAJOR in the trainer's log), the desc lesson is
          recorded as skipped with its reason in rec out22 (and the ramp's MAJOR line), the built 17-output outlook learns on (rows, not off)
   oom    an out-of-memory in desc_notrk's lesson: that part alone off (rec out22 parts_off, MAJOR), desc and desc_nomap learn on
+  oom_once  the same fault once (the first lesson of a process): the part stays off and named afterwards, never retried
     QLBOT_ROOT=... python docs/runs/2.2/2.2a/fault_test.py <start file> <2.1d's opt> <anchor a> <anchor b>"""
 import json
 import os
@@ -51,6 +52,13 @@ def main():
                             and (x_.get("desc") or {}).get("desc", {}).get("kind") and (x_.get("desc") or {}).get("desc_nomap", {}).get("kind") for x_ in q_)
         and "OUT OF MEMORY in 2.2a's the desc outlook desc_notrk" in log, [(x_.get("parts_off"), x_.get("off")) for x_ in q_])
     chk("oom: the ramp's MAJOR line names the part", "turned OFF by an out-of-memory" in wl)
+    M, log, wl = arm("oom_once")                             # (the second review: a fault once; the part must STAY off, not retry)
+    q_ = [m_.get("out22") or {} for m_ in M]
+    sib_ = [((x_.get("desc") or {}).get("desc_notrk") or {}) for x_ in q_[:3]]
+    chk("oom_once: one out-of-memory in desc_notrk's first lesson: off and named in every later update of the process, never retried (its record "
+        "says off earlier), desc learns on", len(M) == 4 and all("the desc outlook desc_notrk" in (x_.get("parts_off") or []) for x_ in q_[:3])
+        and all(s_.get("off") == "out of memory earlier" for s_ in sib_[1:3]) and log.count("OUT OF MEMORY in 2.2a's the desc outlook desc_notrk") == 2
+        and all((x_.get("desc") or {}).get("desc", {}).get("kind") for x_ in q_), ([x_.get("parts_off") for x_ in q_], [s_.get("off") for s_ in sib_]))
     print("ALL PASSED" if ok else "FAILED")
     return 0 if ok else 1
 

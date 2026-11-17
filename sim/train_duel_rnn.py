@@ -4337,6 +4337,8 @@ def main():
     TRK_L = DSC_L = TRK_OPT = DSC_OPT = VW_OPT = FSTATS = TRK_GEN = DSC_GEN = None
     O22_FAULT = os.environ.get("O22_FAULT") or ""             # ... (tests of the guards only: rows, oom)
     O22_PARTOFF = set()                                      # ... (the review) the parts turned off by an out-of-memory, by name
+    PART_DESC, PART_VW, PART_FACTS, PART_TRK, PART_PASS = "the desc outlook {}", "the second value", "the facts", "the tracker", "the pass odds"
+    O22_FAULT_DONE = [False]                                 # ... (tests of the guards: a fault injected once)
     O22_SKIPS = [0]                                          # ... the updates whose desc lesson did not run
     O22_OFF = [False]                                        # ... a failure in its lessons or readouts: off for the rest of the run (a desc term plays on)
     O22_ST = [None]                                          # ... the update's readouts, for the record
@@ -4549,12 +4551,13 @@ def main():
             OKd_ = OKd_c.to(dev)
             FMd_ = FMd_c.to(dev) if FMd_c is not None else None
             for sib_ in DSC_L["sibs"]:
-                if "desc:" + sib_ in O22_PARTOFF:
+                if PART_DESC.format(sib_) in O22_PARTOFF:
                     st_["desc"][sib_] = dict(off="out of memory earlier")
                     continue
                 try:
-                    if O22_FAULT == "oom" and sib_ == "desc_notrk":  # (a test's injected fault: tests of the guards only)
-                        raise RuntimeError("CUDA out of memory. (O22_FAULT=oom: a fault injected into desc_notrk's lesson)")
+                    if (O22_FAULT == "oom" or (O22_FAULT == "oom_once" and not O22_FAULT_DONE[0])) and sib_ == "desc_notrk":   # (a test's
+                        O22_FAULT_DONE[0] = True                     # injected fault: tests of the guards only)
+                        raise RuntimeError("CUDA out of memory. (O22_FAULT={}: a fault injected into desc_notrk's lesson)".format(O22_FAULT))
                     with torch.no_grad():
                         od_, fd_ = [], []
                         for i_ in range(0, len(S_o), 4096):
@@ -4577,7 +4580,7 @@ def main():
                                              l3=round(float(pol.head2.dsc[sib_].l3.weight.norm()), 5))
                 except Exception:
                     st_["desc"][sib_] = dict(off="failed")
-                    o22_part("the desc outlook " + sib_)
+                    o22_part(PART_DESC.format(sib_))
                     if O22_OFF[0]:
                         raise
                 finally:
@@ -4589,7 +4592,7 @@ def main():
         if eb_ is not None:
             st_["atk_built"] = o22_atk_out(out_now.cpu() if out_now is not None else None, pick_, EN_, eb_) if out_now is not None else None
         bowi_, bvwi_ = R.get("b_owi"), R.get("b_vwi")             # the head's second value: the return of the win chance with the items
-        if bowi_ is not None and bvwi_ is not None and "vw" not in O22_PARTOFF:
+        if bowi_ is not None and bvwi_ is not None and PART_VW not in O22_PARTOFF:
             try:
                 _, rw2_ = head2_.gae(bowi_, bvwi_, b_done_[:T_].float(), float(H2L["gamma"]), a.head2_lam if a.head2_lam > 0 else a.lam)
                 with PLAN_LOCK, torch.enable_grad():
@@ -4598,7 +4601,7 @@ def main():
                 st_["vw"] = dict(loss_before=round(l0_, 6) if l0_ is not None else None, loss_after=round(l1_, 6) if l1_ is not None else None,
                                  ret_mean=round(float(yv_.mean()), 5), ret_sd=round(float(yv_.std()), 5), l2=round(float(pol.head2.vw.l2.weight.norm()), 5))
             except Exception:
-                o22_part("the second value")
+                o22_part(PART_VW)
                 if O22_OFF[0]:
                     raise
             finally:
@@ -4638,16 +4641,13 @@ def main():
         P_ = torch.cat(P_) if P_ else torch.zeros(0, G19_.shape[1], 3)
         inv_ = ax_[rt_, ri_, C["en_in_view"]] > 0.5
         ctl_ = C_o.cpu().bool()
+        t_r = time.time()
         for sp_, sel_ in (("all", torch.ones(len(rt_), dtype=torch.bool)), ("in_view", inv_), ("out_view", ~inv_), ("in_ctl", ctl_), ("out_ctl", ~ctl_)):
             for h_ in range(3):
                 q_ = (Mq_[sel_][..., h_] > 0.5)
                 if bool(q_.any()):
-                    pp_ = torch.zeros(int(q_.sum()), 3)
-                    yy_ = torch.zeros(int(q_.sum()), 3)
-                    pp_[:, h_] = P_[sel_][..., h_][q_]
-                    yy_[:, h_] = Y_[sel_][..., h_][q_]
-                    acc_.d[sp_][h_]["P"].append(pp_[:, h_].numpy())
-                    acc_.d[sp_][h_]["Y"].append(yy_[:, h_].numpy())
+                    acc_.add_h(sp_, h_, P_[sel_][..., h_][q_].numpy(), Y_[sel_][..., h_][q_].numpy())   # (capped: PassAcc's cap)
+        secs_r = round(time.time() - t_r, 3)
         l_ = None
         with PLAN_LOCK, torch.enable_grad():
             for g_ in TRK_OPT.param_groups:
@@ -4667,7 +4667,10 @@ def main():
                 l_ = float(ls_)
         for p_ in pol.head2.trk.parameters():
             p_.grad = None
-        st_["pass"] = dict(acc_.record(), rows=int(len(rt_)), questions=int(Mq_.sum()), loss=round(l_, 5) if l_ is not None else None,
+        t_r = time.time()
+        rec_p = acc_.record()
+        secs_r = round(secs_r + time.time() - t_r, 3)
+        st_["pass"] = dict(rec_p, rows=int(len(rt_)), questions=int(Mq_.sum()), loss=round(l_, 5) if l_ is not None else None, secs_readouts=secs_r,
                            p2=round(float(pol.head2.trk.p2.weight.norm()), 5), secs=round(time.time() - t0_, 3))
 
     def o22_atk_out(o_, pick_, EN_, eb_):
@@ -9149,7 +9152,7 @@ def main():
                         ro_ = outlook_.readouts(out_now, G_o, Zp_, OK_o, dec=D_o, ctrl=C_o if bool(OUT_ST[0].get("ctrl")) else None,
                                                 trial=TR_o if bool(TR_o.any()) else None, base=B_o, clip=float(OUT_L["clip"]))
                         FY_o = FM_o = FZp_ = FZn_ = None
-                        if O22 and R.get("b_o22") is not None and not O22_OFF[0] and "facts" not in O22_PARTOFF:   # (2.2a) the facts of each
+                        if O22 and R.get("b_o22") is not None and not O22_OFF[0] and PART_FACTS not in O22_PARTOFF:   # (2.2a) the facts of each
                           try:                                           # row's segment, scored before the lesson (their own guard: the review)
                             bo22_ = R["b_o22"][..., [0, 1, 5]].to(dev).float()   # (his health, armor, reached: what the facts read)
                             dme_ = b_aux[1:T + 1, :, TRK_IXD["died"]].to(dev).float() > 0.5
@@ -9164,7 +9167,7 @@ def main():
                           except Exception:
                             FY_o = FM_o = FZp_ = FZn_ = None             # (the built outlook learns on without its facts)
                             OUT_ST[0].pop("facts", None)
-                            o22_part("the facts")
+                            o22_part(PART_FACTS)
                         raw_o = OUT_STATS.update(Y_o, OK_o)
                         Zn_ = OUT_STATS.standardise(Y_o)
                     with PLAN_LOCK, torch.enable_grad():
@@ -9191,11 +9194,11 @@ def main():
                             o22_learn(R, T_o, I_o, S_o, G_o, B_o, D_o, TR_o, C_o, Zp_, Zn_, OK_o, FZp_, FZn_, FM_o, out_now, b_done, T)
                         except Exception:
                             o22_fail()
-                    if O22 and not O22_OFF[0] and TRK_L.get("pass") and "the pass odds" not in O22_PARTOFF:   # (2.2a, the owner's go: the tracker's
+                    if O22 and not O22_OFF[0] and TRK_L.get("pass") and PART_PASS not in O22_PARTOFF:   # (2.2a, the owner's go: the tracker's
                         try:                                             # pass odds, scored, then learnt; its own guard)
                             o22_pass_learn(R, T_o, I_o, C_o, b_aux, b_done, T)
                         except Exception:
-                            o22_part("the pass odds")
+                            o22_part(PART_PASS)
                     S_o = G_o = B_o = Y_o = Zp_ = Zn_ = out_now = None
                 except Exception:
                     out_fail()
@@ -9204,11 +9207,11 @@ def main():
                                  "the built outlook's lesson did not run (its rows, its labels or its lesson off)")
             O22_SKIPS[0] += 1
             O22_ST[0]["desc_skipped_n"] = O22_SKIPS[0]
-        if O22 and not O22_OFF[0] and "tracker" not in O22_PARTOFF:      # (2.2a) the tracker: its rows scored, then learnt; the in-control split
+        if O22 and not O22_OFF[0] and PART_TRK not in O22_PARTOFF:      # (2.2a) the tracker: its rows scored, then learnt; the in-control split
             try:
                 o22_tracker_learn(R)
             except Exception:
-                o22_part("the tracker")
+                o22_part(PART_TRK)
         if NOSYNC:                                                       # (--learn-nosync) the counters summed on the card, read once
             CHK_[:] = [None, None]
             XL_[:] = [None, None]

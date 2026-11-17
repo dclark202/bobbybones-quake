@@ -352,8 +352,11 @@ class NpDesc:
         self.st.grow(n)
         check_blank(ox[0])
         si_, tg_, _ = self.inputs_rows(brain_s, xa, tokP, tokok, tokhand, trk_brain, ox, maps)
-        t_ = np_term(self.dscW, self.DL, h2s_rows, si_, tg_, g, pick)
-        bad_ = ~np.isfinite(t_).all(1)                       # (a non-finite outlook: no term for that seat, counted, loud)
+        import outlook as outlook_
+        o_, _ = np_forward(self.dscW, self.DL, h2s_rows, si_, tg_)
+        o_ = o_[:, int(pick)]
+        bad_ = ~np.isfinite(o_[:, :-1]).all(1)              # (a non-finite outlook, counted on the raw outlook before the term zeroes it: no term
+        t_ = outlook_.np_term(o_, g, float(self.DL["clip"]))  # for that seat, counted, loud)
         if bad_.any():
             self.nonfinite = getattr(self, "nonfinite", 0) + int(bad_.sum())
             print("MAJOR PROBLEM: the desc term is not finite on {} seats (counted {}): 0 for them".format(int(bad_.sum()), self.nonfinite), flush=True)
