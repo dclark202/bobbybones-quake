@@ -96,6 +96,27 @@ are one play, told apart by the weapon and the fire flag.
 
 The pilot: its card is [2.2a/CARD.md](2.2a/CARD.md) (what is in it, the stages, the red team, the odds).
 
+## Notes for 2.2c, from the owner's play test of 2.1d's end (11-16 evening; not designed in detail)
+
+- **"Holding a rail angle isn't enough, but it's a start. It should also include 'have rail out and look for a shot'"** (owner). In the
+  order's four parts: no fixed place, the point where he is expected, the rail in hand, fire on sight. It is the lead case of "attack
+  with the weapon to bring", not only a hold.
+- **My reading of why he does not use the rail (to be measured, not assumed).** The owner's: "he prefers to have weapons out that get
+  him paid" (the hands are paid by the damage; the lightning pays steadily, the rail in lumps). Beside it: his opponents are his copies,
+  who hold the rail almost never, so his hands get almost no rail practice, his rail on a moving target is probably weak, and holding
+  fire until the target slows is then the right choice for him (a missed rail costs 1.5 s). A loop: not held, so not learnt, so not
+  worth holding. Every attempt to move his weapon from outside failed (1.5a's weapon scores: no gain; 1.7c's table: collapse; rule 12).
+- **Trial weapons**: on a small share of trips he carries a weapon he would not have chosen. The hands get the practice and the
+  outlook learns what the weapon is worth from each place (the map sense already has a rail reading for every pair of places). The
+  same mechanism as trial trips, on the order's weapon part.
+- **The jumping and the rail are probably one cause**: nobody in his world rails him, so a jump in a fight (the easiest rail target)
+  costs him nothing. Once the rail is used against him, jumping in view is priced by itself. Until then: a readout (jumps with the
+  enemy in view against travelling), no cost added.
+- **Before 2.2c, on recorded games (no training)**: his rail's hit rate by how fast the target moves, in self-play and in the owner's
+  play test; how often he fires with the enemy in view, by the enemy's speed and by his weapon. Not a pro target: facts about his hands.
+- **A fixed play test after each run** (the same maps, the score, the owner's three ratings: fight decisions, positioning, weapon use),
+  to see the slow improvement he asked for.
+
 ## Decided in the chat of 11-16 (owner)
 
 - The three jobs with no new memory; the outlook scores a play's description; the tracker and the map sense enter through the outlook, not the chooser's inputs.

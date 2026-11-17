@@ -204,6 +204,20 @@ The trainer ended itself on the clock (exit 0); the end kept as `keep/policy_end
   the point; fewer trips is never read as progress); the targets reached a minute did not fall.
 - The league table by opponent was not written by this run (the table file dates from 11-04): open.
 
+## The owner's play test of the end (11-16 evening): the final statement
+
+A quick play test of 2.1d's end on a local server. The owner: "overall good. He feels more human and enjoyable to play against. I
+smoked him though." And: "Overall this is the right direction. He might actually lose more games to people now, but I feel better in
+being able to improve him long term. The decision network is where all the hard work will be."
+
+| What he saw | In his words | Where it goes |
+|---|---|---|
+| Plays more like a person; no overall strategy | "it's clear he has no 'overall strategy' (which is to be expected). He goes between the major items, and does a decent job of trying to take fights, better than previous versions" | 2.2 |
+| Fight decisions and positioning still weak | "his decision making on fighting is still weak (expected) and his positioning is still somewhat weak (also expected). These things I would like to see slowly start to get better as we incorporate the new decisioning capabilities" | 2.2b (attack: the stacks, the map sense, the pass odds); a fixed play test after each run |
+| Rockets more, the rail still little | "He's using rockets more which I like, rail still not much"; "I believe the reason he doesn't use it is that he prefers to have weapons out that get him paid" | 2.2c |
+| Holds fire on a moving enemy | "It seems he's reluctant to take a shot on a moving enemy, he'll fire more frequently if I slow down" | to be measured on recorded games before 2.2c (his rail's hit rate by the target's speed; how often he fires in view by the enemy's speed and his weapon) |
+| Jumps a lot | "Probably a good behavior to learn away again let's keep monitoring it" | a readout to watch; see 2.2c's note (nobody in his world rails a jumping player) |
+
 ## Before the go
 
 | | |
