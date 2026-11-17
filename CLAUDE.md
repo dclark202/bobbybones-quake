@@ -11,6 +11,7 @@ bot is made of, why each rule exists and what was tried are in the documents bel
 | [docs/PLAN.md](docs/PLAN.md) | The goal, where things stand, what is next |
 | [docs/RUNS.md](docs/RUNS.md) | **The log: every run** (started from, start, stop, the change, the outcome, the kept file). The source of truth for what ran |
 | [docs/HISTORY.md](docs/HISTORY.md) | What was tried and failed and why; open problems; **each rule below with the owner's words and the incident behind it** |
+| [docs/design/PRINCIPLES.md](docs/design/PRINCIPLES.md) | **Good design principles: what has worked**, each with its case and how sure we are. Read before proposing a design; add an entry when a design works in a run |
 | [docs/research/](docs/research/README.md) | How the game works, how the best play it, how other bots learnt it (one-page core and a checklist in its README) |
 | [docs/guides/ARCHITECTURE.md](docs/guides/ARCHITECTURE.md) | What the parts are and where their code is; the inputs; the commands. It changes as we build: the code's own notes win |
 | [docs/guides/GOTCHAS.md](docs/guides/GOTCHAS.md) | Hard-won traps: the trainer, runs, the real game and servers, design lessons |
