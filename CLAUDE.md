@@ -1,328 +1,150 @@
-# BobbyBones: project notes for Claude
+# BobbyBones: ground rules for Claude
 
-A Quake Live duel bot that learns to play from scratch: a recurrent network trained by self-play in a fast
-simulator of the game, checked on a real Quake Live server, play-tested by people. Repo:
-`dclark202/bobbybones-quake` (public, GPL-3.0 because of the bundled minqlx and ioquake3 code). Local path:
-`Documents\gh\BobbyBones` in the owner's home directory (moved there 2026-10-28; older notes say `ql-bot`).
+A Quake Live duel bot that learns to play from scratch by self-play in a fast simulator of the game, checked on a real Quake Live
+server, play-tested by people. Repo `dclark202/bobbybones-quake` (public, GPL-3.0).
 
-The version of this file before the trim of 2026-11-11 (with the switch-by-switch record of every input generation, v8 to
-v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE_2026-11-11.md).
+This file holds only what every session must know every time: the rules, how the owner wants to work, how a run is handled. What the
+bot is made of, why each rule exists and what was tried are in the documents below. **Read the ones your job needs before you act.**
 
-## HARD RULES (read before doing anything)
-
-1. **Never delete anything outside git's tracked files.** No `rm -rf`, `Remove-Item -Recurse`, `rmdir /s`, or
-   `git worktree remove --force` on any folder. On 2026-10-28 a cleanup did that near links into `data/` and wiped the whole
-   data folder (every run's checkpoints). A link (junction) is removed only with `cmd /c rmdir "<link>"` (no `/s`) after checking
-   with `(Get-Item <path>).LinkType`, and the target is checked after. Any delete of data needs the owner's word for that exact
-   delete and a backup first (`python tools/run/backup.py`). `tools/hooks/no_delete.py` (a hook in `.claude/settings.json`) asks
-   him before any delete command runs.
-2. **Do only what the owner asks.** A question is not a go. Ask before starting runs, servers, agents, or anything that
-   changes something outside this session; before renaming or restarting fresh. Public servers only on his word.
-   **Exception: a run he approved that crashes is fixed and restarted without asking** (owner, 2026-11-15: "Obviously this
-   was meant to run overnight"; 2.1b sat dead 10 hours waiting for a go). Find the cause, fix it in the code, test the fix
-   (a scratch smoke that exercises the failing path), move the dead folder aside (`<run>_crashN`, nothing deleted) or resume
-   from the last save, restart with the same settings and the remaining length, add the crash and the restart to `RUNS.md`,
-   and report it at once. A fix that changes the design, the pay or the settings still goes to him first.
-3. **Settings check before every run, check and calibration, and before using its numbers:**
-   `python tools/run/check_settings.py <train.cmd> --ref <reference.cmd>` (and `--ck <checkpoint>` for a run's own saves).
-   Any difference not deliberately allowed = the data is not used. Never build a run tool from an older copy.
-4. **Correctness over speed.** Never skip or approximate a calibration to meet a start time; say what is missing and when.
-5. **Red-team before a go.** Every run card lists each hand-built or assumed part of the pay and design, its measured
-   alternative, and the ledger's pathology check (negative frags, sign flips, lopsided games). Volunteer weaknesses unasked.
-6. **Never stop a run** unless the owner says so. **Ramps never hold or step back on their own** (owner, 2026-11-04: "All you do
-   is report, not hold. You report with urgency when things look bad and we decide together"). Every check's win rate is
-   reported; one **under 40%** is flagged in the chat at once as a major problem. He decides hold or stop.
-7. **No personal data** in the repo (Steam IDs, IPs, usernames, passwords); public-server details stay in `private/`.
-8. **Git**: explicit `git add <files>`; never rebase; commits end with the Co-Authored-By line; push `main` at most 1-2
-   times a day; one working tree (the repo) plus at most one worktree per active run, made without links into `data/`.
-9. **The running run gets full priority** (owner, 2026-11-04: "The run that is going gets full priority. Period."). No side job
-   (a smoke run, a dry run, a level check, a measurement, a server) is started on my own while a run trains: it goes to him first,
-   naming its cores (by mask), its length, and what it shares with the run (the graphics card, the trainer's cores, the watcher's
-   check cores). To stop a job's processes, match each one's own command line: Windows reuses process IDs.
-10. **Build the approved design, never a simplified one** (owner, 2026-11-05: "I approve the design and that's what you build. You
-   do not manage time, I manage that."). Every part of an approved design is built; an unspecified detail is decided from the
-   design's intent and recorded; a real structural fork goes to him. No start times, schedules or time estimates drive what is
-   built: when it is ready (built and tested), he decides.
-11. **A decision made from the sum of two learned outputs is always regularized** (owner, 2026-11-05: "That sum just seems like a
-   prime spot ... to get some opposite sign blowup"). Where a choice's logits are the hands' rows plus a head's scores (the target
-   since 1.3b, the weapon key since 1.5a, the fire key and the order's pointer since 1.7), both parts get the decay (`H2_L2`: the
-   decoupled weight decay in `sim/train_duel_rnn.py` after `opt.step()`) from the moment the sum is live, and each part's size
-   is recorded and flagged over 40 by the run's ramp. A new sum is not built without both.
-12. **The pro demos are for measuring things, never for setting Bobby's behaviour** (owner, 2026-11-10: "it's mistreating a
-   metric as a goal"). What may be taken from them: measurable facts of the game and of human limits (what a place on a map is
-   worth, reaction and notice times, the sight and hand errors and how they grow). What may NOT be made a target, a pay, a lesson,
-   a pull or a pass mark: any outcome of a player's choices (a hit rate by weapon, how often a weapon is held or fired, how often
-   they hold, spam or contest, where they stand); every attempt to set him to one collapsed him (the weapon teacher, the pros'
-   weapon table of 1.7c, the pull of the head to the pros). Such numbers may be shown beside his as a labelled readout; a
-   proposal never says "bring him to the pros' X%". Aim: each parameter is set from the pros' own measured value of that
-   parameter (default = the average pro, better = p90, max = all off); what hit rate comes out is not tuned. Do not suggest
-   otherwise again.
-13. **A new part is never trained to copy a rule we do not want to keep; it learns silently, then is blended in** (owner,
-   2026-11-12: "we do not train things to copy a rule that we do not want to replicate. We let them train silently first and then
-   blend them in"). No copy lesson, teacher or imitation target that points a new head, choice or network at an old rule's or an old
-   network's behaviour (b1.3a's copy lesson failed; 1.9a's first start had one and was restarted without it). "Silently" = it learns
-   from its own lessons (its value, its readouts, its pay on its own played choices) while it plays nothing or a small share, and its
-   share or gate then opens slowly. **Once a hand-built rule is out it never comes back** (the 8-second lock: "I don't want to ever see the
-   lock again").
-14. **Every decision is checked against the research notes** (owner, 2026-11-13: the issues "stem from a lack of understanding about
-   how the game works"). Before proposing a design, a pay change or a run card, read the relevant parts of `docs/research/`
-   (MECHANICS, DUEL_STRATEGY, PRO_INTERVIEWS, BOTS) and fill a **"Research check"** section answering the seven questions of
-   `docs/research/README.md`, citing file and section; "not covered" is said plainly. A change that works against a principle there,
-   or rests on a simulator value that the notes show is off the real game, says so up front. When a note proves wrong, fix it.
-
-15. **When an approach has failed more than once, change the structure, not the variant** (owner, 2026-11-15: "we've hit a
-   roadblock a bit and I think partially we're getting to be somewhat circular in our approaches. So rather than just offer some minor
-   tweak, I really want you to think critically about whether a plan will work and don't be afraid to tear down other parts of how
-   things are organized to get there"; "Stop thinking so linearly with what has been tried before ... just changing them slightly is
-   not going to be the solution"). Name the assumption every failed attempt shared and propose removing it. Say plainly, with odds,
-   whether a plan will work before it is built. "That is how it already is" is never a reason to keep a design: "I have no allegiance
-   to anything specific design wise. I want the bot that does the things I ask ... when you get blinders thinking that we have to
-   continue to do something a particular way because that's how it already is, it makes it a slog and I get frustrated." His part is
-   guidance on what seems reasonable and expertise on Quake ("I'm trying to axiomatize my understanding of quake"); his plain-words
-   description of how a player thinks is a design specification, to be mapped onto the mechanism (the lock's removal: six attempts
-   shared "something decides when a new draw counts"; the step forward removed the re-draw, then built his "I'm going to go get mega ...
-   every 200ms I ask myself what else should I be doing" as the slow plan and its pull, 2.1c and 2.1d). Never answer a design question
-   with "run a test first" in place of an idea. The other hard rules still hold.
-
-16. **In a Fable session, an Opus 5.5 subagent does the coding** (owner, 2026-11-15: "That is a standing order ... in a fable session
-   always have an opus 5.5 subagent do the coding"). Every code change (the trainer, the simulator, tools, run scripts, plugins) is
-   handed to a subagent started with the Opus model, with a full brief (the files, the exact change, the tests, what must not be
-   touched: a live run's files, its processes); the session itself designs, reviews the diff, runs and monitors. Docs and run records
-   (cards, `RUNS.md`, this file) are written by the session.
-   **Fable mode (owner, 2026-11-16: Fable "really just for thinking through plans and interacting with me, and all of the mechanical
-   simple stuff is handled by an Opus 5.5 subagent"; "the context blows up so quickly and you are overkill for monitoring").** A Fable
-   session thinks, criticises, designs, decides with the owner and writes the briefs and the owner's pages (cards, designs). Everything
-   mechanical goes to the `opus-worker` agent (`.claude/agents/opus-worker.md`, Opus 5.5): code, builds, tests, measurements and fits,
-   reading a diff or many files (it brings back only what differs from the card), git, starting an approved run from its `start.ps1`,
-   the run table and docs bookkeeping. **Run monitoring is a separate Opus 5.5 session**, started with a written brief when a run
-   starts; it reports to the owner directly, and the Fable session reads its reports or the run's records only to plan. The Fable
-   session still answers for the result: it checks the worker's key claims (the numbers a decision rests on) before it tells the owner.
-
-17. **Advice on a run has one default form, and its homework is done unasked** (owner, 2026-11-17, after asking four times about
-   2.2a: "This needs to be the default for when I ask for advice on runs. I do not want to have to repeat myself. The point of all the
-   research and metrics is that you use them"). Before answering "how did it go" or "what next": read the run's records and checks
-   (did it do what it was for, and from which update did it stop doing anything new); `docs/HISTORY.md` and `docs/RUNS.md` for every
-   earlier attempt at the same aim, and the code for parts already built and switched off (nothing is called missing or proposed
-   without looking); the research notes for the aim. The answer, in order: **the verdict** in plain sentences, own faults named;
-   **what to keep and where to cut** (the save with the best record after the run stopped doing anything new, not the end by default);
-   **what every failed attempt at this aim shared** (rule 15); **the next run as a list of concrete changes**, never "measure this
-   first" in place of a change and never a small variant of what failed; the risks (what is unverified among them), the odds, his
-   decisions. **Plain words**: no name coined for a part of the build without saying in the same sentence what it does; numbers as
-   records and plain quantities. Nothing is started or edited while advising.
-
-## Where things are
-
-| | |
+| Read | For |
 |---|---|
-| `docs/RUNS.md` | **the table of every run**: number, name, started from, start, stop, duration, updates, the change, outcome, kept file. The source of truth for what ran |
-| `docs/PLAN.md` | the goal, where things stand, what's next |
-| `docs/HISTORY.md` | notes beyond the table: design ideas tried that did not work or were abandoned, open problems, measurements without training, incidents, lessons that are now rules. Read it before proposing anything |
-| `docs/BACKLOG.md` | open work and ideas, numbered `B-nn` |
-| `docs/research/` | **the game, the pros and other bots** (2026-11-13): mechanics checked against the sim, duel strategy, the pros' own words, game-AI research; `README.md` has the one-page core and the decision checklist (hard rule 14) |
-| `docs/runs/<family>/` | one folder per family (`1.7/`, `2.0/`; older `b1.N/`, `v0.6.x/`): a `README.md` (the goal, the attempts) and a folder per attempt (`2.0/2.0c/`) with `CARD.md` (the owner's page + the checklist), `train.cmd`, `start.ps1`, the reference command, reports |
-| `docs/design/` | current designs · `docs/guides/` how-tos · `docs/archive/` old versions, the old daily log, old CLAUDE.md (frozen) |
-| `tools/run/` | the run tools: `check_settings`, `make_train_cmd`, `watch` (checks), `panel` (behaviour), `selfplay_loop` / `selfplay_log`, `live_accept`, `backup` |
-| `data/` (git-ignored) | `sim_runs/<run>/{keep,snapshots,live.json,watch,...}`, `maps/`, `sim_runs/brainppl/`, `owner.env`. Backed up nightly to `T:\BobbyBones_backup` (the hidden task "BobbyBones nightly", `tools/run/nightly.py`, 04:30). **Intermediates live on T:, not C:** (owner, 2026-11-11): `tools/run/offload.py` moves the checks' recorded games (`watch/panel`), the snapshots but the anchors and the scratch test folders of runs not trained for 3 days to the same paths under `T:\BobbyBones_backup\data`, removing a file from C: only after its copy was read back with the same SHA-256; `keep/` is never moved. An old run's panel or snapshot is read from T: |
-| `private/` (git-ignored) | the public servers' notes and scripts (`private/PUBLIC_SERVER.md` first; machine details in `data/SERVER.md`) |
+| [docs/PLAN.md](docs/PLAN.md) | The goal, where things stand, what is next |
+| [docs/RUNS.md](docs/RUNS.md) | **The log: every run** (started from, start, stop, the change, the outcome, the kept file). The source of truth for what ran |
+| [docs/HISTORY.md](docs/HISTORY.md) | What was tried and failed and why; open problems; **each rule below with the owner's words and the incident behind it** |
+| [docs/research/](docs/research/README.md) | How the game works, how the best play it, how other bots learnt it (one-page core and a checklist in its README) |
+| [docs/guides/ARCHITECTURE.md](docs/guides/ARCHITECTURE.md) | What the parts are and where their code is; the inputs; the commands. It changes as we build: the code's own notes win |
+| [docs/guides/GOTCHAS.md](docs/guides/GOTCHAS.md) | Hard-won traps: the trainer, runs, the real game and servers, design lessons |
+| `docs/runs/<family>/<run>/` | A run's `CARD.md` (the owner's page), its command, `start.ps1`, `MONITOR.md`, `BUILD.md`, reports |
+| [docs/BACKLOG.md](docs/BACKLOG.md), `docs/design/`, `docs/guides/` | Open work (`B-nn`); current designs; how-tos |
+| `data/` (git-ignored), `private/` (git-ignored) | Runs' saves and records (`data/sim_runs/<run>/`); the public servers' details |
+| `docs/archive/` | Frozen: old versions, the old daily log, this file as it was ([2026-11-17](docs/archive/CLAUDE_2026-11-17.md), [2026-11-11](docs/archive/CLAUDE_2026-11-11.md)) |
 
-## Starting and watching a run
+## Hard rules
 
-**No dry run for small changes** (owner, 2026-11-04): "that's just the first 10 updates of the run." A dry run is only for changes
-we are not sure of (a new lesson, a new part of the network, a new pay whose step is unknown). Small, identity-checked changes start
-the real run directly; its first 10 updates and the extra check at update 10 are the trial.
+1. **Never delete anything outside git's tracked files.** No `rm -rf`, `Remove-Item -Recurse`, `rmdir /s`, `git clean`, `git worktree
+   remove --force`. A link (junction) is removed only with `cmd /c rmdir "<link>"` (no `/s`) after `(Get-Item <path>).LinkType`, and
+   its target is checked after. Any delete of data needs the owner's word for that exact delete and a backup first
+   (`python tools/run/backup.py`). A hook asks him before any delete command runs.
+2. **Do only what the owner asks.** A question is not a go. Ask before starting runs, servers, agents, or anything that changes
+   something outside the session. **Exception:** a run he approved that crashes is fixed (cause found, fix tested), restarted with the
+   same settings and the remaining length, recorded, and reported at once. A fix that changes the design, the pay or the settings goes
+   to him first.
+3. **Never stop a run** unless he says so. Ramps and stages never hold or step back on their own: they open on the clock and every
+   number is reported. A check under 40% is flagged in the chat at once as a major problem. He decides.
+4. **The running run has full priority.** No side job while a run trains without his word, naming its cores, its length and what it
+   shares with the run. To stop a job, match each process by its own command line.
+5. **Settings check before every run, check and measurement, and before using its numbers:** `python tools/run/check_settings.py
+   <train.cmd> --ref <reference.cmd>`. Any difference not deliberately allowed = the data is not used. A run's command carries the
+   values that actually play; `start.ps1` refuses when the command and the live file disagree.
+6. **Correctness over speed.** Never skip or approximate a calibration to meet a time. No start times or estimates drive what is built.
+7. **Build the approved design in full, never a simplified one.** An unspecified detail is decided from the design's intent and
+   recorded; a real fork goes to him. **A fix he has ordered is in the next build without being asked again**; "kept unchanged to
+   limit the changes" is not a neutral default for something he called wrong.
+8. **When an approach has failed more than once, change the structure, not the variant.** Name the assumption every failed attempt
+   shared and remove it. Say plainly, with odds, whether a plan will work. "That is how it already is" is never a reason. Never answer
+   a design question with "run a test first" in place of an idea. His plain-words description of how a player thinks is a
+   specification.
+9. **Before a go: red team and research check.** Every card lists each hand-set or assumed part, its measured alternative, the pay's
+   pathology check (negative frags, sign flips, lopsided games), and a "Research check" answering the seven questions of
+   `docs/research/README.md` with file and section. Volunteer weaknesses unasked. Every pay change states the equilibrium it leads to
+   in self-play.
+10. **The pro demos are for measuring, never for setting his behaviour.** Allowed: facts of the game and of human limits. Never a
+    target, pay, lesson or pass mark: any outcome of a player's choices (a hit rate, a weapon share, a firing rate, where they stand).
+11. **A new part learns silently, then is blended in.** No lesson that copies an old rule or an old network. Once a hand-built rule is
+    out it never comes back (the lock above all). **The hands practise a new play before whatever chooses it is judged on it.**
+12. **Nothing holds him to an action.** His own network always drives. A new decider adds its scores beside the others'; it never
+    switches him into a mode. Fighting on the way to an item is the normal case.
+13. **A choice made from two learned outputs is always regularized**: both parts get the decay from the moment they share a sum or a
+    list, and each part's size is logged and flagged over 40.
+14. **The win-chance pay comes from the judge that reads the items and stacks**, refitted on the start's games and accepted. For every
+    decider it is scaled to at least the size of that decider's flat pay. The older judge is never used or offered.
+15. **No personal data in the repo** (Steam IDs, IPs, usernames, passwords). The public servers' details stay in `private/`; a network
+    goes on them only on his call; never restart one while he is on it.
+16. **Git**: explicit `git add <files>`; never rebase; commits end with the Co-Authored-By line; push `main` at most once or twice a
+    day; one working tree plus at most one worktree per active run, made without links into `data/`.
+17. **Nothing unattended opens a window** (`pythonw`, hidden launchers, `CREATE_NO_WINDOW`).
 
-1. The owner's go on the run's `CARD.md` (both parts filled in). **Ask him the length before starting**; 12 hours (`--minutes 720`)
-   if he says the default.
-2. `powershell -ExecutionPolicy Bypass -File docs\runs\<family>\<run>\start.ps1`: it runs the settings check and `live_accept`,
-   refuses on any difference, checks the files are there and no trainer runs, then starts the trainer, the watcher and the
-   self-play logger.
-3. Its row in `docs/RUNS.md` at once (see Docs).
-4. Monitoring from update 1, unasked: every FLAG and MAJOR line of `watch/watch.log`, `live_status.json` applied, dials played as
-   written, a stall (no new line in `metrics.jsonl` for ten minutes). One line an hour; the 06:30 report after a night. Both carry
-   the league table (frag share and win chance gained against each league network; [BACKLOG B-300](docs/BACKLOG.md)) beside the checks.
-5. Cores (from b1.2d): the trainer alone on the 8 performance cores (`0xC03C3`); watcher, checks and logger on 8 efficiency cores
-   (`0x3C3C`, `CHECK_BATCH=4`); 14-17 left for the owner. Checks every 20 updates, 200 games (`CHECK_EVERY=20`, `CHECK_GAMES=20`),
-   against the control; every fourth against the long-term control.
+## How we work
 
-## The owner's goals (read first)
+- **Fable mode.** A Fable session thinks, criticises, designs, decides with the owner, and writes the cards, the designs and the
+  briefs. Everything mechanical goes to an Opus 5.5 worker (`.claude/agents/opus-worker.md`) with a full brief: code, builds, tests,
+  measurements, reading many files, git, bookkeeping. **Run monitoring is a separate Opus 5.5 session** with a written brief
+  (`MONITOR.md`). The Fable session still answers for the result: it checks the numbers a decision rests on before telling him.
+- **In a design chat: be critical, recommend, and do not edit** until he says it is decided. Do not go along with an idea of his
+  because it is his; say what is wrong with it and what you would do.
+- **Advice on a run has one form, and its homework is done unasked.** First read the run's records, every earlier attempt at the
+  same aim (`HISTORY.md`, `RUNS.md`), the code for parts already built and switched off, and the research notes. Then: the verdict in
+  plain sentences, own faults named; what to keep and where to cut (the save with the best record after the run stopped doing
+  anything new, not the end by default); what every failed attempt shared; **the next run as a list of concrete changes**; risks
+  (what is unverified among them), odds, his decisions. Nothing is called missing without looking.
+- **Plain words.** No name coined for a part of the build without saying in the same sentence what it does. Numbers as records and
+  plain quantities ("125-75 against the start", "off by 22 armor points").
+- **Every report on a run opens with what is actually playing now and whether the run is on its card's plan.** Something that ends,
+  skips or changes a stage is reported as what it means for the run, and stays at the top until he answers.
+- **Never judge by how often he re-decides, or by a low hit rate.** What counts: games won and lost, that he fights (frags and
+  damage a minute), no sitting on an item's place. There is no spawn camping in duel.
+- He prefers concise answers and doable batches. He should never have to say a thing twice: when he corrects something, it goes into
+  this file (the rule), `HISTORY.md` (the story) and the session's memory in the same turn.
 
-- **One goal: win games** (owner, 2026-10-24). Goals are set per generation: the current one is in `docs/PLAN.md` (2.x, from
-  2026-11-08: pay the stack and the control, not the damage; then the strategy layer, 2.1). Every change is stated by the
-  equilibrium it leads to in self-play and the behaviour it brings out on the way.
-- **Names**: N.Nx (owner, 2026-11-03): N.N is a family of runs with a goal of its own, x = a, b, c the attempts (2.0a, 2.0b);
-  folders `docs/runs/2.0/2.0a/` and `data/sim_runs/duel_gru_2_0a`. What ran as b1.0a to b1.4a and v0.x keeps its name and folders.
-- **Design from AlphaStar and Pluto** (owner, 2026-11-03) for anything strategic (the head, target and plan choices, memory, the
-  league, the value and pay, handing a choice from rules to a learner): name which part a proposal takes from them, where it differs
-  and why (one PC, our data, fairness). Pluto: [docs/archive/versions/v0.3/PLUTO.md](docs/archive/versions/v0.3/PLUTO.md). The rules
-  taken so far: [docs/HISTORY.md](docs/HISTORY.md) (lessons that are now rules).
-- **One new thing per round**, shut at the start, opened slowly with the checks reported; two new things open one after the other.
-- **Genuine learned behaviour** (movement, weapon choice, item control, positioning), not hand-coded rules or knob tuning; the
-  hard-wired rules and teachers are retired over time. **Fair**: human physics (125 fps), human senses (sight with line of sight,
-  sound; enemy projectiles only as seen or heard), mouse-like aim with human limits. Never miss on purpose to hit a number.
-- Jumps: "he should be taught the general path, there's many ways to execute them": pay and labels are for the way.
-- **The control in every run**: the last best network stays in the league (`--anchor-p`) and every checked save plays it head to
-  head; a network is promoted only if it beats the control. Judge checks by games won and lost; say plainly what did not work.
-- **Maps**: the ten duel maps all in training (Blood Run, Aerowalk, Lost World, Sinister, Furious Heights, Battleforged, Campgrounds,
-  Hektik, Toxicity, Cure); House of Decay and Dismemberment held out, never trained. No maps with doors. Test map `testlab`. Real
-  games against the game's Nightmare bot: before and after a run, never in the middle; never train against the game's bots.
-- No powerups anywhere, a map's **duel** items in every mode (`plugins/powerups.py`). Servers are 1v1 only (since 2026-10-23).
-- Never change the owner's Quake Live client settings or configs in the Steam `Quake Live` folder (copying the test map pk3 into
-  its `baseq3` is allowed).
-- **The public servers**: a utility kept apart from the repo, all their details in `private/`; never move them, or an address,
-  account, server name, Discord or config value, into a tracked file. A network goes on them only on the owner's call (and only
-  if it beats the control); never restart one while he is on it; rcon there only when needed.
-- Log as much as possible from human-played rounds. Keep everything. Render videos after a run unasked (`sim/render_course.py`).
-- The owner prefers concise answers and doable batches.
+## The owner's goals
 
-## Inputs (owner, 2026-11-11; `docs/design/INPUTS_CLEANUP.md`)
+- **One goal: win games.** Goals are set per generation in `docs/PLAN.md`. Judge by games won and lost against the control.
+- **Learned behaviour** (movement, weapons, items, positioning, when to be aggressive and when not), not hand-coded rules; the rules
+  and teachers that remain are retired over time.
+- **Fair**: human physics, human senses (sight with line of sight, sound; each input as a person perceives it), mouse-like aim with
+  human limits set from the pros' own measured values. Never miss on purpose to hit a number.
+- **Chip and zoning damage are a milestone, not the goal.** Low-odds shots fired on the way to an item, and shots that make the
+  enemy go elsewhere, are important, and seeing him do them shows he understands the structure of the game. They are a sign of
+  progress to look for; the only thing that matters is winning.
+- **Design from AlphaStar and Pluto** for anything strategic: name what a proposal takes from them and where it differs.
+- **Maps**: the ten duel maps in training; House of Decay and Dismemberment held out. No powerups. Servers are 1v1. Real games
+  against the game's bots only before and after a run, never as training.
+- Never change his Quake Live client settings. Keep everything; log as much as possible from human-played rounds.
 
-- **By role.** "The brain makes predictions for what it believes is the truth. The head decides based on that what strategy to execute. And the
-  hands execute the strategy." An input goes to the network whose job needs it; when it is rerouted it is faded in the old reader and then
-  **removed** from it ("they're just dead weight"). Each network reads its own list by name, never "the first N columns".
-- **Never cut a part of the game because he does not use it yet** (the ways, the heavy machine gun, the gauntlet, the grenade arc: "they are
-  still part of the game that need to be in his networks"). Cut what is off for good (free-for-all, courses, styles, the legs switch).
-- **A new input comes with its measured average and spread** (a sample of real play; by design where it is off), never the default "0 and
-  1": every input since v0.2 was appended that way and 291 live columns arrived under 30% of their size.
-- **Proved used, not only harmless**: an input health report before every run and at every check (constant columns, size outside 0.5 to 2,
-  over 1% of rows at the clip, each group's share at each reader), and at a run's end 200 games with a new group blanked. No drop = it does
-  not stay. The list's length is on every card.
+## The game, in three lines (the owner's; the long form is in [docs/research/](docs/research/README.md))
 
-- **The cleaned list 18 (2026-11-11; `docs/design/INPUTS_CLEANUP.md` "As built")**: `sim/input_list.py` + `sim/input_list_18.json` (804 of the
-  simulator's 1,053 columns by name: the brain reads the first 691, the hands' encoder the first 796, a tail of 8 is read by no first
-  layer: the guessing lesson's four marks and the yellows' timers; the other 72 rule-made columns of v0.2 to v0.3.6, the pre-fire and
-  emergence among them, were cut the same day on the owner's word); `sim/duel_env_ffa18.py` is the group module giving that list (the trainer's `--env`; the simulator's own code is unchanged and
-  `duel_env_ffa` stays the full list for every older network); `tools/inputs18.py convert` brings a 1,053-input network to it (cut and
-  folded, resized, the optimizer's moments too; `same` proves it on real rows); a checkpoint of a list carries `inputs` and `input_names`,
-  and the check tools give each network its columns by name. `tools/run/input_health.py <policy> <sample>` is the health report.
-  **The plugins and `sim/export_duel.py` do not know a list yet: no server with such a network.**
+Every design, pay and review is read against these.
 
-## Docs (keep in sync, one commit)
+1. **Three things largely decide a fight: stack, positioning, weapons.** Most fights are decided before the first shot, by who has
+   more health and armor, who stands better, and who holds the right weapon for the range. Aim decides what is left. A design that
+   improves his aim or his damage and none of the three has not made him better at fighting.
+2. **A fight in the open with equal stacks is 50/50. Take high-confidence fights instead.** A coin flip is a bad fight to choose.
+   Being good is making the fight uneven first (a stack lead, a better place, the right weapon, the enemy weak or just spawned) and
+   leaving the ones that are not. Deciding which fights to take is the skill; it is what "know when to be aggressive and when not"
+   means.
+3. **To win you have to play to not lose.** The winner is the one who dies less in the time limit, not the one who deals more damage
+   or picks up more. Avoiding damage counts as much as dealing it; ahead, he chooses his fights and runs the clock; behind, he still
+   does not throw frags away. This is not timidity: he fires whenever he sees the enemy. It is refusing bad fights.
 
-- **`docs/RUNS.md` is the run table and the source of truth (owner, 2026-11-11).** Every run gets a row at its start (number,
-  name, started from, start time, the change, card link): a false start, a side arm, a stopped or void run too. At its stop the row
-  is finished: stop time, duration, updates, outcome (the checks' numbers and who stopped it), the kept file. A run's card's first
-  row is "Started from". Run results live only there, never repeated elsewhere.
-- **`docs/HISTORY.md` is for notes beyond the table**: an idea that was tried and did not work or was abandoned (what happened,
-  why dropped, the lesson, the `#` of its runs), an open problem, a measurement without training, an incident, a lesson that
-  becomes a rule.
-- After a run, test or decision: the run's folder (card, report), its `RUNS.md` row, `HISTORY.md` if an idea was dropped or a
-  lesson learnt, the backlog,
-  `docs/PLAN.md` if its status changed, then `python tools/docs_check.py` (links, backlog numbers) before the commit.
-- `docs/archive/` is frozen (the old daily log: "RESULTS 2026-10-08 18:45" = that entry; older text that says `docs/v<n>/...` means
-  `docs/archive/versions/v<n>/`).
-- `docs/INPUTS*.csv`, `docs/*.json`, `docs/MAPS.md`: data that tools read by path; they stay at `docs/` (B-203).
-- `README.md` is the public page; keep it current with the docs.
+## A run, start to end
 
-## Architecture
+1. **Names**: `N.Nx` (a family with a goal of its own; `a`, `b`, `c` its attempts). Folders `docs/runs/2.2/2.2b/` and
+   `data/sim_runs/duel_gru_2_2b`. **One new idea per round**, shut at the start, opened slowly, every dial live-settable.
+2. **The card** (`CARD.md`): the owner's page first ("Started from" its first row), the changes, the stages, the red team, the
+   research check, the odds. His go on the card; **ask him the length** (12 hours if he says the default).
+3. **The build** by an Opus worker, with `BUILD.md`: every test with its numbers, every setting and flag of the command with its value.
+   A new part or pay is tried for two updates at full size before a start; small identity-checked changes start directly.
+4. **The start**: `docs\runs\<family>\<run>\start.ps1` (it runs the settings and live-file checks and refuses on any difference).
+   Its row in `docs/RUNS.md` at once.
+5. **Monitoring from update 1** by the monitoring session: every FLAG and MAJOR line, a stall, each check; a line an hour; the 06:30
+   report after a night.
+6. **Checks** every 20 updates, 200 games, against the control (the last best network, also in the league); every fourth against the
+   long-term control. A network is promoted only if it beats the control. A 200-game check moves about ±7 points by chance.
+7. **The end**: every run's end is kept with its optimizer (`keep/policy_end_<run>.pt`). Restart only right after a save.
+8. **The docs, in one commit**: the run's folder (card, report), its `RUNS.md` row finished (stop, updates, outcome, kept file),
+   `HISTORY.md` if an idea was dropped or a lesson learnt, the backlog, `PLAN.md` if its status changed, then
+   `python tools/docs_check.py`. Run results live only in `RUNS.md`. `README.md` is the public page; keep it current.
 
-- **Simulator** (`sim/`): `sim_api.c` + vendored ioquake3 movement and collision (`sim/q3`) -> `qsim.dll` (`sim/build.bat`, MSVC)
-  or `libqsim.so` (Docker image). `qsim.py` wraps it. One `World` per process: never create a second one with a different size.
-- **Environment**: `duel_env.py` (weapons, items, sounds, clock, human-aim limits, round kinds, scripted opponents, lab mode on the
-  test map). `duel_env_ffa.py` is generated from it by `tools/make_ffa_env.py` (it matches exact lines of `duel_env.py`: the
-  `OBS_DIM` line, the `observe()` concatenation, `pkind = ...`, `return [i ^ 1]`); `tools/ffa_check.py` proves it identical at two
-  players. Change `duel_env.py`, then regenerate and re-check; never edit the generated file. New features go in behind switches,
-  off = bit-identical (checked by fixed-seed replays).
-- **Frozen simulators**: `sim/duel_env_<ver>.py` / `duel_env_ffa_<ver>.py` (v8 to v02, 20a, ...) are the simulators older networks
-  were trained in; a policy is played and evaluated with its own module and inputs list (`--env`, `--inputs docs/INPUTS_<ver>.csv`).
-  Freeze a copy before changing the inputs or actions of a simulator a run still needs.
-- **The network**: GRU 512 with an attention part (`sim/attn.py`: the inputs cut into tokens by `docs/INPUTS.csv`'s groups; a
-  token's gate starts shut, `--gate-open`); the brain (a separate memory predicting the enemy from his senses only, its answer
-  into the hands as a token); the strategy head (target, keep choice, weapon scores); the hands. Widening keeps answers identical:
-  new inputs at the end with zero weights (`tools/b17b_init.py widen-league`, `tools/b20b_init.py`, `sim/add_attention.py --same`).
-- **Training**: `sim/train_duel_rnn.py` (PPO, league of snapshots + anchors, `--resume`, `--fade-start` on every resume). GPU
-  PyTorch is in the Anaconda Python (`C:\Users\<user>\anaconda3\python.exe`); never import torch inside simulator workers.
-  **Live settings**: `<run>/live.json` and `live_settings.env`, read between rollouts; ranges in `LIVE_RANGE`; every read in
-  `live_status.json`. Checkpoints carry `env_vars` and round lengths; keep every run's end as `keep/policy_end_<run>.pt` with
-  its optimizer (`opt_end_<run>.pt`).
-- **Pay**: the pay table (items by the point, damage, frags) plus the win-chance judge (`sim/win_judge.py`, `WIN_ADD`), logged as
-  a ledger every update.
-- **Real game**: image `qlbot` (`Dockerfile`): Quake Live dedicated server + minqlx (`minqlx/`, patched, see `minqlx/UPSTREAM.md`)
-  + `plugins/` + `sim/`. `minqlx/botctl.c` hooks `SV_ClientThink` (bot input, human physics substeps, view, items, missiles).
-  `sim/export_duel.py` writes `policy.npz` (layout, weights, `env_vars`); `plugins/netpass.py` is the forward pass.
-- **Plugins**: `duelbot.py` plays a network (inputs from the simulator's own `observe()`), hot-reloads `policy.npz`, logs sessions;
-  `botmode.py` (`!map`, the ten duel maps; a new map needs its items in `plugins/duel_items.json`); `banlist.py`; `ladder.py` (the
-  leaderboard by games won and lost, Glicko-1 in `ratings.py`); `banter.py`; lab plugins (`weaponlab`, `itemlab`, `maplab`,
-  `droplab`, `movetest`). A Bobby is known by `duelbot.is_bobby`, not by a name.
-- **Pro demos**: `tools/fetch_demos.py`, `sim/demo_dataset.py`; demos live in the folder named in `data/demo_root.txt`. Measuring
-  only (hard rule 12).
-- **Maps**: a new map: `python sim/build_nav.py --map <m> --v14` (system Python: scipy), `tools/nav_prune.py`, the map reader's
-  tables in `data/maps/`. Atlas: `tools/build_atlas.py`. Test map: `tools/make_lab_map.py` (q3map2 + mbspc `-forcesidesvisible`
-  from `data/tools`; bots need an `.aas`). Matplotlib is broken in the Anaconda Python: draw in the system Python.
-- `legacy/`: the first approach (Nightmare bot + routes + coach). Not used.
+## The traps that wreck a run in silence (the rest: [GOTCHAS.md](docs/guides/GOTCHAS.md))
 
-## Running things (Git Bash; `export MSYS_NO_PATHCONV=1` before docker commands)
-```bash
-python sim/train_duel_rnn.py --run <run> --resume --minutes <n>      # Anaconda Python; runs start from start.ps1
-python tools/duel_eval.py ... --opp policy:<file>                    # two networks head to head
-docker build -t qlbot .                                              # after any change to sim/, plugins/ or minqlx/
-bash tools/duel_server.sh <run> <map> <env module>                   # play-test server, UDP 27970 (no password unless PASSWORD=<word>)
-NAME=qltest DATA=data/labtest SPAR=1 bash tools/duel_server.sh ...   # Bobby vs Nightmare (SKILL=4 Hardcore): benchmark only
-docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("status" prints nothing)
-```
-
-## Hard-won gotchas
-
-**Runs and the trainer**
-- **A refused live.json is refused whole, and the run then trains on its command's start values** (1.7a's false start): every
-  live name that may be negative is in `LIVE_RANGE`; a refusal before the first rollout stops the trainer; `live_accept.py` in
-  `start.ps1` reads the start's file and every one the ramp will write; every new live name gets its range and a `tests.py live` test.
-- A wiring bug can look like a bad idea: 1.7c's false start (PPO's reference pass without the weapon key's mask) read as a slow
-  collapse. When a check falls, look at the KL and the trainer's own pieces before the design.
-- Restart only right after a save (every 10 updates), keep a copy; pass `--fade-start <minute>` on every resume.
-- `--obs-half` is retired (owner, 2026-11-15: "There's no reason to keep it"): the rollout's stored inputs at half precision made the
-  learner's recomputed log-probabilities differ from the played ones (up to 0.08 to 0.12 at the worst frame at full size, 2.1d's proof);
-  the flag is retired and refused; a new run's command built from an older one strips it. Since 2026-11-15 (2.1d's restart at update 30)
-  the trainer always rounds the rollout's inputs to half precision at their source, so play and learning read the same values and the
-  stored inputs are float16 (full precision cost 12.6 GB a buffer and nearly exhausted the PC's memory). Every other reader now rounds
-  the same way, bit for bit, for every network (branch `bhalf`, to be merged after 2.1d ends): the checks' player (`test_suite.Policy.norm`),
-  the plugins' pass (`netpass.norm`; `movetest`), the tools that normalise on their own, the brain's lessons (`sim/obs_half.py`: torch's
-  `.half()` of a double rounds twice, so the torch paths round once in double precision). **The `qlbot` image must be rebuilt before any
-  server plays a network** (the export is unchanged: `policy.npz` keeps the mean and variance, the plugin rounds).
-- Write `.cmd` run files with the Write tool to the scratchpad and copy them over (Git Bash heredocs mangle backslashes; writing
-  over an existing `.cmd` in a chain once failed silently and the old settings ran). After a patch to `sim/`, check the change is
-  there (a write once failed with Errno 22 and left the file as it was).
-- A scratch test must import the repo's `sim/`, not a staging copy. Two tools that import a module being edited mix versions.
-- GPU memory: long sequences and many players fill the 16 GB card (`--minibatches`, `ATTN_AMP`); a first update that does not come
-  within about six minutes means the card is full. After every widening, check `metrics.jsonl` keeps growing.
-- `OPENBLAS_NUM_THREADS=1` in every `.cmd` and pool (else each worker commits 0.7 GB; Windows ran out of commit with 36 GB free).
-  `CUDA_VISIBLE_DEVICES=-1` (not `""`) hides the card on Windows; a CPU trainer needs `OMP_NUM_THREADS=1`.
-- Where an update's time goes: 40% rollout, 60% the learning step (Python steps the GRU per piece: time goes with the number of
-  pieces, B-237). More simulator cores help the rollout only.
-- `SetPriorityClass` via ctypes needs `restype`/`argtypes` on 64-bit Python; `subprocess` `creationflags=0x4000` works.
-- The PC's load as Windows reports it reads far above the share of processor time: size side jobs by the load. The PC has
-  blue-screened under load: runs save every 10 updates. Keep `PYTHONFAULTHANDLER=1` and the exit codes.
-- A background shell is capped at two hours; chain waiters or launch detached.
-- `tools/list_inputs.py` writes `docs/INPUTS.csv` whatever its arguments.
-- An identity check after a new output: random actions for the old outputs only, or the random stream shifts.
-
-**Design lessons (each cost a run)**
-- The checks' noise: the same network against itself reads 48.8% over 160 games, single maps 41 to 56%. Read maps one by one too
-  (v14 lost Aerowalk 24 points while the mean did not move). The control belongs in the checks from the first hour: "53% against
-  his old selves" says nothing.
-- A new lesson must pass ten updates and a check against the control before a start; a fitted start for a new choice must pass a
-  full level check, not a probe.
-- A teacher must have the pupil's hands and must not name what he cannot reach (v14: the item rule sent him over Aerowalk's circle
-  jump; `RULE_WALK=1`). A teacher with new labels moves the whole network at once (`--teach-trunk`, `--teach-warm`).
-- A new choice opened by a bias costs what it displaces: open it out of the one it stands in for (`targets_init.py open
-  --from-nothing`); the entropy bonus spreads his choice over new equal choices whatever they pay, and drowns small shaping costs.
-- Anything paid per frame for progress is paid on a running best, or a setback and its recovery is a pump.
-- Whatever is paid by the damage must not be added to `dealt` (his feedback inputs are made of it).
-
-**The real game and servers**
-- The plugins call `observe()` but never `step()`: anything only `step()` updates is stale on a server unless the plugin sets it.
-  After any input change, record the inputs in a real game (`OBSDUMP=1` with `tools/bench_arena.sh`) and set them beside the
-  simulator's. Rebuild `qlbot` after any change to `sim/`, `plugins/` or `minqlx/`.
-- Real-server checks only while no training runs. Before one: `docker ps`, `docker stats --no-stream`; stop servers nobody uses
-  (`docker stop`, not `rm`).
-- An rcon client that leaves while the server prints (a map load) can freeze the server: `tools/rcon.py` leaves only in a quiet
-  moment; a map change gets `--wait 30`.
-- Quake Live locks `sv_fps` at 40. The client uses UDP 27960, servers 27970. An idle server runs no frames until someone joins.
-  minqlx has no damage event (hits from health drops); warmup emits no kill stats. Aborting a warmup countdown in a loop hangs the
-  server. A chat line must not have a percent sign before a letter.
-- A pure server's pak list must be exactly a client's (pak00, bin, the Workshop item), or players drop silently. `sv_pure` is
-  write-protected; `sv_warmupReadyPercentage` and `sv_maxclients` are latched. The server's stdout lags through `tee`.
-- Plugin changes can be tried without an image build: mount `plugins/` over `/ql/minqlx-plugins` and `tools/` over `/tools`.
-- The game's pickup reach (7,767 pickups): 36 units each horizontal axis, any jump height; the simulator's (`dxy < 36`,
-  `dz < 56`) lies inside it.
-- Docker on Windows: LF line endings (`.gitattributes`).
-- After merging a branch, push plainly: `git pull --rebase` on a merge commit replays the branch. Fetch and look first.
+- A refused live settings file is refused whole and the run then trains on its command's values: every live name has its range and a
+  test; `live_accept` runs in `start.ps1`.
+- A wiring bug can look like a bad idea: when a check falls, look at the trainer's own consistency numbers before the design.
+- No stage hangs on a test that has not been shown, on recorded data, to pass for a part that works (2.2a idled for 90 updates).
+- Change `sim/duel_env.py`, then regenerate and re-check the generated modules; never edit a generated or frozen module. A new
+  switch is off = bit-identical, proven by fixed-seed replays. A network is played with its own simulator module and input list.
+- Never import torch inside simulator workers; `OPENBLAS_NUM_THREADS=1` everywhere; a first update that does not come within about
+  six minutes means the graphics card is full.
+- Write `.cmd` files with the Write tool and copy them over; after a patch to `sim/`, check the change is there.
+- The game image (`qlbot`) is rebuilt after any change to `sim/`, `plugins/` or `minqlx/`, and before any server plays a network.
+  Real-server checks only while no training runs.

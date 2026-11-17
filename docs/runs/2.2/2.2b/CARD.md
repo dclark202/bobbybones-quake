@@ -1,6 +1,6 @@
 # 2.2b: a fight network beside the item picker
 
-**Status (2026-11-17): the design agreed with the owner in the chat of 11-17. Not built. No go for a start.**
+**Status (2026-11-17): built, reviewed and started on the owner's go ("Have a subagent build it and validate it. Then start it when it's ready"). The build's record: [BUILD.md](BUILD.md).**
 
 ## The owner's page
 
@@ -24,8 +24,8 @@
 | **The belief** (as now) | What is true about the enemy? | What he sees and hears | Predictions: where the enemy is and will be, his stack, the odds of a fight | Being right |
 | **The item picker** (the decider we have, narrowed) | Which item is worth going for? | The belief, his stack, the item timers, score, clock | A score for every item (**all items stay**: big items, weapons, yellow armor, health) and for "nothing" | **Items and the change in his chance of winning. No damage, no frags** |
 | **The fight network** (new) | How much is a fight worth now, and which kind? | Below | A score for each of four fight options; a nudge on the weapon; its eagerness, told to the hands | **Damage dealt and taken, far rails, frags and deaths, and the change in his chance of winning. No item pay** |
-| **The hands** (as now) | How do I do it this instant? | Everything he senses, where he is headed, how eager the fight network is | Aim, trigger, dodging, the weapon in hand; they can take over his movement at any time | All of his pay, as now |
-| **The legs** (as now, frozen) | | The spot he is headed for and the point to look at | Walk there, turn the view, unless the hands take over | Not trained |
+| **The hands** (as now) | How do I do it this instant? | Everything he senses, where he is headed, how eager the fight network is | Aim, trigger, dodging, the weapon in hand; he always drives himself: nothing else moves him | All of his pay, as now |
+| **The way's suggestion** (a part of his own network, as now) | | The place he is headed for and the point to look at | Suggests the keys that walk the way there. **It does not move him**: since v0.3.5 his own network always drives (corrected 11-17: an earlier version of this card called it a separate walker) | Learns with the rest |
 
 **One list, no switch.** Every 0.2 s each item has a score from the item picker and each fight option has a score from the fight
 network. He heads for whichever is highest. A mega three seconds out can outscore a chase; a weak enemy nearby can outscore a far
@@ -72,10 +72,11 @@ at; in a fight the hands' own scores are far larger and decide.
 | 2 | **The fight network is added** | As above. Until update 60 its scores are not in his list; it picks half of the practice trips |
 | 3 | **The fight options are switched on in the simulator** | Built in 1.7, off since. Cut-off moves to the prediction that works (the 1.7 version used one that is dead on this line). The angle with a look point is new. Break off as fixed in 1.7b |
 | 4 | **The hands are told where he is headed and how eager the fight network is** | New inputs: the kind of spot, where it and its look point are, how long he has been headed there, the fight network's four scores. Added with their measured average and spread, starting with no effect, opened over updates 0 to 20 |
-| 5 | **Practice** | At a new decision, with a set chance, he is sent on one of the four fight options that is possible at that moment, with a weapon he owns (each equally likely). **Half of these are dealt at random** (each option equally likely), so every option keeps being tried; **the other half are picked by the fight network itself** from its own four scores, which start equal. That half is what keeps its scores honest before update 60: there is no tie to starting amounts. **The destination is kept** until the spot, contact, or 4 seconds; the hands can still take over his movement. Practice only, never a choice of his own. The chance: 0 → 12% over updates 0 to 20, held to 60, then 5% to the end. A practice trip counts as the fight network's own exploration, so its scores learn from every one and no fight option can fall to nothing in training |
+| 5 | **Practice** | At a new decision, with a set chance, he is sent on one of the four fight options that is possible at that moment, with a weapon he owns (each equally likely). **Half of these are dealt at random** (each option equally likely), so every option keeps being tried; **the other half are picked by the fight network itself** from its own four scores, which start equal. That half is what keeps its scores honest before update 60: there is no tie to starting amounts. **The destination is kept** until the spot, contact, or 4 seconds; he still drives himself the whole way. Practice only, never a choice of his own. The chance: 0 → 12% over updates 0 to 20, held to 60, then 5% to the end. A practice trip counts as the fight network's own exploration, so its scores learn from every one and no fight option can fall to nothing in training |
 | 6 | **Both players get practice** | Each also learns what it costs to be cut off, to walk into a held angle, to chase someone who leaves |
 | 7 | **Fight starts** | A fifth of all rounds start just after a frag: one player with the stack and weapons of a real moment, the other fresh. Taken from the rounds that start at a pro game's moment (35% → 15%); whole games stay at 65% |
 | 8 | **The pay is split** | The item picker: items and the change in his chance of winning. The fight network: damage, far rails, frags, deaths, and the change in his chance of winning. The hands: unchanged. For its first 10 updates the item picker only relearns its forecast under the new pay; its scores are not taught until then |
+| 8b | **The chance of winning is read by the judge that sees the items and stacks** | For every part paid by it (the hands, the item picker, the fight network): one judge everywhere. Refitted on 100 new games of the start and accepted by its test before a start; the ledger's check (negative frags, sign flips) is run with it as the pay. In 2.2a this judge only fed a side forecast while the pay kept the older one; that is ended here (owner, 11-16 and 11-17) |
 | 9 | **The chance of winning is scaled up for both** | For the item picker and for the fight network, the win-chance part is scaled to **at least the size of their flat pay** (items for one; damage and frags for the other), measured on the start's games, logged every update, flagged if it falls below. The fight network keeps two forecasts, one for damage and frags, one for the chance of winning, each brought to the same size before they are added. It is also what makes the two networks' scores comparable in one list: the chance of winning is their common currency |
 | 10 | **The fight options enter his list, slowly** | Updates 60 to 100: the share of his decisions at which the fight options are in the list goes 0 → 1. Over the same updates "the enemy" and "the places" are shut in both halves of the item picker and its weapon push fades to nothing, while the fight network's weapon nudge opens. **One number is set by hand here**: the four fight options' total share at update 60 starts at what "the enemy" and "the places" hold together at that moment (they are what leaves the list), so his play does not jump. How that total is split among the four comes from what the fight network has learnt by then |
 | 11 | **It opens whatever the numbers say; they are reported, not obeyed** | A ramp never holds on its own. At update 60 the report says in plain words whether the hands carry the fight options out and how much practice each has had. If not enough, it is flagged at once and you decide |
@@ -142,9 +143,9 @@ in view and damage to be had), that is reported as it is: nothing is added to ho
 | No memory in the fight network | Me | It may not follow a fight's course from what it reads | Its forecast error; a memory is added if it lags |
 | Fight starts at 20% of rounds | Me | Fewer starts from pro games' moments | None |
 | The near-miss pay: its size, its outer distance, its cap | Me, on the owner's word for the pay itself | He comes to like near misses for their own sake and aims beside the enemy; or the charge on the enemy makes him over-fear shells that cannot hurt him | A hit pays about twenty times a near miss; damage a minute must not fall as projectiles a minute rise; both are live dials |
-| His legs take him to a fight option | Read in the simulator's notes, not yet tested on this line | If not, stage 1 teaches nothing | The build's first test |
+| He walks to a fight option when it is his destination | Assumed: he does for an item and for the hunted enemy, by the same way inputs | If not, stage 1 has to teach the walking as well, and may be too short | The build's first test: arrival and contact on dealt practice trips, per option |
 
-**The ledger's check:** no pay amount changes except the win-chance scale (change 9) and the near-miss pay (change 13, zero-sum, so it adds nothing to the two players' total); which network learns from which part changes.
+**The ledger's check:** the win chance now comes from the judge that reads the items (change 8b). Beyond that no pay amount changes except the win-chance scale (change 9) and the near-miss pay (change 13, zero-sum, so it adds nothing to the two players' total); which network learns from which part changes.
 The scaled win part is checked for sign flips and negative frags on the start's games before a start. Lopsided games are expected in
 the fight starts, by design.
 
@@ -189,6 +190,31 @@ network, because 1.7a's pointer added a moving part to every choice; and nothing
 - A server cannot play this network until the fight options, the predictions and the fight network are in the game image.
 - From 2.2a, unexplained, to be traced in the build before a start: the trainer's consistency check that failed once at update 153, and whether it shows at update 90.
 
-## Before a go
+## Built and tested (2026-11-17; the full record is [BUILD.md](BUILD.md))
 
-Not built. The build goes to an Opus 5.5 worker with a brief; "Built and tested" is added here when it is done.
+Built by an Opus 5.5 worker on branch `b22b`, reviewed by the planning session, sent back for one fix round, merged.
+
+| Test | Result |
+|---|---|
+| The start against 2.2a's update 90, every new dial at zero | 0 of 1,075,200 actions differ |
+| The simulator with every new switch off | Identical on fixed-seed replays |
+| Does he go to each fight option when it is dealt (the start network, four maps) | Reached the place or met the enemy: go at him 0.78, cut him off 0.91, hold an angle 0.91, back off 0.945 |
+| An angle practice trip | 408 of 579 arrived and held about 2 s each; on 55% of those the enemy came into view while he held |
+| The judge that reads the items, refitted on 100 new games of the start | Accepted (held-out gain, all folds); it is the pay for every part. The guard refuses any new run without it |
+| The win-chance part against each decider's flat pay | 2.1 to 7.0 times larger: no scaling was needed |
+| Frags with no win-chance gain (7 of 454) | Traced: frags in games already decided, a frag and a suicide in one frame, a frag bought with a big loss of his own stack. The judge behaving as it should; no fault |
+| The command's values against the values that play | All 53 names equal; the start refuses otherwise |
+| Four updates at full size, the carried optimizer | No part off, no non-finite number; the choices move calmly (weapon KL 0.002 to 0.012); the graphics card 14.2 of 16 GB |
+| Unit, live-file and guard tests; the small run through every stage with a restart | All passed |
+
+**Different from this card, as built:**
+
+- **The start carries 2.2a's update-100 optimizer**, not a cold one: cold, the weapon choice moved twenty times faster than usual in the second update.
+- **An update takes about 6.0 minutes** (2.2a: 6.6; 2.1d: 5.4). Update 60 comes about 6 hours in, update 100 about 10 hours in.
+- **Practice is 7.6 in 100 decisions, not 12.** Each of the four kinds is attempted equally often, but go at him, cut him off and the angle can only be dealt with the enemy out of sight, so about half of those attempts deal nothing. Of the trips dealt, back off is 42% and the other three about 19% each. (The first build dealt back off ten times as often as each other kind; that was sent back.)
+- **The weapon nudge learns only from practice trips**, where the weapon was dealt at random. On his own choices the weapon is the hands' pick, and learning the nudge from that would copy the hands.
+- **Cut-off chooses among 16 places a map** (eight standing places and eight choke points), the one the prediction says he is most likely to pass.
+- **The hands' old input "headed for the enemy" is on for all four fight options**, back off included. The new inputs that say which option he is on open over updates 0 to 20.
+- The part that read the map for the rater left with it.
+- No server can play this network: the export refuses it.
+
