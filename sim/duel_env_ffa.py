@@ -7855,11 +7855,11 @@ class DuelEnv:
         self.fgt_pass = self.fgt_pass[:n] | ps_
 
     def fg_state(self):
-        """(2.2b, FIGHT) per seat after the step [n, 6] float32: the fight option he is on (0 none, 1 at him, 2 cut off, 3 an angle, 4 back off),
-        arrived (intent_arr), the enemy in view, the enemy passed its place, his seconds on the target, alive"""
+        """(2.2b, FIGHT) per seat after the step [n, 7] float32: the fight option he is on (0 none, 1 at him, 2 cut off, 3 an angle, 4 back off),
+        arrived (intent_arr), the enemy in view, the enemy passed its place, his seconds on the target, alive, the weapon in his hand"""
         n = self.n
         return np.stack([self.fgt_k[:n], self.intent_arr[:n], np.asarray(self.visible, bool)[:n], self.fgt_pass[:n],
-                         self.intent_t[:n], self.hp[:n] > 0], 1).astype(np.float32)
+                         self.intent_t[:n], self.hp[:n] > 0, self.weapon[:n]], 1).astype(np.float32)
 
     def fight_feat(self):
         """(2.2b, FIGHT) at a tick's frame, every seat's fight options' candidates and their numbers (order_feat()'s columns, CMB_FEAT) ->

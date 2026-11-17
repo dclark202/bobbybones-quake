@@ -79,6 +79,14 @@ def main():
     allow = set(x for x in a.allow.split(",") if x)
     env, args = read_cmd(a.cmd)
     bad = 0
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "sim"))
+    import judge_guard as JG                                 # (2.2b's guard) the run's win-chance pay must read the judge with the items
+    ok_g, why_g = JG.check(env, None, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    if not ok_g and not same(args.get("--old-judge-replay", "0") or "0", "1"):
+        bad += 1
+        print("REFUSED the judge's guard: " + why_g)
+    else:
+        print("judge's guard: " + why_g)
     if a.ref:
         e0, a0 = read_cmd(a.ref)
         for kind, x, y in (("set", env, e0), ("arg", args, a0)):

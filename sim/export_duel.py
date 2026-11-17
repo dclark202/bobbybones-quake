@@ -51,6 +51,10 @@ def version_name(run):
 
 
 ck = torch.load(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, a.policy), weights_only=False, map_location="cpu")
+if ck.get("fight22") is not None:                           # (2.2b) a network with the fight network: the plugins do not play it yet (its readings,
+    raise SystemExit("REFUSED: {} has the fight network of 2.2b (sim/fightnet.py: its readings of the fight options, the one list, its weapon "   # the
+                     "nudge, the hands' fight inputs): plugins/netpass.py and plugins/duelbot.py do not play it yet, and a server would play it "   # options'
+                     "wrong. Not exported".format(a.policy))  # numbers, the hands' inputs of them, the four scores to the simulator)
 sd = {k: v.cpu().numpy() for k, v in ck["model"].items()}
 os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 env_vars = dict(ck.get("env_vars") or {})

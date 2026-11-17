@@ -88,6 +88,11 @@ def settings(ps, pol=None):
             S_["DODGE_IN"] = "1"                             # zeros there (the other seat, reading its columns by name, is not touched),
             if ev_.get("DODGE_G") not in (None, ""):         # at the gate the save trained at (both seats see it: one simulator)
                 S_["DODGE_G"] = str(ev_["DODGE_G"])
+        if ev_.get("FIGHT") not in (None, "", "0", 0, "0.0"):     # (2.2b) and the fight options (the hands' inputs of them, the options his
+            S_["FIGHT"] = "1"                                # list may pick: a network without them plays as before with it on)
+            for k_ in ("OUT_LIVE", "FG_IN_G"):
+                if ev_.get(k_) not in (None, ""):
+                    S_[k_] = str(ev_[k_])
     return ["{}={}".format(k, v) for k, v in S_.items() if k != "OVERTIME"] + ["OVERTIME=1"]
 
 
