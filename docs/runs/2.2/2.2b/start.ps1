@@ -13,11 +13,12 @@
 # ramp could write, FGT_BIAS at -30, 0, 30); a run folder that already has a policy.pt. Then: the trainer (0xC03C3), the watcher (checks every 20
 # updates, 200 games, against 2.2a's update 90; every fourth against 2.1d's end), the ramp and the self-play logger (0x3C3C). Every window hidden.
 # Usage (PowerShell):  powershell -ExecutionPolicy Bypass -File docs\runs\2.2\2.2b\start.ps1 -Minutes <n> -Updates <n> [-From <2.2a's policy_90.pt>]
-#   [-Samples <dir with the samples s_<map>.npz of legs_test.py --sample>] [-Opt <an optimizer file to carry, e.g. 2.2a's keep\opt_u100.pt>]
-# -Opt (the planning session's choice, BUILD.md "The optimizer at the start"): the file is copied in as opt.pt (the trainer carries its moments
-# over to list 22b's widened first layer and the new token); without it the optimizer starts cold, as the card has it. --lr-warm applies either way.
+#   [-Samples <dir with the samples s_<map>.npz of legs_test.py --sample>] [-Opt <an optimizer file to carry>] [-ColdOpt]
+# The optimizer (the planning session's decision of 11-17, BUILD.md "The optimizer at the start"): BY DEFAULT 2.2a's update-100 optimizer
+# (keep\opt_u100.pt) is copied in as opt.pt (the trainer carries its moments over to list 22b's widened first layer and the new token);
+# -Opt <file> carries another; -ColdOpt starts it cold (the card's first plan). --lr-warm applies either way.
 # -DryRun: every check and every file made, into data\sim_runs\scratch_22b_dryrun (log: start_dryrun.log); the trainer and its helpers not started.
-param([int]$Minutes = 0, [int]$Updates = 0, [string]$From = "", [string]$Samples = "", [string]$Opt = "", [switch]$DryRun)
+param([int]$Minutes = 0, [int]$Updates = 0, [string]$From = "", [string]$Samples = "", [string]$Opt = "", [switch]$ColdOpt, [switch]$DryRun)
 $ErrorActionPreference = "Stop"
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT = (Resolve-Path (Join-Path $HERE "..\..\..\..")).Path
@@ -30,6 +31,7 @@ $LOG = Join-Path $HERE $(if ($DryRun) { "start_dryrun.log" } else { "start.log" 
 function Log($m) { $l = (Get-Date -Format "MM-dd HH:mm:ss ") + $m; Add-Content -Path $LOG -Value $l; $l }
 if (-not $From) { $From = Join-Path $R0 "keep\policy_90.pt" }
 if (-not $Samples) { $Samples = Join-Path $SR "scratch_22b_start" }
+if ($ColdOpt) { $Opt = "" } elseif (-not $Opt) { $Opt = Join-Path $R0 "keep\opt_u100.pt" }
 
 if ($Minutes -le 60) { Log "-Minutes (over 60) is needed: not started"; exit 1 }
 if ($Updates -le 0) { Log "-Updates (the run's --max-updates, the owner's length) is needed: not started"; exit 1 }

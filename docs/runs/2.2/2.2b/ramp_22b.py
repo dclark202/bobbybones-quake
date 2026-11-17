@@ -96,7 +96,9 @@ def carried_report(lines, at=REPORT_AT, win=BIAS_WIN):
     """(change 11) the plain-words lines at update 60: for each option over updates at - win + 1 .. at: its practice trips, how they ended, the
     damage dealt for the damage taken on practice trips against his own choices -> (lines of text, {option: carried?})"""
     w_ = lines[max(0, at - win):at]
-    tot_ = {o_: dict(dealt=0, arrived=0, met=0, died=0, timed_out=0) for o_ in OPTS}
+    tot_ = {o_: dict(dealt=0, attempted=0, arrived=0, met=0, died=0, timed_out=0, held_to_the_end=0, arrived_trips=0, sighted_while_holding=0)
+            for o_ in OPTS}
+    hs_ = 0.0
     allp_ = {o_: 0 for o_ in OPTS}
     dm_ = dict(pd=0.0, pt=0.0, od=0.0, ot=0.0)
     for m_ in lines[:at]:
@@ -106,6 +108,7 @@ def carried_report(lines, at=REPORT_AT, win=BIAS_WIN):
         for o_ in OPTS:
             for k_ in tot_[o_]:
                 tot_[o_][k_] += int(_dig(m_, ("fight", "practice", o_, k_)) or 0)
+        hs_ += float(_dig(m_, ("fight", "practice", "angle", "held_s_after_arrival")) or 0.0)
         d_ = _dig(m_, ("fight", "damage")) or {}
         for k_, (a_, b_) in (("pd", ("practice", "dealt_s")), ("pt", ("practice", "taken_s")), ("od", ("own", "dealt_s")), ("ot", ("own", "taken_s"))):
             sec_ = float(_dig(d_, (a_, "seconds")) or 0.0)
@@ -119,18 +122,26 @@ def carried_report(lines, at=REPORT_AT, win=BIAS_WIN):
                "share 0 -> 1 over 40 updates, whatever these numbers say). On practice trips he dealt {} points of damage for each point he took; "
                "on his own choices {}.".format(at, at - win + 1, at, "{:.2f}".format(rp_) if rp_ is not None else "an unknown number",
                                                "{:.2f}".format(ro_) if ro_ is not None else "an unknown number"))
+    dl_ = sum(tot_[o_]["dealt"] for o_ in OPTS)
+    out.append("  Practice dealt in these ten updates: {} trips ({}); each kind is drawn equally often and dealt only when it is possible at that "
+               "moment (attempted: {}).".format(dl_, ", ".join("{} {} ({:.0%})".format(OPT_WORDS[o_], tot_[o_]["dealt"], tot_[o_]["dealt"] / max(1, dl_))
+                                                               for o_ in OPTS), ", ".join("{} {}".format(o_, tot_[o_]["attempted"]) for o_ in OPTS)))
     for o_ in OPTS:
         t_ = tot_[o_]
         e_ = t_["arrived"] + t_["met"] + t_["died"] + t_["timed_out"]
-        rm_ = (t_["arrived"] + t_["met"]) / e_ if e_ else None
+        rch_ = t_["arrived"] + t_["met"] + (t_["held_to_the_end"] if o_ == "angle" else 0)   # (an angle trip holds after arriving: reached)
+        rm_ = rch_ / e_ if e_ else None
         ok[o_] = bool(rm_ is not None and rm_ >= 0.5 and (rp_ is None or ro_ is None or rp_ >= ro_))
         out.append("  {}: {} practice trips so far ({} in these ten updates); of those that ended he {} on {} ({}), was killed on {}, ran out of "
                    "time on {}. {}".format(
                        OPT_WORDS[o_].capitalize(), allp_[o_], t_["dealt"], "got there or met the enemy" if o_ != "away" else "got away or met the enemy",
-                       t_["arrived"] + t_["met"], "{:.0%}".format(rm_) if rm_ is not None else "none ended", t_["died"], t_["timed_out"],
+                       rch_, "{:.0%}".format(rm_) if rm_ is not None else "none ended", t_["died"], t_["timed_out"],
                        "THE HANDS CARRY IT OUT." if ok[o_] else "THE HANDS DO NOT CARRY IT OUT (the card's mark: at least half reached or met, and "
                        "the damage trade no worse than on his own choices): it enters his list anyway and may be learnt away as in 1.7a; the owner "
-                       "may lengthen the practice or stop."))
+                       "may lengthen the practice or stop.") + (" At the angle (a trip holds there until he sees the enemy, 4 s from its start, or "
+                       "death): he arrived on {} trips, held {:.1f} s on average after arriving, saw the enemy come while holding on {}, and held "
+                       "to the end without a sighting on {} (counted as reached).".format(t_["arrived_trips"], hs_ / max(1, t_["arrived_trips"]),
+                                                                                         t_["sighted_while_holding"], t_["held_to_the_end"]) if o_ == "angle" else ""))
     return out, ok
 
 
@@ -151,6 +162,12 @@ def fight_lines(m_, u_, log):
             o_, (pr_.get(o_) or {}).get("dealt"), (pr_.get(o_) or {}).get("own_picked"), (pr_.get(o_) or {}).get("arrived"), (pr_.get(o_) or {}).get("met"),
             (pr_.get(o_) or {}).get("died"), (pr_.get(o_) or {}).get("timed_out"), (pr_.get(o_) or {}).get("reached_or_met"),
             (pr_.get(o_) or {}).get("enemy_passed")) for o_ in OPTS))
+    sh_, an_ = pr_.get("share") or {}, pr_.get("angle") or {}
+    log("update {}: fight: practice: attempted {} (by kind {}), dealt {} = {} of his decisions; dealt by kind {} | the angle: arrived {} trips, held {} s "
+        "after arriving ({} s a trip), saw the enemy while holding {}, held to the end {}".format(
+            u_, sh_.get("attempted"), {o_: (pr_.get(o_) or {}).get("attempted") for o_ in OPTS}, sh_.get("dealt"), sh_.get("practice_of_his_decisions"),
+            sh_.get("dealt_by_kind"), an_.get("arrived_trips"), an_.get("held_s_after_arrival"), an_.get("held_s_per_arrival"),
+            an_.get("sighted_while_holding"), an_.get("held_to_the_end")))
     log("update {}: fight: damage a second on practice trips dealt {} taken {} ({} s) | on his own choices dealt {} taken {} ({} s) | his decisions {}: "
         "the enemy and the places {} | list decisions {}: the fight side wins {} | bias to set {} (now {})".format(
             u_, _dig(dm_, ("practice", "dealt_s")), _dig(dm_, ("practice", "taken_s")), _dig(dm_, ("practice", "seconds")), _dig(dm_, ("own", "dealt_s")),
@@ -181,7 +198,11 @@ def fight_lines(m_, u_, log):
     if big_:
         log("FLAG update {}: a part of a sum or a decayed layer over {} (rule 11): {}".format(u_, SIZE_FLAG, big_))
     if f_.get("win_scale_below_flat"):
-        log("FLAG update {}: the scaled win part is below the flat part for {} (change 9): {}".format(u_, f_["win_scale_below_flat"], ls_.get("win_scale")))
+        ws_ = ls_.get("win_scale") or {}
+        for k_, who_ in (("items_ratio", "the item picker (its flat pay: the items)"), ("fight_ratio", "the fight network (its flat pay: damage, frags, deaths, far rails, near misses)")):
+            if k_ in f_["win_scale_below_flat"]:
+                log("FLAG update {}: the win part is smaller than the flat pay for {}: the win part (x its scale) is {} of the flat pay's size, "
+                    "under 1 (change 9 wants it at least as large)".format(u_, who_, ws_.get(k_)))
     if (f_.get("nonfinite") or 0) > 0:
         log("MAJOR PROBLEM update {}: THE FIGHT NETWORK GAVE {} NON-FINITE NUMBERS (zero for those seats)".format(u_, f_.get("nonfinite")))
 
@@ -281,8 +302,8 @@ def main():
                     u_, pm_.get("dmg_dealt"), pm_.get("dmg_taken"), pm_.get("frag"), pm_.get("death"), pm_.get("win_part"), ss_.get("win_part"),
                     pm_.get("item_MH"), pm_.get("item_RA"), pm_.get("item_YA"), pm_.get("item_points"), pm_.get("item_decay"),
                     pt_.get("total_per_player_min")))
-            if (ss_.get("win_part") or 0) > 0.6:
-                log("FLAG update {}: the win part is {} of the pay's size (over 0.6): the judge's noise".format(u_, ss_.get("win_part")))
+            # (2.2b, the coordinator's fix C: 2.2a's "win part over 0.6 of the pay's size" flag is retired: the owner wants the win part at least
+            # the size of each decider's flat pay; its opposite is flagged in fight_lines, from the fight block's win scale)
         dg_ = m_.get("dodge_gate") or {}
         if dg_:
             import math as math_

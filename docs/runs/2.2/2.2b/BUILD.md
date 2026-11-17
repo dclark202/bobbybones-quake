@@ -5,31 +5,39 @@ what was built, how it was tested, and where the build departs from the card. Br
 
 ## Not done, or open (read first)
 
-1. **The optimizer at the start: a decision for the planning session.** Cold (the card), the second update's weapon KL is 0.30 (2.2a's:
-   0.015) even at a tenth of the rate; with 2.2a's update-100 optimizer carried it is 0.002. `start.ps1 -Opt <file>` carries one. I
-   recommend `-Opt data\sim_runs\duel_gru_2_2a\keep\opt_u100.pt` ("The full-size trial").
+**The fix round of 11-17 (the coordinator's review: A to D and the optimizer), done and re-validated: see "The fix round" below.**
+
+1. **The optimizer at the start (decided 11-17): 2.2a's update-100 optimizer is carried** (`start.ps1`'s default now: `keep\opt_u100.pt`;
+   `-ColdOpt` starts cold, `-Opt <file>` carries another). Cold, the second update's weapon KL was 0.30 (2.2a's: 0.015); carried, 0.002.
 2. **`--lr-warm` did nothing as the card's command had it** (it counts from `--fade-start`, 7214). Fixed with a new `--lr-warm-start`
    (the trainer); worth a line in CLAUDE.md's gotchas (not mine to write).
-3. **An update takes 7.3 to 7.6 minutes**, not toward 2.1d's 5.3 (2.2a: 6.6).
-4. **Two meanings shift under the fight options** (not rules acting on him): his input "his intention is the enemy" is 1 on all four
+3. **An update takes about 6.0 minutes** of wall time in steady state (the 4-update trial: 6.0 and 6.05; 2.2a: 6.57; 2.1d: 5.4). The
+   first record's "7.3 to 7.6" was the rollout's and the learning's seconds added, which overlap: corrected.
+4. **Practice is still not an even quarter each when dealt** (fix A): each kind is now attempted equally often, but going at him, cutting
+   off and the angle are valid only with the enemy out of view, so about half their attempts deal nothing; back off is valid nearly always.
+   Measured: back off 42% of the dealt trips, the other three 19 to 20% each (it was about 10 to 1 before). Attempts that deal nothing go
+   to his own list; the realised share of his decisions that are practice is about 7.6% at `PRACTICE_P` 0.12. Equal dealt shares would
+   need the attempt redrawn among the valid kinds, which is the rule fix A replaced: for the planning session if wanted.
+5. **Two meanings shift under the fight options** (accepted for this run): his input "his intention is the enemy" is 1 on all four
    options, back off included; the `--ahead` readout's target class 8 means "on a fight option". See "The audit's points".
-5. **The ramp's inherited flag "the win part is over 0.6 of the pay's size"** fires on nearly every update with the judge with the items
-   as the pay (0.59 to 0.79 in the measurements; 2.2a's first update: 0.60). The monitor reports every FLAG; the planning session may want
-   to tell the monitor it is expected, or move the line.
-6. Pay groups that are my reading of the card: `high` (0 here) with the fight network's; `drops` and `item_seek` the hands' only;
-   `item_decay` and `stack_keep` the item picker's ("The ledger").
-7. The few frag frames whose win part is at or below 0 (7 of 454, the same count under both judges) were not traced frame by frame;
-   lopsided finished games were not measured (only games under way).
+6. Pay groups (accepted 11-17): `high` (0 here) with the fight network's; `drops` and `item_seek` the hands' only; `item_decay` and
+   `stack_keep` the item picker's ("The ledger").
+7. **Lopsided games are the norm in 2.2a's own self-play**: of the refit's 100 finished games of 2.2a's update 90 against itself, 27 ended
+   by more than 10 frags (32 by 10 or more; median margin 6, mean 7.4, largest 21, no draws).
 8. `tools/run/make_train_cmd.py` could not make 2.2b's command (its form needs the old `cd /d ...ql-bot` line); `make_files.py` (2.2a's
    pattern) makes it from 2.2a's command as it ran, with the guard inside.
-9. The league seats get no weapon nudge; the fight network's weapon scores learn from practice trips' dealt weapons only.
-10. An angle practice trip ends on arrival and never holds; the map sense left with the rater.
+9. The league seats get no weapon nudge; the fight network's weapon scores learn from practice trips' dealt weapons only (accepted 11-17).
+10. The map sense left with the rater.
 11. No server can play a 2.2b network (the export refuses it; the plugins do not know the fight options); the `qlbot` image is not rebuilt.
 12. The test map's `testlab.bsp` is missing in `data/maps`: the generated module's check ran on Blood Run.
 13. `check_settings.py` applies the guard to the command alone (it reads no live file); the trainer reads the run's `live.json` too.
 14. Not merged, not pushed; branch `b22b`. No row in `docs/RUNS.md` for 2.2b (it has not started). Scratch folders left in place
     (nothing deleted): `data/sim_runs/scratch_22b_*` (the start's pieces, smokes, trials, the dry run), `scratch_22b_items` (the 100
     refit games).
+15. **The full-size trial with practice open did not get its practice update** (the coordinator shortened the trial to the updates done):
+   `PRACTICE_P` 0.12 was written to `live.json` after update 2's line, but with `--overlap 1` the rollouts of updates 3 and 4 had already
+   been prepared, so it would first have played in update 5. The new dealing and the angle hold are measured in the CPU smoke and the legs
+   test, not at full size.
 
 ## What was built, by the card's changes
 
@@ -39,7 +47,7 @@ what was built, how it was tested, and where the build departs from the card. Br
 | 2 | The fight network | `sim/fightnet.py`; the trainer's `--fight22` | 1,230 inputs (the brain 256, the tracker 18, his inputs 69, the items 17, the head 256, the hands 512, the options' numbers 80, where he is headed 22), two hidden layers of 256, 4 scores, 10 weapon scores, 2 forecasts (damage and frags; the win part). Its own Adam (1e-4), its own random stream. Decay (`H2_L2`) on its first and last layers. A copy plays; league snapshots keep theirs (`SNAP_FN`) |
 | 3 | The fight options in the simulator | `sim/duel_env.py` (`FIGHT=1`) on 1.7's combat order's points | Him: the enemy's believed place. Cut off: 8 holding places and 8 choke points of the map's tables, valid if he gets there before the enemy; the trainer picks the one the tracker's pass odds favour most (max of the 2 s and 4 s odds). The angle: a place that sees the candidate, reached first, 150 to 1,500 units away, the quickest. Away: the best way out (1.7b's break-off, `OUT_LIVE` 1.5 s counted from the trip's start). The order rides on the keep column (`FG_ASK` 2048, `FG_KIND` 4096 x kind, `FG_CAND` 65536 x candidate) |
 | 4 | The hands' new inputs | group "b22b fight" (20 columns), list 22b, `sim/duel_env_ffa22b.py`; token `fight22` | The kind, the spot and its look point, the time headed there, the four scores (`FG_IN_G`). Their statistics measured on the start's play (`tools/fight22_init.py norm`, 71,760 readings); the four score columns are constant at the start (the scores start equal) and keep their design statistics. The token's gate is live `FGT_GATE`: -30 shut, -12 after the first update, 0 at update 20 |
-| 5 | Practice | the trainer | Dealt at a new decision with chance `PRACTICE_P`; him, cut and angle only with the enemy out of view; half dealt evenly, half from the fight network's own softmax; a random weapon he owns (no gauntlet). Held to the spot, a sighting, 4 s or death. The probability of what was played is the mixture (practice x (half even + half its own) + the rest x his list) |
+| 5 | Practice | the trainer (`fightnet.prac_deal`) | **(fix A)** At a new decision, with chance `PRACTICE_P`, an attempt: the kind is drawn among all four, half evenly, half from the fight network's own softmax over the four; the trip is dealt only if that kind is valid now (him, cut and angle only with the enemy out of view); otherwise no practice and his list decides. A random weapon he owns (no gauntlet). Held to the spot, a sighting, 4 s or death; **(fix B)** an angle trip holds after arriving: only a sighting, 4 s from its start or death end it. The probability of what was played is exact: a practice kind k: `P x (1/8 + softmax(k)/2)` if valid; his list's pick: `(1 - P x q) x` its list probability, `q` the chance an attempt deals (`fightnet.mix_logp`, `list_keep`) |
 | 6 | Both players practise | the trainer | The league seats are dealt practice too (counted apart: `league_dealt`) |
 | 7 | Fight starts | `sim/duel_env.py` `FIGHT_START_P` 0.20, `PRO_START_P` 0.35 → 0.15 | A pro start's moment, then one seat (evenly drawn) keeps it and gets the frag, the other is fresh at a spawn by the measured rule; the judge's base read again |
 | 8 | The pay split | `sim/fight22.py`; `--head2-pay items_win` | See the ledger below. The item picker's choice lessons are off for its first 10 updates (`--h2-choice-warm 10`); its forecast learns from the first |
@@ -95,9 +103,19 @@ Where the split departs from the coordinator's list: **`high`** (the high ground
 deaths, near misses"); the planning session may move any of them by name in `sim/fight22.py`.
 
 **The pathology check** (the same games, the judge with the items as the pay): of 454 frags, the frag term was above 0 for all (0 at or
-below 0); the fragger's whole frame pay was at or below 0 on 2 (0.4%); the win part was at or below 0 on 7 frag frames (1.5%), **the
-same count under both judges**, so not the items' doing; the victim's whole pay was at or above 0 on 1. The cause of these few frames was
-not traced frame by frame (not done). No negative frags, no sign flip of the items judge against the item-blind one. Lopsided games:
+below 0); the fragger's whole frame pay was at or below 0 on 2 (0.4%); the win part was at or below 0 on 7 frag frames (1.5%), the same
+count under both judges; the victim's whole pay was at or above 0 on 1. **Traced frame by frame (fix D): every one is how the judge
+should behave; none is a fault in how the pay is read** (nothing changed):
+
+| Map, clock | Score before → after | What the frame is | The judge's chance for the fragger |
+|---|---|---|---|
+| Battleforged 590.9 s | 13-0 → 14-0 | A frag in a decided game | 1.000 before and after: win part exactly 0 |
+| Campgrounds 587.9 s | 16-(-1) → 17-(-1) | A frag in a decided game | 1.000: 0 |
+| Campgrounds 596.0 s | 17-(-1) → 17-0 (the trailing player frags) | A frag in a decided game | his 0.000 stays 0: 0 |
+| Furious Heights 239.6 s | 1-0 → 2-1 | A double frag: both kill each other in the same frame (the one frame with the victim's whole pay above 0, and one of the two with the fragger's at or below 0: each gets a frag and a death) | 0.707 → 0.587 (blind and with the items alike): the leader's stack advantage (53/140 against 80/0) is gone, the lead is unchanged |
+| Lost World 125.7 s | 1-1 → 1-1 | He frags and kills himself in the same frame (a suicide, -1) | 0.518 → 0.500: level score, both respawn |
+| Lost World 343.9 s | 0-0 → 0-0 | He kills himself and frags in the same frame (the other frame with the fragger's whole pay at or below 0: -0.03) | with the items 0.554 → 0.500 (his 5/94 stack and the items' timing were worth 0.05 to that judge; the blind one 0.500 → 0.500) |
+| Aerowalk 237.8 s | 0-0 → 1-0 | A frag in which he lost 134 points of stack the same frame (195/99 → 150/10) against a victim already at 33/0 | 0.738 → 0.655 (blind), 0.751 → 0.723 (with the items): the frag was already priced in by the stacks; the armor he lost was not | No negative frags, no sign flip of the items judge against the item-blind one. Lopsided games:
 the games under way when the 100 s of each map ended (160 games) had a mean score gap of 2.7 frags, 3 at 10 or more (fight starts give a
 one-frag lead by design); these are not finished games, so this reads the start of games only.
 
@@ -161,7 +179,7 @@ the enemy on dealt practice trips:
 | Hold an angle | 0.818 | 0.933 | 0.873 | 0.907 |
 | Back off | 0.922 | 0.925 | 0.920 | 0.893 |
 
-In the full-size trial with every dial open (one update, all ten maps): him 0.81, cut 0.96, angle 0.95, away 0.98.
+In the full-size trial with every dial open (one update, all ten maps): him 0.81, cut 0.96, angle 0.95, away 0.98. (Both before the fix round: the old dealing, an angle trip ending on arrival. With the new dealing and the hold: "The fix round".)
 
 **The command's start values are the live file's** where the trainer takes one (`start_values.py`: 53 names, all equal; `start.ps1`
 refuses otherwise). Where the trainer takes none: `H2_PG` and `H2_MIX` start from the trainer's own factor (1 and 0, equal to the live
@@ -229,11 +247,12 @@ Every test below was run in the build; none is claimed that was not.
 Three trials at the run's own size (30 simulators x 168 matches, 360 pieces, the graphics card; `smoke.py` with `SMOKE_FULL=1`, 2 updates
 each, from the start file, the league of two converted anchors and the control):
 
-| Trial | Dials | Optimizer | Update 1: KL, clip, the target's KL, the weapon's KL | Update 2: the same | Minutes an update (1, 2) |
+| Trial | Dials | Optimizer | Update 1: KL, clip, the target's KL, the weapon's KL | Update 2: the same | Rollout + learning seconds added, in minutes (1, 2; they overlap: not the wall time) |
 |---|---|---|---|---|---|
 | 1 | all open (practice 0.12, near pay 5, token open, FGT_G 1, FGT_W 1, H2_WADD 0) | cold, full rate 1e-4 (the warm-up did not work then: below) | 0.246, 0.40, 0.221, 0.883 | 0.063, 0.28, 0.044, 0.373 | 9.3, 7.3 |
 | 2 | the start's (shut) | cold, the warm-up (1.1e-5, 1.6e-5) | 0.014, 0.09, 0.011, 0.044 | **0.050, 0.15, 0.046, 0.296** | 9.2, 7.3 |
 | 3 | the start's (shut) | **2.2a's update 100 optimizer carried** (`keep/opt_u100.pt`), the same warm-up | 0.0036, 0.03, 0.0004, 0.0018 | **0.0043, 0.04, 0.0006, 0.0023** | 9.7, 7.6 |
+| 4 (fix round, after fixes A to C) | the start's (shut; `PRACTICE_P` 0.12 written after update 2, too late to play: see "Not done") | carried (`start.ps1`'s default now) | 0.0036, 0.03, 0.0004, 0.0018 | 0.0042, 0.04, 0.0006, 0.0024 | 9.3, 9.8; then updates 3 and 4: KL 0.0061 and 0.0090, clip 0.07 and 0.10, the target's 0.0011 and 0.0022, the weapon's 0.0050 and 0.0124 (the rate warming: 2.5e-5, 3.4e-5) |
 
 2.2a for comparison (warm optimizer, full rate): KL 0.027 to 0.030, the weapon's 0.015, the target's 0.004. In every trial: no part
 turned off, no non-finite number, no flag; the pull's proof (`pull.first_err`) 0.0002 to 0.0006 at the start's dials (0.0031 at update 2
@@ -243,18 +262,66 @@ cut 792, 0.96; angle 785, 0.95; away 9,013, 0.98 (away is valid nearly always, t
 the list at 34% of decisions (scores still near equal, no bias set).
 
 **Memory** (a monitor every 20 s over trials 1 and 2 and the start of 3; before: 18.3 GB of RAM in use, commit 32.9 GB, the card 1.4 GB):
-the card's memory at most 14.1 GB of 16; RAM in use at most 50.3 GB (17.7 GB free at the least); commit at most 81.2 of 111 GB.
+the card's memory at most 14.1 GB of 16; RAM in use at most 50.3 GB (17.7 GB free at the least); commit at most 81.2 of 111 GB. Trial 4
+(before: 13.7 GB in use, commit 25.8 of 103.4 GB, the card 1.2 GB): the card at most 14.2 GB, RAM in use at most 50.9 GB (12.5 GB free at
+the least), commit at most 75.7 GB. Trial 4's KL by head (14 heads, update 4): 0.0003, 0.0003, 0.0002, 0.0030, 0.0018, 0.0002, 0.0022 (the
+target), 0.00004, 0.0004, 0.0002, 0.0002, 0, 0, 0; no part off, no non-finite number, no flag; the pull's proof 0.0002 to 0.0007; the win part
+2.1 to 7.0 times each decider's flat pay.
 
-**Minutes an update**: 7.3 to 7.6 after the first (2.2a: 6.6; the card hoped for nearer 2.1d's 5.3 with the rater out). The rollout
-200 to 240 s, the learning 214 s (its first update 355 s). The fight network's lesson takes about 1 s, the tracker's pass odds about 1.3 s;
+**Minutes an update** (wall time, from the records' clock): about 6.0 in steady state (trial 4: 6.0 and 6.05 for updates 2 to 4; 2.2a:
+6.57; 2.1d: 5.4). The rollout 200 to 240 s, the learning 214 to 362 s; they overlap. The fight network's lesson takes about 1 s, the tracker's pass odds about 1.3 s;
 the rest is the item picker's and the hands' learning as in 2.2a.
 
 **The optimizer at the start.** The card starts cold with a warm-up because no optimizer was kept at update 90. Measured: cold, even at a
 tenth of the rate, the second update's weapon KL is 0.30, 20 times 2.2a's (likely the cold Adam: its first steps are about the rate's
 size for every weight whatever its gradient; not traced further). With 2.2a's update-100 optimizer carried (its
 moments are the gradient's scale, 10 updates on; the trainer carries them over to the widened first layer and starts the new token's
-fresh), the KL is at 2.2a's level. `start.ps1 -Opt <file>` carries one; without `-Opt` it starts cold as the card says. **For the planning
-session to decide** (my recommendation: `-Opt data\sim_runs\duel_gru_2_2a\keep\opt_u100.pt`).
+fresh), the KL is at 2.2a's level. **Decided 11-17: carried.** `start.ps1` carries `keep\opt_u100.pt` by default; `-ColdOpt` starts
+cold; `-Opt <file>` carries another.
+
+## The fix round (the coordinator's review of 11-17)
+
+**A. The dealing.** `fightnet.prac_deal` (the trainer's own call): at an eligible decision (a new draw, alive, his head on, not on a trip),
+an attempt with chance `PRACTICE_P`; the kind drawn among all four, half evenly, half from the fight network's softmax over all four;
+dealt only if valid now; otherwise no practice and his list decides. The probabilities the lessons use are exact (`mix_logp`,
+`list_keep`; the list events now carry the practice validity of their decision). Unit tests: three closed-form cases, and 400,000 deals
+of `prac_deal` against `mix_logp` and `list_keep` (each kind's frequency within 0.0002, the list's share within 0.0003, the whole sums to
+1). Recorded in `metrics.jsonl` (`fight.practice`): attempted and dealt per kind, `share` (attempted, dealt, his decisions, the realised
+share of his decisions that are practice, the dealt share by kind). The ramp's line every update and its update-60 report give the dealt
+trips per kind and the attempts.
+
+The legs test with the new dealing (the start network, `--p 0.12` at keep readings, 4 maps x 4,000 frames x 32 seats):
+
+| Kind | Attempted | Dealt | Share of the dealt | Reached the place or met the enemy |
+|---|---|---|---|---|
+| Go at him | 1,176 | 591 | 19.8% | 77.7% |
+| Cut him off | 1,147 | 564 | 18.9% | 91.0% |
+| Hold an angle | 1,170 | 579 | 19.4% | 90.7% (408 arrived; 224 saw the enemy while holding) |
+| Back off | 1,254 | 1,254 | 42.0% | 94.5% |
+
+Practice is 7.6% of the eligible readings at 0.12. In the CPU smoke the full-size ramp's stages ran with it (back off 17% to 48% of the dealt trips
+by update, on tiny samples).
+
+**B. The angle holds.** An angle practice trip ends on a sighting, 4 s from its start, or death; arrival does not end it (the order stays:
+the destination the place, the look point the spot). Recorded: `fight.practice.angle` arrived trips, seconds held after arrival (and a
+trip), sighted while holding, held to the end (counted as reached). Legs test: 408 of 579 dealt angle trips arrived and held 803 s in
+all, about 2.0 s a trip, and 224 of them (55%) saw the enemy come while holding. A seat on a practice trip is no longer eligible for
+another (it was not excluded before: with the old end at arrival it never mattered).
+
+**C. The flag.** 2.2a's "the win part is over 0.6 of the pay's size" is retired from `ramp_22b.py`. The new line, written when either
+decider's win part (times its scale) falls below its flat pay's size, exactly:
+`FLAG update <u>: the win part is smaller than the flat pay for the item picker (its flat pay: the items): the win part (x its scale) is <r> of the flat pay's size, under 1 (change 9 wants it at least as large)`
+(and the same with `the fight network (its flat pay: damage, frags, deaths, far rails, near misses)`).
+
+**D. The odd frags** are traced in "The ledger" (all judge behaviour: three in decided games, three with the fragger's own death in the
+frame, one where his stack loss outweighed an already-priced frag); nothing changed. Lopsided games: of the refit's 100 finished games,
+27 ended by more than 10 frags (32 by 10 or more; median margin 6, mean 7.4, largest 21).
+
+**Re-validated after the fixes**: `tests.py unit` (the new mixture tests included), `live`, `guard`: ALL PASSED; the simulator's identity
+with every switch off (Blood Run and Hektik, 1,200 frames x 16 seats): IDENTICAL; the start against 2.2a's update 90: 0 of 1,075,200
+actions differ; the legs test above; the CPU smoke through every stage and a resume: PASSED (practice, the one number at update 6, the
+plain-words report with the new dealt-per-kind line and the angle's hold, the list and the weapon hand-over, no non-finite number, the
+pull's proof at most 0.0011); one full-size trial of 4 updates with the carried optimizer (trial 4 above).
 
 ## 2.2a's consistency failure at update 153 (traced)
 
@@ -272,8 +339,8 @@ calls one over 0.01 MAJOR.
 | Detail | Decided | Why |
 |---|---|---|
 | Which cut-off place | Among the 16 candidates he reaches before the enemy, the one the tracker's pass odds favour most (the larger of its 2 s and 4 s odds) | The card: "cut-off moves to the prediction that works"; the tracker's pass odds learn without the outlook (the rater's own score of them left with it) |
-| When him, cut and angle are dealt in practice | Only with the enemy out of view (away whenever valid) | A trip toward an enemy in view ends at once by contact; practice is for reaching the spot. Away is therefore dealt far more often (trial 1: 9,013 against 785 to 904) |
-| A practice trip's end | The spot, a new sighting after he was out of view, 4 s, or death; on its frames his own target choice is not read (`b_live` 0: no lesson of his target head on a pick he did not make); the fight network learns from it as its own exploration | The card ("until the spot, contact, or 4 seconds"). Consequence: **an angle trip ends on arrival and never holds there**; holding is then his own choice |
+| When him, cut and angle are dealt in practice | Only with the enemy out of view (away whenever valid); since fix A the kind is drawn first among all four and an attempt whose kind is not valid deals nothing | A trip toward an enemy in view ends at once by contact. Before fix A away was dealt about ten times as often as each other (trial 1: 9,013 against 785 to 904); after it 42% against 19 to 20% (the legs test) |
+| A practice trip's end | The spot, a new sighting after he was out of view, 4 s, or death; **an angle trip not at the spot (fix B): it holds there until a sighting, 4 s from its start, or death**. On its frames his own target choice is not read (`b_live` 0: no lesson of his target head on a pick he did not make); the fight network learns from it as its own exploration | The card ("until the spot, contact, or 4 seconds"); fix B (the owner's 4 s total kept). An angle trip that arrived and held to its end without a sighting counts as reached |
 | The weapon on a practice trip | Even among the weapons he owns, no gauntlet | The card ("a weapon he owns, each equally likely") |
 | What the fight network's weapon scores learn from | The practice trips' dealt weapons only (their advantage) | On his own and list trips the weapon is the hands' pick; teaching the nudge from it would copy the hands (rule 13) |
 | The league seats | Dealt practice (change 6) and their snapshot's own fight network when it has one; **no weapon nudge** | The nudge is the learner's dial (`FGT_W`); a league file's own is not replayed |

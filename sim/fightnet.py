@@ -213,22 +213,55 @@ def masked_scores(S, valid, xp=np):
     return xp.where(valid.bool(), S.float(), xp.full_like(S.float(), NEG))
 
 
-def mix_logp(S, valid, k, p_prac, at_draw, fl_on, joint_lsm=None):
-    """(torch) THE MIXTURE: the probability that option k [B] was played at a decision, as the trainer plays it: at a new draw (at_draw) with
-    the chance p_prac a practice trip (half: an option dealt evenly among the valid ones; half: from the fight network's own softmax over the
-    valid ones), else his list (fl_on: the fight options are in it; joint_lsm [B, 4]: the list's log-probabilities of the four, None: not in it).
-    k < 0: an item from the list (its probability is the caller's). -> log p [B]"""
+def prac_kind_p(S):
+    """(torch) THE DEALING (the coordinator's fix A, 11-17): at a decision that is to be a practice trip the kind is drawn first among ALL FOUR,
+    half evenly, half from the fight network's own softmax over the four; the trip is dealt only if that kind is valid now (else no practice:
+    he decides as usual). -> the chance of drawing each kind [B, 4]"""
     import torch
-    nv_ = valid.float().sum(-1).clamp(min=1.0)
-    u_ = valid.float() / nv_[:, None]
-    own_ = torch.softmax(masked_scores(S, valid, torch), -1)
+    return 0.5 * 0.25 + 0.5 * torch.softmax(S.float(), -1)
+
+
+def prac_q(S, pvalid):
+    """(torch) the chance that an attempt becomes a practice trip: the drawn kind is valid for practice now (pvalid [B, 4]; all False where no
+    attempt can be made: not a new draw, dead, already on one) -> [B]"""
+    return (prac_kind_p(S) * pvalid.float()).sum(-1)
+
+
+def mix_logp(S, valid, k, p_prac, at_draw, fl_on, joint_lsm=None):
+    """(torch) THE MIXTURE: the probability that option k [B] was played at a decision, as the trainer plays it. At a new draw (at_draw) an
+    attempt with the chance p_prac: the kind drawn among all four (prac_kind_p), dealt if valid for practice (valid [B, 4]: the practice
+    validity of that moment); otherwise (no attempt, or the drawn kind not valid: chance 1 - p_prac x prac_q) his list (fl_on: the fight options
+    are in it; joint_lsm [B, 4]: the list's log-probabilities of the four, None: not in it). k < 0: an item from the list (the caller's: times
+    list_keep). -> log p [B]"""
+    import torch
     kk_ = k.clamp(min=0)[:, None]
-    pm_ = 0.5 * u_.gather(1, kk_).squeeze(1) + 0.5 * own_.gather(1, kk_).squeeze(1)
-    pp_ = torch.where(at_draw, torch.full_like(pm_, float(p_prac)), torch.zeros_like(pm_))
-    pl_ = torch.zeros_like(pm_)
+    pk_ = prac_kind_p(S).gather(1, kk_).squeeze(1) * valid.float().gather(1, kk_).squeeze(1)
+    pp_ = torch.where(at_draw, torch.full_like(pk_, float(p_prac)), torch.zeros_like(pk_))
+    keep_ = 1.0 - pp_ * prac_q(S, valid)
+    pl_ = torch.zeros_like(pk_)
     if joint_lsm is not None:
-        pl_ = torch.where(fl_on, joint_lsm.exp().gather(1, kk_).squeeze(1), torch.zeros_like(pm_))
-    return torch.log((pp_ * pm_ + (1.0 - pp_) * pl_).clamp(min=1e-12))
+        pl_ = torch.where(fl_on, joint_lsm.exp().gather(1, kk_).squeeze(1), torch.zeros_like(pk_))
+    return torch.log((pp_ * pk_ + keep_ * pl_).clamp(min=1e-12))
+
+
+def prac_deal(S, pvalid, eligible, p_prac, own_ok, gen):
+    """(torch) THE DEALING as the trainer plays it (one call a frame): eligible [B] (a new draw, alive, his head on, not on a trip already);
+    an attempt with the chance p_prac; the kind drawn among all four, half evenly, half from S's softmax (own_ok False: evenly); dealt if
+    pvalid [B, 4] holds for it. -> (attempted [B], kind [B], own-picked [B], dealt [B])"""
+    import torch
+    B_, dv_ = S.shape[0], S.device
+    at_ = eligible & (torch.rand(B_, generator=gen, device=dv_) < float(p_prac))
+    u_ = torch.rand(B_, generator=gen, device=dv_) < 0.5
+    pa_ = torch.where((u_ | ~own_ok)[:, None], torch.full_like(S.float(), 0.25), torch.softmax(S.float(), -1))
+    k_ = torch.multinomial(pa_.clamp(min=1e-12), 1, generator=gen).squeeze(1)
+    return at_, k_, ~u_ & own_ok, at_ & pvalid.gather(1, k_[:, None]).squeeze(1)
+
+
+def list_keep(S, pvalid, p_prac, at_draw):
+    """(torch) the chance that his list decides at a decision: 1 - p_prac x prac_q at a new draw, else 1 -> [B]"""
+    import torch
+    q_ = prac_q(S, pvalid)
+    return torch.where(at_draw, 1.0 - float(p_prac) * q_, torch.ones_like(q_))
 
 
 def joint_lsm(items, S, valid, shut, xp=np):

@@ -6,7 +6,7 @@ data/sim_runs/scratch_22b_*; nothing deleted.
             trainer refuses at its start (exit 2) and goes past the guard with --old-judge-replay 1
     live    every new live name (FGT_G, FGT_W, PRACTICE_P, FGT_BIAS, H2_WADD, FGT_GATE; NEAR_PAY, NEAR_OUT) refused out of its range and accepted
             in it, by the trainer's own reader (sim/train_duel_rnn.py live_read)
-    unit    the mixture's probability; the one list's masks (the enemy and the places shut, an invalid option shut); the pay split's parts sum
+    unit    the mixture's probability and the dealing as played (fix A: the kind drawn among four, dealt if valid); the one list's masks (the enemy and the places shut, an invalid option shut); the pay split's parts sum
             to the frame's pay (a simulator run with NEAR_MISS on); the near miss: zero-sum, graded, its cap; a fight start: one seat fresh
             (spawn health, the machine gun) at a spawn point, the other a moment's, a frag added; the win scale's arithmetic
     QLBOT_ROOT=<checkout> CUDA_VISIBLE_DEVICES=-1 OPENBLAS_NUM_THREADS=1 python docs/runs/2.2/2.2b/tests.py <guard|live|unit|all>"""
@@ -110,15 +110,36 @@ def unit():
     S = torch.zeros(1, 4)
     v = torch.tensor([[True, True, True, False]])
     lp = FN.mix_logp(S, v, torch.tensor([1]), 0.12, torch.tensor([True]), torch.tensor([False]), None)
-    check("mixture: equal scores, 3 valid, practice 0.12, the list off", abs(float(lp.exp()) - 0.12 * (0.5 / 3 + 0.5 / 3)) < 1e-7, float(lp.exp()))
+    check("mixture: equal scores, 3 valid, practice 0.12, the list off (a kind drawn among four)", abs(float(lp.exp()) - 0.12 * 0.25) < 1e-7, float(lp.exp()))
     jl = torch.log_softmax(torch.tensor([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]), -1)[:, 2:]
     lp = FN.mix_logp(S, torch.ones(1, 4, dtype=torch.bool), torch.tensor([0]), 0.12, torch.tensor([True]), torch.tensor([True]), jl)
     want = 0.12 * 0.25 + 0.88 * (1.0 / 6.0)
-    check("mixture: practice 0.12 and the list on (six equal choices)", abs(float(lp.exp()) - want) < 1e-6, (float(lp.exp()), want))
+    check("mixture: practice 0.12 and the list on (six equal choices), all four valid", abs(float(lp.exp()) - want) < 1e-6, (float(lp.exp()), want))
+    lp = FN.mix_logp(S, v, torch.tensor([0]), 0.12, torch.tensor([True]), torch.tensor([True]), jl)
+    want = 0.12 * 0.25 + (1.0 - 0.12 * 0.75) * (1.0 / 6.0)
+    check("mixture: one kind invalid: its attempts fall to his list", abs(float(lp.exp()) - want) < 1e-6, (float(lp.exp()), want))
     S2 = torch.tensor([[1.0, 2.0, 0.5, 0.0]])
     lp = FN.mix_logp(S2, torch.ones(1, 4, dtype=torch.bool), torch.tensor([1]), 0.05, torch.tensor([True]), torch.tensor([False]), None)
     want = 0.05 * (0.5 * 0.25 + 0.5 * float(torch.softmax(S2, -1)[0, 1]))
-    check("mixture: its own half by its softmax", abs(float(lp.exp()) - want) < 1e-7, (float(lp.exp()), want))
+    check("mixture: its own half by its softmax over all four", abs(float(lp.exp()) - want) < 1e-7, (float(lp.exp()), want))
+    # the dealing as played (fightnet.prac_deal, the trainer's own call) against the probabilities the lessons use: every outcome's frequency
+    g_ = torch.Generator().manual_seed(7)
+    B_ = 400000
+    Sg = torch.tensor([[1.0, -0.5, 0.3, 2.0]]).repeat(B_, 1)
+    vg = torch.tensor([[True, False, True, False]]).repeat(B_, 1)       # (him and the angle valid; cut off and back off not)
+    el = torch.ones(B_, dtype=torch.bool)
+    at_, k_, own_, dl_ = FN.prac_deal(Sg, vg, el, 0.3, torch.ones(B_, dtype=torch.bool), g_)
+    fr_ = [float((dl_ & (k_ == j_)).float().mean()) for j_ in range(4)]
+    pk_ = [float(FN.mix_logp(Sg[:1], vg[:1], torch.tensor([j_]), 0.3, torch.tensor([True]), torch.tensor([False]), None).exp()) for j_ in range(4)]
+    pk_ = [p_ if vg[0, j_] else 0.0 for j_, p_ in enumerate(pk_)]
+    keep_ = float(FN.list_keep(Sg[:1], vg[:1], 0.3, torch.tensor([True]))[0])
+    err_ = max(abs(a_ - b_) for a_, b_ in zip(fr_, pk_))
+    check("the dealing as played: each kind's dealt frequency is the mixture's practice part", err_ < 0.002, (fr_, pk_))
+    check("the dealing as played: the share left to his list is list_keep", abs(float((~dl_).float().mean()) - keep_) < 0.002,
+          (float((~dl_).float().mean()), keep_))
+    tot_ = sum(pk_) + keep_ * 1.0
+    check("the mixture sums to 1 (the practice kinds + his list)", abs(tot_ - 1.0) < 1e-6, tot_)
+    check("attempts by kind are a quarter each in the even half", abs(float(((k_ == 3) & at_ & ~own_).float().sum() / (at_ & ~own_).float().sum()) - 0.25) < 0.005)
     shut = torch.as_tensor(FN.shut_mask(17))
     it = torch.zeros(1, 17)
     jl = FN.joint_lsm(it, torch.zeros(1, 4), torch.tensor([[True, False, True, True]]), shut, torch).exp()

@@ -54,6 +54,7 @@ def pass_odds(pol, sb, xa, Xc):
 
 SAMPLE = None
 NEWC = None
+HIST, PEND, MAPNOW, TNOW = [], [], [None], [0]
 PAY = None
 
 
@@ -96,11 +97,17 @@ def run_map(pol, mp, a, acc):
     trip_c = np.zeros(n, np.int64)
     trip_t = np.zeros(n, np.int64)
     met = np.zeros(n, bool)
+    arrv = np.zeros(n, bool)                                 # (the trip has reached its place: an angle trip holds there)
+    hold_t = np.zeros(n, np.int64)                           # (frames held at the angle after arriving)
     out_ = np.zeros(n, bool)                                 # (the enemy has been out of view since the trip began)
     F = None
     dl0 = np.asarray(env.dmg_life[:n], np.float64).copy()
     st0 = (np.asarray(env.hp[:n], np.float64) + np.asarray(env.armor[:n], np.float64)).copy()
+    MAPNOW[0] = mp
+    HIST.clear()
+    PEND.clear()
     for t in range(a.frames):
+        TNOW[0] = t
         kf = H2.np_kf_end(env)
         pz, zz = BT.pose_from_env(env, mp)
         xl = env.legs_prep() if pol.needs_xl else None
@@ -131,10 +138,16 @@ def run_map(pol, mp, a, acc):
             acc["valid"]["readings"] += int(al_.sum())
             for j_, k_ in enumerate(KINDS):
                 acc["valid"][k_] += int((valid[:, j_] & al_).sum())
-            new_ = kr & (trip_k < 0) & valid.any(1) & (rng.random(n) < a.p) & (env.script[:n] == 0)
-            for i in np.nonzero(new_)[0]:
-                k_ = int(rng.choice(np.nonzero(valid[i])[0]))
+            att_ = al_ & (trip_k < 0) & (rng.random(n) < a.p)    # (2.2b's dealing, the coordinator's fix A: the kind drawn evenly among the four
+            kd_ = rng.integers(0, 4, n)                              # first, the trip dealt only if that kind is valid now; else no practice)
+            acc["valid"]["eligible"] += int((al_ & (trip_k < 0)).sum())
+            for i in np.nonzero(att_)[0]:
+                k_ = int(kd_[i])
+                acc[KINDS[k_]]["attempted"] += 1
+                if not valid[i, k_]:
+                    continue
                 trip_k[i], trip_c[i], trip_t[i], met[i], out_[i] = k_, int(cbest[i]), 0, False, not vis0_[i]
+                arrv[i], hold_t[i] = False, 0
                 acc[KINDS[k_]]["trips"] += 1
         on_ = trip_k >= 0
         if on_.any():
@@ -145,6 +158,13 @@ def run_map(pol, mp, a, acc):
         an_ = pol.brain_answer(h)
         if an_ is not None:
             env.brain_in({k_: an_[k_] for k_ in ("bel", "ok", "band", "ztop") if k_ in an_})
+        if PAY is not None:                                  # (the trace of the odd frags: the state before the frame)
+            pre_ = dict(fr=np.asarray(env.frags_r[:n], np.float64).copy(), hp=np.asarray(env.hp[:n], np.float64).copy(),
+                        ar=np.asarray(env.armor[:n], np.float64).copy(), wb=np.asarray(env.wb_p, np.float64).copy(),
+                        wh=(np.asarray(env.wb_p, np.float64) + np.asarray(env.wh_off, np.float64)).copy(),
+                        tick=np.asarray(env.g_tick, np.int64).copy(), game=np.asarray(env.game).copy())
+            HIST.append(pre_)
+            del HIST[:-6]
         obs, r_, done, info = env.step(act)
         fs = env.fg_state()
         if PAY is not None:                                  # (win_scale: the pay by part on the frames of whole games; both judges' win part)
@@ -175,8 +195,42 @@ def run_map(pol, mp, a, acc):
                     PAY["frag_total_le0"] += int(float(r_[kk_]) <= 0)
                     PAY["frag_blind_le0"] += int(env.wb_raw[kk_] <= 0)
                     fi_ = [E.PAY_TERMS.index(x_) for x_ in ("frag", "death") if x_ in E.PAY_TERMS]
+                    odd_ = env.wh_raw[kk_] <= 0 or float(r_[kk_]) <= 0 or (0 <= vv_ < n and float(r_[vv_]) >= 0)
+                    if odd_:                                     # (the trace: what this frag frame is)
+                        m_ = kk_ // 2
+                        q_ = [2 * m_, 2 * m_ + 1]
+                        pre_ = HIST[-1]
+                        evs_ = [dict(killer=int(x_["killer"]), victim=int(x_["victim"]), **{k2_: x_[k2_] for k2_ in ("weapon", "mod", "how") if k2_ in x_})
+                                for x_ in info["events"] if int(x_["victim"]) in q_ or int(x_["killer"]) in q_]
+                        pt_k = {E.PAY_TERMS[j_]: round(float(v_), 5) for j_, v_ in enumerate(np.asarray(info["pay_terms"][kk_], np.float64)) if abs(v_) > 1e-9}
+                        pt_v = ({E.PAY_TERMS[j_]: round(float(v_), 5) for j_, v_ in enumerate(np.asarray(info["pay_terms"][vv_], np.float64)) if abs(v_) > 1e-9}
+                                if 0 <= vv_ < n else None)
+                        PAY["odd"].append(dict(
+                            map=MAPNOW[0], frame=int(TNOW[0]), match=int(m_), killer=int(kk_), victim=int(vv_), seat_of_killer=int(kk_ - 2 * m_),
+                            game=int(pre_["game"][m_]), tick=int(env.g_tick[m_]), clock_s=round(float(env.g_tick[m_]) * 0.025, 2),
+                            tick_before=int(pre_["tick"][m_]),
+                            score_before=[float(pre_["fr"][q_[0]]), float(pre_["fr"][q_[1]])],
+                            score_after=[float(env.frags_r[q_[0]]), float(env.frags_r[q_[1]])],
+                            stack_before=[[float(pre_["hp"][i_]), float(pre_["ar"][i_])] for i_ in q_],
+                            stack_after=[[float(env.hp[i_]), float(env.armor[i_])] for i_ in q_],
+                            killer_done=bool(np.asarray(done)[kk_]), victim_done=bool(np.asarray(done)[vv_]) if 0 <= vv_ < n else None,
+                            events=evs_, wh_raw=float(env.wh_raw[kk_]), wb_raw=float(env.wb_raw[kk_]), pay_killer=float(r_[kk_]),
+                            pay_victim=float(r_[vv_]) if 0 <= vv_ < n else None, terms_killer=pt_k, terms_victim=pt_v,
+                            chance_blind_seat0_before=[round(float(h_["wb"][m_]), 5) for h_ in HIST],
+                            chance_items_seat0_before=[round(float(h_["wh"][m_]), 5) for h_ in HIST],
+                            chance_blind_seat0_now=round(float(env.wb_p[m_]), 5),
+                            chance_items_seat0_now=round(float(env.wb_p[m_] + env.wh_off[m_]), 5), after=[]))
+                        PEND.append([len(PAY["odd"]) - 1, m_, 5])
                     PAY["frag_term_le0"] += int(ptk_[kk_, fi_[0]] <= 0)
                     PAY["victim_total_ge0"] += int(0 <= vv_ < n and float(r_[vv_]) >= 0)
+        if PAY is not None:                                  # (the trace: the chance on the frames after an odd frag)
+            for pe_ in PEND:
+                o_ = PAY["odd"][pe_[0]]
+                o_["after"].append(dict(tick=int(env.g_tick[pe_[1]]), game=int(env.game[pe_[1]]), blind=round(float(env.wb_p[pe_[1]]), 5),
+                                        items=round(float(env.wb_p[pe_[1]] + env.wh_off[pe_[1]]), 5),
+                                        score=[float(env.frags_r[2 * pe_[1]]), float(env.frags_r[2 * pe_[1] + 1])]))
+                pe_[2] -= 1
+            PEND[:] = [pe_ for pe_ in PEND if pe_[2] > 0]
         dl1 = np.asarray(env.dmg_life[:n], np.float64)
         st1 = np.asarray(env.hp[:n], np.float64) + np.asarray(env.armor[:n], np.float64)
         dealt = np.maximum(dl1 - dl0, 0.0)
@@ -201,15 +255,25 @@ def run_map(pol, mp, a, acc):
             if fs[i, 2] <= 0:
                 out_[i] = True
             end = None
+            hold_ = KINDS[trip_k[i]] == "angle"                 # (fix B: an angle trip holds after arriving: a sighting, 4 s or death end it)
+            if on_k and fs[i, 1] > 0 and not met[i] and not arrv[i]:
+                arrv[i] = True
+                A["arrived_ever"] += 1
+            elif arrv[i] and hold_ and not met[i]:
+                hold_t[i] += 1
             if d[i] or fs[i, 5] <= 0:
                 end = "died"
-            elif on_k and fs[i, 1] > 0 and not met[i]:
+            elif on_k and fs[i, 1] > 0 and not met[i] and not hold_:
                 end = "arrived"
             elif met[i]:
                 end = "met"
             elif trip_t[i] >= 160:
                 end = "timeout"
             if end is not None:
+                A["reached"] += int(arrv[i] or met[i])
+                if hold_:
+                    A["held_s"] += hold_t[i] * 0.025
+                    A["met_holding"] += int(end == "met" and arrv[i])
                 if os.environ.get("LEGS_DEBUG") and k_ == "away" and end == "arrived" and A["arrived"] < 5:
                     print("DEBUG away arrived: t", trip_t[i], "intent_t", float(env.intent_t[i]), "out_qt", float(env.out_qt[i]), "cmb_k", int(env.cmb_k[i]),
                           "fgt_k", int(env.fgt_k[i]), "arr", bool(env.intent_arr[i]), "done", bool(env.intent_done[i]), "intent", int(env.intent[i]), flush=True)
@@ -243,7 +307,7 @@ def main():
     global SAMPLE, NEWC, PAY
     if a.pay:
         PAY = dict(abs_items=0.0, abs_fight=0.0, abs_win=0.0, abs_other=0.0, blind=[0.0, 0.0, 0.0], items_judge=[0.0, 0.0, 0.0], frames=0, frags=0,
-                   frag_win_le0=0, frag_total_le0=0, frag_blind_le0=0, frag_term_le0=0, victim_total_ge0=0, margins=[], terms={})
+                   frag_win_le0=0, frag_total_le0=0, frag_blind_le0=0, frag_term_le0=0, victim_total_ge0=0, margins=[], terms={}, odd=[])
     if a.sample:
         import csv
         now_ = [(r_["group"], r_["input"]) for r_ in csv.DictReader(open(os.path.join(ROOT, "docs", "INPUTS.csv"), encoding="utf-8"))]
@@ -253,9 +317,10 @@ def main():
     pol = T.Policy(a.policy, seed=a.seed)
     out = {}
     for mp in a.maps.split(","):
-        acc = {k_: dict(trips=0, arrived=0, met=0, timeout=0, died=0, passed=0, sec=0.0, dealt=0.0, taken=0.0, applied_frames=0) for k_ in KINDS}
+        acc = {k_: dict(attempted=0, trips=0, arrived=0, met=0, timeout=0, died=0, passed=0, sec=0.0, dealt=0.0, taken=0.0, applied_frames=0,
+                        arrived_ever=0, reached=0, held_s=0.0, met_holding=0) for k_ in KINDS}
         acc["own"] = dict(sec=0.0, dealt=0.0, taken=0.0)
-        acc["valid"] = dict(readings=0, **{k_: 0 for k_ in KINDS})
+        acc["valid"] = dict(readings=0, eligible=0, **{k_: 0 for k_ in KINDS})
         env_m = run_map(pol, mp, a, acc)
         out[mp] = acc
         print(mp, json.dumps(acc), flush=True)
@@ -266,7 +331,14 @@ def main():
                 tot[k_][q_] = tot[k_].get(q_, 0) + v_
     for k_ in KINDS:
         A = tot[k_]
-        A["reached_or_met"] = round((A["arrived"] + A["met"]) / max(1, A["trips"] - A.get("open", 0)), 3)
+        en_ = A["arrived"] + A["met"] + A["timeout"] + A["died"]
+        A["reached_or_met"] = round(A["reached"] / max(1, en_), 3)
+        A["dealt_of_attempted"] = round(A["trips"] / max(1, A["attempted"]), 3)
+    dl_all = sum(tot[k_]["trips"] for k_ in KINDS)
+    tot["share"] = {k_: round(tot[k_]["trips"] / max(1, dl_all), 3) for k_ in KINDS}
+    tot["share"]["practice_of_eligible_readings"] = round(dl_all / max(1, tot["valid"]["eligible"]), 4)
+    for k_ in KINDS:
+        A = tot[k_]
         A["dealt_per_s"] = round(A["dealt"] / max(1e-9, A["sec"]), 2)
         A["taken_per_s"] = round(A["taken"] / max(1e-9, A["sec"]), 2)
     tot["own"]["dealt_per_s"] = round(tot["own"]["dealt"] / max(1e-9, tot["own"]["sec"]), 2)
@@ -274,7 +346,7 @@ def main():
     json.dump(dict(maps=out, total=tot, args=vars(a)), open(a.out, "w"), indent=1)
     if PAY is not None:
         json.dump(PAY, open(a.pay, "w"), indent=1)
-        print("pay: " + json.dumps({k_: v_ for k_, v_ in PAY.items() if k_ not in ("margins", "terms")}))
+        print("pay: " + json.dumps({k_: v_ for k_, v_ in PAY.items() if k_ not in ("margins", "terms", "odd")}))
     if SAMPLE is not None:
         np.savez_compressed(a.sample, fx=np.concatenate(SAMPLE["fx"]) if SAMPLE["fx"] else np.zeros((0, 0), np.float32),
                             rows=np.concatenate(SAMPLE["rows"]))

@@ -4625,8 +4625,8 @@ def main():
                         on_ = ev_["on"].to(dev)[e_]
                         pre_ = pr_e[e_]
                         lp_prac = fightnet_.mix_logp(S_, vp_, ev_["opt"].to(dev)[e_].long(), PR_, torch.ones_like(pre_), on_, jls_[:, ACTION_DIMS[I_HEAD]:])
-                        pp_ = torch.where(dr_, torch.full_like(lp_prac, PR_), torch.zeros_like(lp_prac))
-                        lp_list = torch.log(((1.0 - pp_) * jls_.gather(1, pk_[:, None]).squeeze(1).exp()).clamp(min=1e-12))
+                        kp_ = fightnet_.list_keep(S_, vp_, PR_, dr_)
+                        lp_list = torch.log((kp_ * jls_.gather(1, pk_[:, None]).squeeze(1).exp()).clamp(min=1e-12))
                         lp_ = torch.where(pre_, lp_prac, lp_list)
                         ae_ = fightnet_.std_adv(AE_[e_], torch.ones_like(AE_[e_]))
                         pg_, cf_ = fightnet_.ppo_term(lp_, ev_["lp"].to(dev)[e_].float(), ae_, torch.ones_like(ae_), clip)
@@ -4720,10 +4720,19 @@ def main():
         OP = fightnet_.OPTS
         trips_ = {OP[k_]: dict(dealt=int(c_[k_]), own_picked=int(c_[4 + k_]), arrived=int(c_[20 + k_]), met=int(c_[24 + k_]), died=int(c_[28 + k_]),
                                 timed_out=int(c_[32 + k_]), enemy_passed=int(c_[36 + k_]), league_dealt=int(c_[40 + k_])) for k_ in range(4)}
-        for k_ in OP:
+        for j_, k_ in enumerate(OP):
             T_ = trips_[k_]
+            T_["attempted"] = int(c_[47 + j_])
             e_ = T_["arrived"] + T_["met"] + T_["died"] + T_["timed_out"]
-            T_["reached_or_met"] = round((T_["arrived"] + T_["met"]) / e_, 4) if e_ else None
+            rch_ = T_["arrived"] + T_["met"] + (int(c_[55]) if k_ == "angle" else 0)    # (an angle trip that arrived and held to 4 s or death: reached)
+            T_["reached_or_met"] = round(rch_ / e_, 4) if e_ else None
+        trips_["angle"].update(arrived_trips=int(c_[52]), held_s_after_arrival=round(float(c_[53]) * 0.025, 1),
+                               held_s_per_arrival=round(float(c_[53]) * 0.025 / max(1.0, float(c_[52])), 2), sighted_while_holding=int(c_[54]),
+                               held_to_the_end=int(c_[55]))
+        dl_ = sum(int(c_[k_]) for k_ in range(4))
+        trips_["share"] = dict(attempted=int(sum(c_[47:51])), dealt=dl_, his_decisions=int(c_[51]),
+                               practice_of_his_decisions=round(dl_ / max(1.0, float(c_[51])), 4),
+                               dealt_by_kind={OP[k_]: round(int(c_[k_]) / max(1, dl_), 4) for k_ in range(4)})
         dmg_ = dict(practice=dict(dealt_s=round(c_[15] / dr_ / max(c_[17] * 0.025, 1e-9), 3), taken_s=round(-c_[16] / dr_ / max(c_[17] * 0.025, 1e-9), 3),
                                   seconds=round(c_[17] * 0.025, 1)),
                     own=dict(dealt_s=round(c_[18] / dr_ / max(c_[44] * 0.025, 1e-9), 3), taken_s=round(-c_[19] / dr_ / max(c_[44] * 0.025, 1e-9), 3),
@@ -6554,7 +6563,9 @@ def main():
                            pt=torch.zeros(N, dtype=torch.long, device=dev), pw=torch.full((N,), -1, dtype=torch.long, device=dev),
                            pout=torch.zeros(N, dtype=torch.bool, device=dev), met=torch.zeros(N, dtype=torch.bool, device=dev),
                            st=torch.zeros(N, 7, device=dev), F=None, japp=torch.full((N,), -1, dtype=torch.long, device=dev),
-                           pe=torch.full((N,), -1, dtype=torch.long, device=dev), has=torch.zeros(N, 9, dtype=torch.bool, device=dev))
+                           pe=torch.full((N,), -1, dtype=torch.long, device=dev), has=torch.zeros(N, 9, dtype=torch.bool, device=dev),
+                           pvp=torch.zeros(N, 4, dtype=torch.bool, device=dev), parr=torch.zeros(N, dtype=torch.bool, device=dev),
+                           ph=torch.zeros(N, dtype=torch.long, device=dev))
             GG_F = torch.where(MINE_F, torch.full((N,), float(FGT_GV[0]), device=dev), torch.full((N,), float(FN_OPP_D[0] if FGO_ else 0.0), device=dev))
             GW_F = torch.where(MINE_F, torch.full((N,), float(FGT_WV[0]), device=dev), torch.full((N,), float(FN_OPP_D[1] if FGO_ else 0.0), device=dev))
             PR_F = float(PRACT_V[0])
@@ -6977,14 +6988,14 @@ def main():
                             vis_f = FG_["st"][:, 2] > 0                  # (at him, cut off and an angle: dealt only with the enemy out of view)
                             vp_f = FG_["valid"] & ~(vis_f[:, None] & torch.tensor([True, True, True, False], device=dev)[None, :])
                             alive_f = FG_["st"][:, 5] > 0
-                            pr_n = fr_ & HD_["on"] & alive_f & vp_f.any(1) & (torch.rand(N, generator=FGEN, device=dev) < PR_F)
+                            el_f = fr_ & HD_["on"] & alive_f & ~FG_["prac"]   # (a decision at which a practice trip may be attempted)
+                            FG_["pvp"] = torch.where(fr_[:, None], vp_f & el_f[:, None], FG_["pvp"])   # (the practice validity of this decision)
+                            own_ok_ = MINE_F | torch.full_like(MINE_F, FGO_)   # (fix A: an attempt; the kind drawn among ALL FOUR, half evenly,
+                            at_n, k_n, op_n, pr_n = fightnet_.prac_deal(FG_["S"], vp_f, el_f, PR_F, own_ok_, FGEN)   # half its own; dealt if valid now)
+                            u_f = ~op_n
+                            FC_[47:51] += torch.bincount(k_n[at_n & MINE_F], minlength=4)[:4].double()
+                            FC_[51] += float((el_f & MINE_F).sum())
                             if bool(pr_n.any()):
-                                u_f = torch.rand(N, generator=FGEN, device=dev) < 0.5     # (half dealt evenly, half from its own scores)
-                                pe_ = vp_f.float() / vp_f.float().sum(1, keepdim=True).clamp(min=1.0)
-                                po_ = torch.softmax(fightnet_.masked_scores(FG_["S"], vp_f, torch), -1)
-                                own_ok_ = MINE_F | torch.full_like(MINE_F, FGO_)
-                                pd_ = torch.where((u_f | ~own_ok_)[:, None], pe_, po_)
-                                k_n = torch.multinomial(pd_.clamp(min=1e-12), 1, generator=FGEN).squeeze(1)
                                 hs_f = FG_["has"].clone()
                                 hs_f[:, int(E_.G)] = False                                # (a weapon he owns: not the gauntlet)
                                 hs_f[:, int(E_.MG)] = hs_f[:, int(E_.MG)] | ~hs_f.any(1)
@@ -6996,11 +7007,12 @@ def main():
                                 FG_["pw"] = torch.where(pr_n, w_n, FG_["pw"])
                                 FG_["pout"] = torch.where(pr_n, ~vis_f, FG_["pout"])
                                 FG_["met"] = torch.where(pr_n, torch.zeros_like(FG_["met"]), FG_["met"])
+                                FG_["parr"] = torch.where(pr_n, torch.zeros_like(FG_["parr"]), FG_["parr"])
+                                FG_["ph"] = torch.where(pr_n, torch.zeros_like(FG_["ph"]), FG_["ph"])
                                 FC_[0:4] += torch.bincount(k_n[pr_n & MINE_F], minlength=4)[:4].double()
                                 FC_[4:8] += torch.bincount(k_n[pr_n & MINE_F & ~u_f], minlength=4)[:4].double()
                                 FC_[40:44] += torch.bincount(k_n[pr_n & ~MINE_F], minlength=4)[:4].double()
                                 FG_["pnew"] = pr_n
-                                FG_["pvp"] = vp_f
                             else:
                                 FG_["pnew"] = torch.zeros_like(fr_)
                         else:
@@ -7365,6 +7377,12 @@ def main():
                     FG_["met"] = FG_["met"] | (pr_ & vis_n & FG_["pout"])
                     FG_["pout"] = FG_["pout"] | (pr_ & ~vis_n)
                     arr_n = pr_ & (st_f[:, 1] > 0) & (st_f[:, 0].long() == FG_["pk"] + 1)
+                    ang_ = pr_ & (FG_["pk"] == 2)                    # (fix B: an angle trip holds: arrival does not end it; a sighting, 4 s or death do)
+                    na_ = ang_ & arr_n & ~FG_["parr"] & ~FG_["met"]
+                    FC_[52] += float((na_ & MINE_F).sum())
+                    FG_["ph"] = torch.where(ang_ & FG_["parr"] & ~FG_["met"], FG_["ph"] + 1, FG_["ph"])
+                    FG_["parr"] = FG_["parr"] | na_
+                    arr_n = arr_n & ~ang_
                     died_n = pr_ & ((fd_ > 0) | (st_f[:, 5] <= 0))
                     to_n = pr_ & (FG_["pt"] >= PFR_F)
                     end_n = (arr_n | FG_["met"] | died_n | to_n) & pr_
@@ -7379,6 +7397,10 @@ def main():
                         for o_, m_e in ((20, arr_n & ~mt_e), (24, mt_e), (28, died_n & ~arr_n & ~mt_e), (32, to_n & ~arr_n & ~mt_e & ~died_n)):
                             FC_[o_:o_ + 4] += torch.bincount(FG_["pk"][me_ & m_e], minlength=4)[:4].double()
                         FC_[36:40] += torch.bincount(FG_["pk"][me_ & (st_f[:, 3] > 0)], minlength=4)[:4].double()   # (the enemy passed its place)
+                        ae_ = me_ & (FG_["pk"] == 2)                    # (the angle trips that ended: held seconds after arriving, a sighting while
+                        FC_[53] += float(FG_["ph"][ae_].sum())          # holding; those that arrived and held to the end: reached)
+                        FC_[54] += float((ae_ & FG_["parr"] & mt_e).sum())
+                        FC_[55] += float((ae_ & FG_["parr"] & ~mt_e).sum())
                         FG_["prac"] = FG_["prac"] & ~end_n
                         FG_["met"] = FG_["met"] & ~end_n
                         FG_["pw"] = torch.where(end_n, torch.full_like(FG_["pw"], -1), FG_["pw"])
@@ -7533,10 +7555,10 @@ def main():
                         dr_e = b_hfr[t][em_]
                         jl_e = FG_["jlsm"][em_]
                         lpl_e = jl_e.gather(1, jp_e[:, None]).squeeze(1)
-                        pp_e = torch.where(dr_e, torch.full_like(lpl_e, PR_F), torch.zeros_like(lpl_e))
-                        lp_e = torch.log((1.0 - pp_e) * lpl_e.exp()).clamp(min=-30.0)   # (an item or an option from the list: the practice's coin did not fall)
+                        kp_e = fightnet_.list_keep(FG_["S"][em_], FG_["pvp"][em_], PR_F, dr_e)
+                        lp_e = torch.log(kp_e * lpl_e.exp()).clamp(min=-30.0)   # (an item or an option from the list: no practice trip was dealt)
                         FEV_.append(dict(t=t, i=em_, opt=opt_e, pick=jp_e, draw=dr_e, prac=torch.zeros(len(em_), dtype=torch.bool, device=dev),
-                                         on=FG_["on"][em_], lp=lp_e, vl=FG_["valid"][em_], vp=FG_["valid"][em_],
+                                         on=FG_["on"][em_], lp=lp_e, vl=FG_["valid"][em_], vp=FG_["pvp"][em_],
                                          it=(FG_["it"][em_] if FG_.get("it") is not None else torch.zeros(len(em_), NTI_, device=dev)).half(),
                                          w=torch.full_like(em_, -1), own=FG_["has"][em_], nv=FG_["valid"][em_].sum(1)))
                     FG_["japp"] = torch.where(FG_["jl"] & (live > 0), FG_["jp"], FG_["japp"])
