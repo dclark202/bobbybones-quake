@@ -1,5 +1,11 @@
 # 2.2: he values a play before he chooses it (the suite's framework; owner, 2026-11-16 evening: "this plan for 2.2 makes sense"; 2.2a first; no run carded yet)
 
+> **Superseded in part on 2026-11-17.** 2.2a failed at its purpose: the part that rated his options (the outlook) never switched on and
+> is not rebuilt (owner: "every 'judge' has sucked"). The suite now runs on a different structure, decided in the chat of 11-17: an
+> **item picker** (items only) under a **fight network** (fight or not, and how), with the hands practising the plays first. The current
+> design is [2.2b's card](2.2b/CARD.md); 2.2c is the section "2.2c: firing at a spot he cannot see" below. The three-jobs table, the
+> steps table and the odds on this page are kept as the record of 11-16.
+
 Blends [2.1f's card](../2.1/2.1f/CARD.md) (the outlook) and [the 2.2 proposal](README.md) (new plays on trial trips) into one suite
 (owner, 11-16: 2.1 is done, the lock is out; 2.1f moves here; start from 2.1d's end). The critical review behind the 2.2 proposal is
 [REVIEW_2026-11-16.md](REVIEW_2026-11-16.md). Where this page differs from those two, the difference is marked **changed**.
@@ -116,6 +122,52 @@ The pilot: its card is [2.2a/CARD.md](2.2a/CARD.md) (what is in it, the stages, 
   play test; how often he fires with the enemy in view, by the enemy's speed and by his weapon. Not a pro target: facts about his hands.
 - **A fixed play test after each run** (the same maps, the score, the owner's three ratings: fight decisions, positioning, weapon use),
   to see the slow improvement he asked for.
+
+## 2.2c: firing at a spot he cannot see (blind fire; the owner, 2026-11-17: "I think that's the right way in")
+
+The run after 2.2b. It needs 2.2b's result first: he has to be standing at a spot and looking at a point before a trigger can be
+taught there (1.7a's push on the trigger did nothing for that reason). The weapon to bring and break off, which this page gave to
+2.2c on 11-16, moved into 2.2b.
+
+**What blind fire is for (owner):** "blind fire is structurally about two things: area or weapon denial or chip damage. Both are low
+success but add up largely over time and make a player much stronger. They are not going to get encouraged by damage pay." "Blind fire
+works because it makes the opponent 'do something else'. That's the opportunity cost. If I get denied a route to mega and the enemy
+takes it even though I otherwise would have been able to, the enemy needs to 'get paid' for that."
+
+**So the pay is for what the enemy has to do in response, not for the damage.** As a bare idea it has two holes; the design closes both.
+
+| Hole | Why | How it is closed |
+|---|---|---|
+| The enemy changes his mind constantly anyway | A copy of Bobby drops goals for many reasons; paid per "he gave it up", he fires anywhere and collects | Only a shot on the enemy's actual way counts, and only the response beyond his usual rate is paid (rows 1 and 2) |
+| A copy that does not fear the shots never yields | Then there is nothing to pay | The enemy is charged what the shooter is paid, and the splash hurts him as it always did (row 3) |
+
+**The design:**
+
+| # | Part | Detail |
+|---|---|---|
+| 1 | Which shots count | A shot fired with the enemy out of view that lands **ahead of him on his way to the item he is going for**, shortly before he gets there. The simulator knows his goal and his way (a pay may use the truth, as a lesson's label does). The research's own rule: far rockets pay only as prediction at a place he must go (an item at its time, a door) |
+| 2 | What is paid: the response | One of: he arrives later than his way's time; he gives the item up; **the shooter takes the item he was going for** (the owner's case: the denied route to the mega). The usual rate of each without a shot is subtracted, so firing at nothing averages to zero |
+| 3 | Zero-sum | The denied player is charged what the shooter is paid. Each side pays for the other's denials, which gives the enemy his own reason not to be deniable and keeps two copies from farming it together |
+| 4 | A near miss pays a little | **Moved into 2.2b on the owner's word (11-17, "ASAP")**: every projectile that bursts near the enemy, seen or not, pays a little by how close, charged to the enemy ([2.2b's card](2.2b/CARD.md), change 13). Here it is already running. Chip damage pays as damage |
+| 5 | A cap | Per item spawn, so one item cannot be farmed |
+| 6 | Who is paid | The fight network (it gets a sixth play, "spam", and a score on the trigger that is **added to the hands' own trigger score** while he is on a hold or spam play; both parts regularized and their sizes logged, rule 11) and the hands (they press the key) |
+| 7 | Weapon denial | The same pay: his goal is the rail, the shots land on its approach |
+| 8 | How it is taught | As 2.2b's plays: dealt as practice first, to both players, then the fight network's own choice of it opens |
+
+**The equilibrium in self-play:** the shooter is paid only when the enemy yields; the enemy yields only when the shells cost him more
+than the item is worth to him. So it settles at shelling the items at their times, and the enemy timing his entry between shells or
+going for another item. An enemy who never yields takes the chip damage instead, which pays the shooter as damage.
+
+**Never**: the pros' blind-shot places or their blind-fire rate as a target (rule 12; the old `BLIND_PLACES` switch did this and is not
+used). No cost on firing (the owner's standing word).
+
+**Where it can still fail:** it stands on the same prediction as 2.2b's cut-off (where he will be in 2 to 4 seconds). If that is not
+good enough for a shell to threaten him, he never yields and nothing is paid. My odds that blind fire becomes a visible habit: 35 to 40%.
+
+**Research check (short; the card's will be full):** DUEL_STRATEGY 1.10 ("spam is one of the primary sources of damage"; rockets and
+grenades at doorways, items and his predicted path), 1.5 point 3 ("deal damage at his pickups, then leave"; "make his stack worth less
+than it reads"), principle 5 ("an item taken under fire is worth less") and 13. Section 5.4: "item timings are the predictable
+arrivals ... spam at the item pays by itself" if his arrival is predictable.
 
 ## Decided in the chat of 11-16 (owner)
 

@@ -16,7 +16,7 @@ log ([archive/RESULTS.md](archive/RESULTS.md)) are in [archive/](archive/).
   review): no slow-only part for a fast decision. The head alone lost the mega on 9 maps of 10 through a 30 s memory.
 - **Hand a choice from a rule to a learner on the learner's own states** (from AlphaStar): a lesson on the frames it plays, faded,
   never copy-then-swap (b1.3a: an 87% copy won 37% alone).
-- **Open a head before fading the rule it replaces** (v0.4.3: the item rule faded with nothing in its place, spawn camping).
+- **Open a head before fading the rule it replaces** (v0.4.3: the item rule faded with nothing in its place: he sat on a weapon's place, the lightning gun's. Older notes call this "spawn camping", meaning the item's place; players' spawn points are random and cannot be camped: owner, 2026-11-17).
 - **The league table** (owner, 2026-11-03): frag share and win chance gained against each league network, in every report.
 - **Measure, don't guess**: the aim from the pros' measured parameters; calibrations never skipped to meet a start time.
 - **The pro demos measure; they never set his behaviour** (CLAUDE.md hard rule 12, 2026-11-10).
@@ -55,7 +55,7 @@ log ([archive/RESULTS.md](archive/RESULTS.md)) are in [archive/](archive/).
 | **Pay by win chance only** (every other pay faded out) | v0.5.1 (#17), v0.6.1 line (#20-25) | v0.5.1 fell 47 → 37%, passive; v0.6.1 held level but did not lift in 190 updates, slower (frags 1.65 → 1.42), the rail out of his hands; v0.6.1b-e drifted (43%), fades together could not be told apart, a dial's real pay was not what was intended (`WIN_W` 0.8 kept 20% of combat) | Replaced by b1: win chance **added** on top of the pay table (#26, a success). Check against fixed networks, not the league alone; check what a dial setting really pays before running it |
 | **A hand-built win table / stack term** | v0.6.1's first plan, v0.5.1 | The stack term could pay a frag negative late with a lead; the table made a leader's frag worth little and protected leads | Replaced by the fitted judge with the owner's axioms in its structure (`sim/win_judge.py`); red-team every hand-built part of a pay |
 | **Aim tuned by feel and self-play** | v0.5.0 (#16) | Never beat its start | Measure the pros' parameters instead (aim2, then AIM3) |
-| **Fading the item rule before a head existed** | v0.4.3, v0.4.4 (#14-15) | Spawn camping: a weapon target became a free "hold here" | Open a head before fading the rule it replaces |
+| **Fading the item rule before a head existed** | v0.4.3, v0.4.4 (#14-15) | Camping on a weapon's place (he sat on the lightning gun; not players' spawn points, which are random): a weapon target became a free "hold here" | Open a head before fading the rule it replaces |
 | **The hand-built enemy belief** (v0.2's rule belief) | v0.2 to v0.4.0 | A failed baseline (owner); retired once the learned brain passed it everywhere (v0.4.0) | The enemy picture and the hands need separate memories |
 | **The knowledge pay** (paid for tracking the enemy) | v0.3.11 (built) | Superseded by the brain | |
 | **Pay for watching the right spot before a sighting** | v0.3.10 | Won (46-0-34) but barely built the habit | |

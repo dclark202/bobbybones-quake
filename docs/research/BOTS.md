@@ -24,7 +24,7 @@ paper as known before today and are marked so.
 | A chooser re-deciding every 0.2 s flickers (1.7a keep choice; 1.9a 4.8 changes a second) | FTW's slow prior over a fast posterior; the deliberation cost of options; FiGAR's learned repetition; the Quake III bot's long-term goal vs nearby goal split | 2, 8, 9 |
 | New inputs destabilised his target (2.0b: 59 raw inputs) | Arnold: game features helped only as co-training targets, not as inputs; UNREAL; FTW's probes; OpenAI Five's surgery rules | 3, 4, 10 |
 | Lightning only; self-play overvalues it because his copies are as easy to track as he is | GT Sophy: self-play alone left the agent unready for human imprecision, fixed by a mixed opponent population; AlphaStar exploiters; Gleave's adversarial policies | 6, 5, 12 |
-| Pay shaping exploits (spawn camping), pay changes that change nothing (2.0a) | FTW's learned reward weights, OpenAI Five's fixed table + zero-sum, GT Sophy's collision penalties, Arnold's ammo penalty dilemma, JueWu's multi-head value | 2, 4, 6, 7, 12 |
+| Pay shaping exploits (camping on an item's place), pay changes that change nothing (2.0a) | FTW's learned reward weights, OpenAI Five's fixed table + zero-sum, GT Sophy's collision penalties, Arnold's ammo penalty dilemma, JueWu's multi-head value | 2, 4, 6, 7, 12 |
 | Space and holding ground have no price because nobody punishes a bad place (2.0b) | AlphaStar exploiters, Sophy's scripted scenario opponents (PID drivers on a chosen line), FTW's held-out-map exploit study | 5, 6, 2 |
 | A noisy pay part dominating the head's pay (1.9a: items race 2-3x the judge part) | JueWu's multi-head value; OpenAI Five's team spirit and Rapier variance lesson | 4, 7 |
 | Monitoring: alarms silent, a run judged late | FTW's probes and behaviour fingerprints; OpenAI Five's staleness and sample-reuse metrics | 2, 4 |
@@ -656,7 +656,7 @@ GT Sophy and Arnold above.
   collision penalty removed made it more aggressive; opponents' mix decided aggression.
 
 **Relevance to Bobby.**
-- Spawn camping (v0.4.3), the red-armour camping of 1.9a, the lightning equilibrium: each is self-play finding what the pay and simulator
+- Camping on a weapon's place (v0.4.3), the red-armour camping of 1.9a, the lightning equilibrium: each is self-play finding what the pay and simulator
   allow. Gleave and hide-and-seek say this never stops; the remedy is a league that contains its own punishers (exploiters), not more pay
   terms.
 - Spinning tops supports keeping the league diverse at Bobby's own level: weapon styles (lightning, rail holder, rocket spammer) are the

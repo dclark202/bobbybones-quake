@@ -98,6 +98,18 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    starts; it reports to the owner directly, and the Fable session reads its reports or the run's records only to plan. The Fable
    session still answers for the result: it checks the worker's key claims (the numbers a decision rests on) before it tells the owner.
 
+17. **Advice on a run has one default form, and its homework is done unasked** (owner, 2026-11-17, after asking four times about
+   2.2a: "This needs to be the default for when I ask for advice on runs. I do not want to have to repeat myself. The point of all the
+   research and metrics is that you use them"). Before answering "how did it go" or "what next": read the run's records and checks
+   (did it do what it was for, and from which update did it stop doing anything new); `docs/HISTORY.md` and `docs/RUNS.md` for every
+   earlier attempt at the same aim, and the code for parts already built and switched off (nothing is called missing or proposed
+   without looking); the research notes for the aim. The answer, in order: **the verdict** in plain sentences, own faults named;
+   **what to keep and where to cut** (the save with the best record after the run stopped doing anything new, not the end by default);
+   **what every failed attempt at this aim shared** (rule 15); **the next run as a list of concrete changes**, never "measure this
+   first" in place of a change and never a small variant of what failed; the risks (what is unverified among them), the odds, his
+   decisions. **Plain words**: no name coined for a part of the build without saying in the same sentence what it does; numbers as
+   records and plain quantities. Nothing is started or edited while advising.
+
 ## Where things are
 
 | | |

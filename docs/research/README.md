@@ -20,7 +20,7 @@ without captions, thin map notes for Sinister and Battleforged) are listed in ea
 2. **The stack decides most fights before they start.** Effective stack = `min(H + A, 3H)` (armor takes 2/3 of each
    hit, so armor counts only up to twice the health). Order of needs: position, then weapon, then aim.
 3. **Control = owning the next mega and red spawns** (mega +35 s, red +25 s from the pickup in QL; no in-game timers).
-   It is a means to frags and to not dying, not a goal; paying it outright invites spawn camping.
+   It is a means to frags and to not dying, not a goal; paying it outright invites camping on an item's place.
 4. **Out of control: don't die again**, restock on the weak side, damage him at his known pickup times and leave, steal
    the item he can't cover, wait for his items to sync, trap and double back.
 5. **Information is the hidden stack**: sound (footsteps every 0.34 s with a move key, walking silent, pickups and jumps
@@ -65,7 +65,7 @@ file and section for each answer. A "not covered by the notes" answer is allowed
 3. **The player's view**: what would a strong player be able to perceive and remember to make this decision (sound,
    timers from heard/seen pickups, his stack estimate, the spawn rule)? Does Bobby have it, as a human has it?
 4. **In and out of control**: how does the change play for the controlling player and for the out-of-control
-   player? Does it open an exploit (spawn camping, item hugging, never fighting)?
+   player? Does it open an exploit (camping on an item's place, never fighting)?
 5. **Self-play equilibrium**: what do two copies of Bobby converge to under it, and is that how good duels look per
    the notes? Does a league opponent exist that punishes the bad version?
 6. **Bot precedent**: has a system in BOTS.md met this problem? What did it do, what failed?
