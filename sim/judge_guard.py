@@ -1,6 +1,7 @@
 """2.2b's guard (the owner, 11-17: "whatever you need to do to fix it so that this doesn't happen again"): no new run pays its win chance with the
 judge that does not see the items. A command (its environment; and the run's live.json, whose WIN_ADD / WIN_W may switch the pay on) whose
-win-chance pay is on (WIN_ADD or WIN_W above 0) must have the paid win part read the judge with the items:
+win-chance pay is on (WIN_ADD or WIN_W above 0), or that names a judge for it (WIN_JUDGE: the live file may switch the pay on later, as 2.2a's
+did), must have the paid win part read the judge with the items:
 
     JUDGE_PAY=1                            the simulator pays the judge with the items (sim/duel_env.py; off: the item-blind judge, wb_raw)
     WIN_JUDGE=<the judge>                  the judge itself (it must exist)
@@ -31,8 +32,8 @@ def check(env, live=None, root=None):
     for k_ in WIN_NAMES:
         if live and live.get(k_) not in (None, ""):
             v[k_] = live[k_]
-    if not any(_f(v.get(k_)) > 0 for k_ in WIN_NAMES):
-        return True, "no win-chance pay (WIN_ADD and WIN_W at 0)"
+    if not any(_f(v.get(k_)) > 0 for k_ in WIN_NAMES) and not str(v.get("WIN_JUDGE") or "").strip():
+        return True, "no win-chance pay (WIN_ADD and WIN_W at 0, no WIN_JUDGE)"
     prob = []
     if _f(v.get("JUDGE_PAY")) <= 0:
         prob.append("JUDGE_PAY is not 1: the paid win part would be the item-blind judge's")
@@ -61,5 +62,6 @@ def check(env, live=None, root=None):
             if not acc_:
                 prob.append("JUDGE_ITEMS {} is not an accepted fit".format(v["JUDGE_ITEMS"]))
     if prob:
-        return False, "the win-chance pay is on (WIN_ADD {}, WIN_W {}) but {}: {}".format(v.get("WIN_ADD"), v.get("WIN_W"), "; ".join(prob), FIX)
+        return False, "the win-chance pay is on or set up (WIN_ADD {}, WIN_W {}, WIN_JUDGE {}) but {}: {}".format(
+            v.get("WIN_ADD"), v.get("WIN_W"), v.get("WIN_JUDGE") or "unset", "; ".join(prob), FIX)
     return True, "the win-chance pay reads the judge with the items ({})".format(v["JUDGE_ITEMS"])

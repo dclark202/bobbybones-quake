@@ -633,7 +633,7 @@ FG_IN_G = float(os.environ.get("FG_IN_G") or 1.0)         # (2.2b) a factor on t
 NEAR_MISS = float(os.environ.get("NEAR_MISS") or 0.0) > 0
 NEAR_PAY = float(os.environ.get("NEAR_PAY") or 0.0)
 NEAR_OUT = float(os.environ.get("NEAR_OUT") or 300.0)
-assert 0.0 <= NEAR_PAY <= 10.0 and 120.0 < NEAR_OUT <= 600.0, "NEAR_PAY within 0 .. 10, NEAR_OUT within the splash radii .. 600"
+assert 0.0 <= NEAR_PAY <= 10.0 and max(P_RADIUS.values()) < NEAR_OUT <= 600.0, "NEAR_PAY within 0 .. 10, NEAR_OUT above the largest splash radius, at most 600"
 # (2.2b; the owner's correction, 11-17) JUDGE_PAY=1 with WIN_JUDGE and JUDGE_ITEMS: the PAID win part (WIN_ADD x the blend's win part, the
 # hands' and every learner's) is the judge WITH the items (wh_raw), not the item-blind judge (wb_raw). Off: as before, to the bit
 JUDGE_PAY = float(os.environ.get("JUDGE_PAY") or 0.0) > 0

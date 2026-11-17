@@ -354,9 +354,9 @@ def play(job):
         if hasattr(env, "fg_score") and (getattr(pol, "fgt", None) is not None or getattr(opp_pol, "fgt", None) is not None):
             fs_ = np.zeros((n, 4), np.float32)                                  # (2.2b) each side's four scores: the hands' inputs (a side without a
             for m_, p_ in ((ev, pol),) + (((od, opp_pol),) if opp_pol is not None else ()):    # fight network reads zeros)
-                sc_ = p_.fight_scores() if getattr(p_, "fgt", None) is not None else None
-                if sc_ is not None:
-                    fs_[m_] = sc_
+                fsc_ = p_.fight_scores() if getattr(p_, "fgt", None) is not None else None
+                if fsc_ is not None:
+                    fs_[m_] = fsc_
             env.fg_score = fs_
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))

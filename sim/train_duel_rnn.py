@@ -1401,6 +1401,8 @@ def main():
                     "update and of the first twenty (kl_heads; one more forward pass over the batch in those updates)")
     ap.add_argument("--lr-warm", type=float, default=0.0, help="the learning rate climbs from a tenth to full over this many minutes "
                     "from the teachers' start (--fade-start): new losses and labels move the network a long way in the first updates")
+    ap.add_argument("--lr-warm-start", type=float, default=-1.0, help="(2.2b) the minute of training --lr-warm counts from (default: "
+                    "--fade-start's): a run whose teachers' fades count from an old minute warms its optimizer from its own start")
     ap.add_argument("--fade-start", type=float, default=-1.0, help="the teachers' fades count from this minute of training "
                     "(default: where this process starts; on a restart pass the first start's, so that the fades go on)")
     ap.add_argument("--intent-seek-minutes", type=float, default=0.0, help="that reward fades to a quarter over this time (0 = constant)")
@@ -4531,6 +4533,19 @@ def main():
                   FGT_GATE_V[0], float(FN.sbias), FGT_BIAS_APPLIED[0], a.practice_secs, a.fgt_nudge, a.h2_choice_warm, a.win_scale_items,
                   a.win_scale_fight, "and its pass odds learn (their Adam {})".format("from the checkpoint" if TRK22_OPT_CK is not None else "new")
                   if not O22 else "with --out22"), flush=True)
+        n_fn_ = 0                                            # (a resume, an anchor of a 2.2b run) the league files loaded above with a fight network of
+        for sd_ in snaps + anchors:                          # their own play it, as the snapshots made in this process do
+            nm_ = LG_NAME.get(id(sd_))
+            if not nm_:
+                continue
+            f_ = os.path.join(out, "snapshots", os.path.basename(nm_))
+            fk_ = torch.load(f_, weights_only=False, map_location="cpu").get("fight22") if os.path.exists(f_) else None
+            if fk_ is not None and fk_.get("model") is not None:
+                dl_ = fk_.get("dials") or {}
+                SNAP_FN[id(sd_)] = ({k_: torch.as_tensor(np.asarray(v_.detach().cpu().numpy() if hasattr(v_, "detach") else v_)).to(dev)
+                                     for k_, v_ in fk_["model"].items()}, float(dl_.get("FGT_G", 0.0)), float(dl_.get("FGT_W", 0.0)))
+                n_fn_ += 1
+        print("2.2b: league files with a fight network of their own: {} of {}".format(n_fn_, len(snaps) + len(anchors)), flush=True)
 
     def fg_save():
         """(2.2b) the checkpoint's top-level "fight22": its layout, weights, Adam, the dials in force, the bias applied"""
@@ -8373,7 +8388,7 @@ def main():
             g["lr"] = a.lr * (1.0 - (1.0 - a.lr_end) * frac) * g.get("lr_scale", 1.0)
         lr_now = a.lr * (1.0 - (1.0 - a.lr_end) * frac)
         if a.lr_warm > 0:
-            lr_now *= min(1.0, 0.1 + 0.9 * max(0.0, mins - fade0) / a.lr_warm)
+            lr_now *= min(1.0, 0.1 + 0.9 * max(0.0, mins - (a.lr_warm_start if a.lr_warm_start >= 0 else fade0)) / a.lr_warm)
             for g in opt.param_groups:
                 g["lr"] = lr_now * g.get("lr_scale", 1.0)
         n_mb = a.minibatches
