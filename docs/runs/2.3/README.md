@@ -1,5 +1,7 @@
 # 2.3: a world and a pay in which the remaining plays are worth making
 
+**Corrected 2026-11-16 evening:** the judge that sees items exists (`JUDGE_ITEMS`, built and accepted for 1.9a; refitted in [2.2a](../2.2/2.2a/CARD.md)), so step 3 below is done there, and the head's pay (step 4) is decided before 2.2b ([2.2/DESIGN.md](../2.2/DESIGN.md)). What stays here: the opponents who make an angle pay, and the hold.
+
 **Rewritten 2026-11-16 with [2.2](../2.2/README.md) (owner: the old versions "are no longer relevant"). A proposal; nothing is decided,
 carded or built.** On 11-14 this round was folded into 2.2 (the head's weapon and trigger come with each play; that stays in 2.2). The
 number is used again here for what 2.2 cannot do by adding rows: the plays that fail today because nothing in his world rewards them,

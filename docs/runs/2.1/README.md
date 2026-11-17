@@ -27,6 +27,9 @@ gets cleaner credit, a new choice can be forecast silently before it is played. 
 with 2.2's choices, whether the trainer's older `--slow-mem` part can be reused. Not designed in detail, not built: its card (with the
 research check) comes after 2.1d's result.
 
+**The family is closed (owner, 2026-11-16 evening): 2.1 met its goal, the lock is out (2.1d). The outlook of 2.1f runs as 2.2a:
+[../2.2/DESIGN.md](../2.2/DESIGN.md).**
+
 **2.1e (2026-11-16, stopped at update 50): the slow half as built is a slow duplicate of the pull; harmless, no gain** ([card](2.1e/CARD.md), RUNS.md #57). **Next: [2.1f](2.1f/CARD.md), an outlook for each goal** (owner, 11-16: "the more principled design. It adds a genuine new signal, the hypothetical future value"), built on branch `b21f`; see [2.1f/HANDOFF.md](2.1f/HANDOFF.md). 2.2 and 2.3 were rewritten the same day from how 2.1 ended ([2.2](../2.2/README.md), [2.3](../2.3/README.md)).
 
 ## The goal

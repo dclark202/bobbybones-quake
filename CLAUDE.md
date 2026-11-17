@@ -89,6 +89,14 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    handed to a subagent started with the Opus model, with a full brief (the files, the exact change, the tests, what must not be
    touched: a live run's files, its processes); the session itself designs, reviews the diff, runs and monitors. Docs and run records
    (cards, `RUNS.md`, this file) are written by the session.
+   **Fable mode (owner, 2026-11-16: Fable "really just for thinking through plans and interacting with me, and all of the mechanical
+   simple stuff is handled by an Opus 5.5 subagent"; "the context blows up so quickly and you are overkill for monitoring").** A Fable
+   session thinks, criticises, designs, decides with the owner and writes the briefs and the owner's pages (cards, designs). Everything
+   mechanical goes to the `opus-worker` agent (`.claude/agents/opus-worker.md`, Opus 5.5): code, builds, tests, measurements and fits,
+   reading a diff or many files (it brings back only what differs from the card), git, starting an approved run from its `start.ps1`,
+   the run table and docs bookkeeping. **Run monitoring is a separate Opus 5.5 session**, started with a written brief when a run
+   starts; it reports to the owner directly, and the Fable session reads its reports or the run's records only to plan. The Fable
+   session still answers for the result: it checks the worker's key claims (the numbers a decision rests on) before it tells the owner.
 
 ## Where things are
 

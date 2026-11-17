@@ -1,5 +1,8 @@
 # 2.2: new plays, each tried for a whole trip, each with its weapon
 
+**Superseded 2026-11-16 evening by [DESIGN.md](DESIGN.md)** (the outlook of 2.1f and this proposal blended into one suite; the owner:
+"this plan for 2.2 makes sense"). Kept as written: its step parts, guards and weak points are still the reference.
+
 **Rewritten 2026-11-16 (owner: "the old versions are no longer relevant, since it's not how 2.1 is ending. Take what we know about 2.1d
 and what we hope to get from 2.1e, and start 2.2 from there").** The design of 11-14 is kept whole as
 [README_2026-11-14.md](README_2026-11-14.md) (its inventory of built code is still the reference); the reasons for the changes are in
