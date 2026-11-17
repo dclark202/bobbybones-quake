@@ -1,0 +1,2 @@
+{"_about": "2.2a's automatic mark (owner, 2026-11-16 night; ramp_22a.py): decided once when update `at` is logged; the owner's watch/out_mark.json always wins. Copied to <run>/watch/auto_mark.json by start.ps1.",
+ "at": 60, "window": 10, "min_pos": 8, "desc_pref": 0.9, "max_share": 0.10, "min_mark": 0.1, "open_updates": 40, "kind": "seg"}

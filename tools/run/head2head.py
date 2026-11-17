@@ -30,6 +30,9 @@ def main():
     import panel as P
     sets = [s for s in P.settings(0.0, a.a) if not s.startswith("INTENT_HOLD=")] + ["INTENT_HOLD=8"]
     import torch
+    if "DESC_OX=1" not in sets and any(str((torch.load(p_, map_location="cpu", weights_only=False).get("env_vars") or {}).get("DESC_OX") or "0")
+                                       not in ("0", "", "0.0") for p_ in (a.a, a.b)):
+        sets.append("DESC_OX=1")                             # (2.2a: either side's desc term reads the description: a read only for the other)
     for k_, p_ in (("contact_a", a.a), ("contact_b", a.b)):              # (review of 2026-11-03: the default was 0 for both, training has 1)
         if getattr(a, k_) == "":
             ev_ = torch.load(p_, map_location="cpu", weights_only=False).get("env_vars") or {}

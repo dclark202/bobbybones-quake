@@ -267,6 +267,21 @@ class Policy:
             self.sh_mix = float(np.asarray(self.h2W.get("slow_mix", 0.0)))
             self.sh_back = float(np.asarray(self.h2W.get("slow_back", 0.0)))
             self.set_slow_pick(int(round(float(np.asarray(self.h2W.get("slow_pick", 1.0))))))
+        self.outW, self.out_g, self.out_pick = None, 0.0, 0   # (2.1f, the outlook inside the head: sim/outlook.py) its arrays, its term's strength (the
+        if self.h2 is not None and head2_g.has_outlook(self.h2):    # file's head2.out_g; set_out_g) and the kind that plays (head2.out_pick; set_out_pick)
+            import outlook as outlook_g
+            self.outW = outlook_g.np_params(self.h2W)
+            assert self.outW is not None, "the layout names the outlook and the file has no head2.out.* weights"
+            self.out_g = float(np.asarray(self.h2W.get("out_g", 0.0)))
+            self.set_out_pick(int(round(float(np.asarray(self.h2W.get("out_pick", 0.0))))))
+        self.dsc22 = None                                    # (2.2a: sim/desc22.py NpDesc) the desc outlook's term, as the trainer makes it at a keep
+        self.maps = None                                     # reading and holds it to the next (out_src 1: the file's head2.out_src; set_out_src);
+        if self.h2 is not None and head2_g.has_parts22(self.h2):    # the seats' maps (set_maps: the map sense's tables)
+            import desc22 as desc22_g
+            ms_ = ck.get("map_sense")
+            self.dsc22 = desc22_g.NpDesc(self.h2W, self.h2, dict(layout=ms_["layout"], model={k_: (v_.detach().cpu().numpy() if hasattr(v_, "detach")
+                                                                                                   else np.asarray(v_)) for k_, v_ in ms_["model"].items()})
+                                         if ms_ else None)
         self.hrng = np.random.default_rng(int(seed) + 2121)  # ... its numbers and coins: a stream of their own
         self.hd_g = self.hd_on = self.held_pick = None       # ... each seat's held numbers, its trip's coin; this frame's targets under it
         self.hd_t = 0
@@ -555,6 +570,43 @@ class Policy:
         return logits
 
     @property
+    def desc_on(self):
+        """(2.2a) the desc outlook's term plays (the outlook's term plays and its source is desc)"""
+        return self.dsc22 is not None and self.dsc22.src == 1 and self.out_on
+
+    @property
+    def desc_due(self):
+        """(2.2a) the coming frame is a keep reading for some seat and desc's term plays: give act() ox=desc22.env_ox(env) (these rows) and the
+        seats' maps (set_maps)"""
+        return self.desc_on and self.k_r is not None and bool(self.k_r.any())
+
+    def set_out_src(self, k):
+        """(2.2a, the checks and tests) which outlook's term plays: 0 the built one, 1 desc"""
+        assert self.dsc22 is not None, "set_out_src: this network has not 2.2a's parts"
+        self.dsc22.src = int(k)
+
+    def set_maps(self, maps):
+        """(2.2a) the map of each seat (a name, or one a seat), for the desc term's map sense"""
+        self.maps = maps
+
+    @property
+    def out_on(self):
+        """(2.1f) the outlook's term plays: the outlook inside the head and its strength above 0"""
+        return self.outW is not None and self.out_g > 0
+
+    def set_out_g(self, g):
+        """(2.1f, the checks and tests) the outlook's strength, in place of the file's (a network without the outlook: refused)"""
+        assert self.outW is not None, "set_out_g: this network has no outlook inside its head"
+        self.out_g = float(g)
+
+    def set_out_pick(self, k):
+        """(2.1f, the checks and tests) the kind that plays (an index of the layout's kinds), in place of the file's"""
+        assert self.outW is not None, "set_out_pick: this network has no outlook inside its head"
+        k = int(k)
+        assert 0 <= k < len(self.h2["outlook"]["kinds"]), "set_out_pick: one of 0 .. {}".format(len(self.h2["outlook"]["kinds"]) - 1)
+        self.out_pick = k
+
+    @property
     def sh_on(self):
         """(2.1e) the picked slow half plays: the network has the halves and its read-back's gate is above 0, or the pull plays with its
         source's mix above 0 (otherwise nothing of them is read: they are not stepped)"""
@@ -749,6 +801,7 @@ class Policy:
             kf = np.asarray(kf, np.float32)
             if kf.shape[1] in (head2_.KEEP_FEAT + 1, head2_.KEEP_FEAT + head2_.KSIG + 1):
                 te_, kf = kf[:, -1] > 0, kf[:, :-1]
+        assert not self.out_on or (kf is not None and h2s is not None and (self.held_g > 0 or self.goal_on)),             "(2.1f) the outlook plays with the held draw's rows: give act() kf with the trip-end column (head2.np_kf_end(env))"
         assert not self.pull_on or (kf is not None and h2s is not None and (self.held_g > 0 or self.goal_on)), \
             "(2.1d) the pull plays with the held draw's rows: give act() kf with the trip-end column (head2.np_kf_end(env))"
         if (self.held_g > 0 or self.goal_on) and kf is not None and h2s is not None:   # (2.1c) the held draw, as the trainer's rollout plays
@@ -764,6 +817,23 @@ class Policy:
                              head2_.np_goal_u(self.h2, kf, self.hd_on))                # before the pull and the head's tick read it
             if self.pull_on:                                                         # (2.1d) the pull on his target scores before the
                 logits = self._pull(logits, si_, h2s, fr_)                             # held draw's pick and the draw
+            if self.out_on:                                                          # (2.1f) the outlook's term after the pull, as the trainer's
+                logits = logits.copy()                                                 # rollout adds it (head2.np_out_vec: the plugin's sums)
+                if self.desc_on:                                                       # (2.2a) desc's term: made at a keep reading from the
+                    if self.k_r is not None and len(self.k_r) == B_ and self.k_r.any():   # simulator's description (ox, after the tick's frame),
+                        import btoken as btoken_d                                      # held to the next reading
+                        assert ox is not None and len(ox) >= 5 and bst is not None and self.maps is not None, \
+                            "(2.2a) desc's term plays: give act() ox=desc22.env_ox(env) at a keep reading (desc_due) and set_maps()"
+                        r_ = np.nonzero(self.k_r)[0]
+                        br_d, tk_d = bst
+                        sb_d = np.asarray(br_d.s, np.float32)[r_]
+                        mp_d = np.asarray([self.maps] * B_ if isinstance(self.maps, str) else self.maps)[r_]
+                        self.dsc22.reading(r_, h2s[r_], sb_d, xa[r_], np.asarray(tk_d.P, np.float32)[r_], np.asarray(tk_d.valid, bool)[r_],
+                                           np.asarray(tk_d.hand)[r_].argmax(1), btoken_d.np_mlp(self.brainP["trk"], sb_d),
+                                           tuple(np.asarray(v_)[r_] for v_ in ox[:5]), mp_d, self.out_g, self.out_pick, B_)
+                    logits[:, si_] += self.dsc22.term(B_)
+                else:
+                    logits[:, si_] += head2_.np_out_vec(self.outW, self.h2, h2s, self.out_g, self.out_pick)
             li_ = logits[:, si_]
             li_ = li_ - li_.max(1, keepdims=True)
             lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))

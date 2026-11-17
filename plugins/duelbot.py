@@ -1042,7 +1042,11 @@ class duelbot(minqlx.Plugin):
         kf = ((_net.kf_rows(self.P, self.env) if hasattr(_net, "kf_rows") else self.env.keep_feat())[:1] if (col_ and hasattr(self.env, "keep_feat"))
               else None)                                     # (1.4c) what his keep choice reads (the simulator's numbers after the last frame)
         kw_ = {} if kf is None else dict(kf=kf)
-        if hasattr(_net, "order_due") and _net.order_due(self.P) and hasattr(self.env, "order_feat"):
+        if hasattr(_net, "desc_due") and _net.desc_due(self.P) and hasattr(self.env, "order_feat"):
+            import desc22 as desc22_b                        # (2.2a) a keep reading with desc's term playing: the description of the targets
+            kw_["ox"] = tuple(v_[:1] for v_ in desc22_b.env_ox(self.env))    # (the simulator's order_feat() with DESC_OX=1, his weapons) and the map's
+            kw_["mapname"] = self.mapname                    # name (the map sense's table: <QLBOT_ROOT>/data/maps/space_<map>.npz on the server)
+        elif hasattr(_net, "order_due") and _net.order_due(self.P) and hasattr(self.env, "order_feat"):
             X_, C_, _ = self.env.order_feat()                # (1.7) a keep reading: the combat order's candidates now (the checks' and the
             kw_["ox"] = (X_[:1], C_[:1])                     # trainer's: after the head's tick)
         self.P["_wdial"] = self.WDIAL_LEVELS.get(getattr(self, "wdial", "off"), 0.0)    # (!weapons) the dial's push, read in step()

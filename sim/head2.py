@@ -325,6 +325,86 @@ def slow_dials(mod):
     return float(mod.slow_mix), float(mod.slow_back), int(round(float(mod.slow_pick)))
 
 
+def add_outlook(L, kinds=("seg", "ret", "all8", "win8", "win5"), hid=128, facts=False):
+    """(2.1f, the outlook; docs/runs/2.1/2.1f) a layout with the outlook INSIDE the head (sim/outlook.py: head2.out.*, from the head's state to
+    kinds x (n_target + 1): an outlook per target and one goal-blind, per label kind; its last layer at zero), the buffers out_g (its term's
+    strength on his target scores) and out_pick (which kind plays: 0, the first: "seg" by default), its settings under the key "outlook". Needs the slow plan inside (its term rides on the pull's place in every reader)"""
+    assert not has_outlook(L), "the head has the outlook already"
+    assert has_slowplan(L), "the outlook plays where the pull plays: a 2.1d network (the slow plan inside the head)"
+    import outlook as outlook_
+    ol_ = outlook_.layout(head=int(L["size"]), n_target=int(L["n_target"]), kinds=kinds, hid=int(hid), facts=facts)
+    return dict(L, outlook=dict(version=ol_["version"], kinds=list(ol_["kinds"]), hid=int(ol_["hid"]), clip=float(ol_["clip"]),
+                                **({"facts": list(ol_["facts"])} if ol_.get("facts") else {})))
+
+
+def has_outlook(L):
+    """(2.1f) the layout has the outlook inside the head"""
+    return bool(L is not None and L.get("outlook"))
+
+
+def outlook_layout(L):
+    """(2.1f) sim/outlook.py's layout of the head's outlook"""
+    import outlook as outlook_
+    P = L["outlook"]
+    return outlook_.layout(head=int(L["size"]), n_target=int(L["n_target"]), kinds=tuple(P["kinds"]), hid=int(P["hid"]),
+                           clip=float(P.get("clip", outlook_.CLIP)), facts=bool(P.get("facts")))
+
+
+def has_out(mod):
+    """(2.1f) the module has the outlook inside (head2.out.*, the buffers out_g, out_pick)"""
+    return mod is not None and hasattr(mod, "out") and hasattr(mod, "out_g")
+
+
+def out_dials(mod):
+    """(2.1f) (g, pick) of a module with the outlook (python numbers), (0, 0) without"""
+    if not has_out(mod):
+        return 0.0, 0
+    return float(mod.out_g), int(round(float(mod.out_pick)))
+
+
+def out_vec(mod, s, L):
+    """(2.1f) the outlook's term on the target's logits [B, n_target] from the head's states s [B, size] (no gradient): out_g x clip(the picked
+    kind's outlook per target - their mean, +-clip) in the label's standardised units, rounded to half precision (sim/outlook.py term)"""
+    import torch
+    import outlook as outlook_
+    g_, k_ = out_dials(mod)
+    with torch.no_grad():
+        return outlook_.term(outlook_.outlook(mod.out, s)[:, k_], g_, float(L["outlook"]["clip"]))
+
+
+NONFINITE = [0]                                             # (the readers' count of seats whose built outlook was not finite)
+
+
+def np_out_vec(PW, L, hs, g, pick):
+    """(2.1f) out_vec() in numpy: PW from outlook.np_params(the head's weights), L the head's layout, hs [B, np_state_width] -> [B, n_target]"""
+    import outlook as outlook_
+    o_ = outlook_.np_outlook(PW, outlook_layout(L), hs)[:, int(pick)]
+    bad_ = int((~np.isfinite(o_[:, :-1]).all(-1)).sum())    # (2.2a, the review: a non-finite outlook gives no term, counted and loud)
+    if bad_:
+        NONFINITE[0] += bad_
+        print("MAJOR PROBLEM: the outlook's term is not finite on {} seats (counted {}): 0 for them".format(bad_, NONFINITE[0]), flush=True)
+    return outlook_.np_term(o_, g, float(L["outlook"]["clip"]))
+
+
+def add_parts22(L, trk, desc, vw_hid=128):
+    """(2.2a, docs/runs/2.2/DESIGN.md) a layout with 2.2a's silent parts INSIDE the head (every reader of a network file has them): the tracker
+    (sim/tracker.py: head2.trk.*, its layout under "trk22"), the outlook that scores a description of a play (sim/desc22.py: head2.dsc.<sibling>.*,
+    "desc22"; the buffer out_src: which outlook's term plays, 0 the built one, 1 "desc") and the head's silent second value of the win chance with
+    the items (sim/outlook.py value_module: head2.vw.*, "vw"). Needs the built outlook inside (its term's place)"""
+    assert has_outlook(L), "2.2a's parts sit beside the outlook (tools/out22_init.py add)"
+    assert not L.get("trk22") and not L.get("desc22") and not L.get("vw"), "the head has 2.2a's parts already"
+    return dict(L, trk22=dict(trk), desc22=dict(desc), vw=dict(hid=int(vw_hid)))
+
+
+def has_parts22(L):
+    return bool(L is not None and L.get("trk22") and L.get("desc22"))
+
+
+def out_src(mod):
+    """(2.2a) which outlook's term plays: 0 the built one, 1 "desc" (a module without the buffer: 0)"""
+    return int(round(float(mod.out_src))) if (mod is not None and hasattr(mod, "out_src")) else 0
+
+
 def np_kf_end(env):
     """(2.1c) the simulator's keep_feat() rows with one more column: his target ended (reached and not an arrival, gone, a spawn):
     what the held draw's players read (test_suite.Policy.act, plugins/netpass.py)"""
@@ -357,7 +437,11 @@ def n_weights(L):
         ((lambda I_: 2 * (S + int(I_["xf"]) + 2) * int(I_["hid"]) + (int(I_["a"]) + 1) * int(I_["hid"]) + int(I_["hid"]) + 1
           + (int(I_["hid"]) + 1) * int(I_["nw"]) + ((int(I_["hid"]) + 1) if I_.get("quiet") else 0))(L["ins"]) if L.get("ins") else 0) + \
         ((lambda Hs_, In_, Out_: len(L["slowhalf"]["clocks"]) * ((In_ + 1) * Hs_ + 6 * Hs_ * Hs_ + 6 * Hs_ + (Hs_ + 1) * Hs_ + (Hs_ + 1) * Out_))(
-            int(L["slowhalf"]["hid"]), S + int(L["widths"]["goal"]), len(L["slowhalf"]["horizons"]) * N) if L.get("slowhalf") else 0)
+            int(L["slowhalf"]["hid"]), S + int(L["widths"]["goal"]), len(L["slowhalf"]["horizons"]) * N) if L.get("slowhalf") else 0) + \
+        ((lambda Ho_, Oo_: (S + 1) * Ho_ + (Ho_ + 1) * Ho_ + (Ho_ + 1) * Oo_)(int(L["outlook"]["hid"]), (len(L["outlook"]["kinds"])
+          + len(L["outlook"].get("facts") or ())) * (N + 1)) if L.get("outlook") else 0) +         ((lambda T_: (int(T_["width"]) + 1) * int(T_["hid"]) + (int(T_["hid"]) + 1) * int(T_["hid"]) + (int(T_["hid"]) + 1) * len(T_["outs"]))(L["trk22"])
+         if L.get("trk22") else 0) +         ((lambda D_: len(D_["sibs"]) * ((S + len(D_["sit"]) + 1) * int(D_["hid"]) + len(D_["tgt"]) * int(D_["hid"]) + (int(D_["hid"]) + 1) * int(D_["hid"])
+                                        + (int(D_["hid"]) + 1) * (len(D_["kinds"]) + len(D_["facts"]))))(L["desc22"]) if L.get("desc22") else 0) +         (((S + 1) * int(L["vw"]["hid"]) + int(L["vw"]["hid"]) + 1) if L.get("vw") else 0)
 
 
 def describe(L):
@@ -378,7 +462,11 @@ def describe(L):
         ("; the slow halves inside (2.1e): {} of {} (head state + goal -> {} -> GRU {} -> {} -> horizons {} x {}), clocks {} head ticks, the "
          "read-back {} columns".format(len(L["slowhalf"]["clocks"]), L["slowhalf"]["hid"], L["slowhalf"]["hid"], L["slowhalf"]["hid"],
                                        L["slowhalf"]["hid"], L["slowhalf"]["horizons"], L["n_target"], L["slowhalf"]["clocks"],
-                                       L["widths"].get("slowback", 0)) if has_slowhalf(L) else "")
+                                       L["widths"].get("slowback", 0)) if has_slowhalf(L) else "") + \
+        ("; the outlook inside (2.1f): {} -> {} -> {} -> kinds {} x ({} targets + goal-blind)".format(
+            L["size"], L["outlook"]["hid"], L["outlook"]["hid"], L["outlook"]["kinds"], L["n_target"]) if has_outlook(L) else "") +         ("; its facts {}".format(L["outlook"]["facts"]) if (has_outlook(L) and L["outlook"].get("facts")) else "") +         ("; (2.2a) the tracker {} -> {} -> {} -> {} outputs; the desc outlooks {} ({} situation + {} per target numbers -> {}); the second "
+         "value {} -> 1".format(L["trk22"]["width"], L["trk22"]["hid"], L["trk22"]["hid"], len(L["trk22"]["outs"]), L["desc22"]["sibs"],
+                                len(L["desc22"]["sit"]), len(L["desc22"]["tgt"]), L["desc22"]["hid"], L["vw"]["hid"]) if has_parts22(L) else "")
 
 
 def _offs(L):
@@ -491,8 +579,27 @@ def make_module(L, seed=4044):
                 self.register_buffer("slow_mix", torch.zeros(()))
                 self.register_buffer("slow_back", torch.zeros(()))
                 self.register_buffer("slow_pick", torch.ones(()))
+            if L.get("outlook"):                             # (2.1f) the outlook inside the head: sim/outlook.py's module (its own random stream:
+                import outlook as outlook_                   # every older layer's draw as before; its last layer at zero), its term's strength,
+                self.out = outlook_.make_module(outlook_layout(L))     # the kind that plays
+                self.register_buffer("out_g", torch.zeros(()))
+                self.register_buffer("out_pick", torch.zeros(()))
+            if L.get("trk22"):                               # (2.2a) the tracker, the desc outlooks, the second value (each its own random stream:
+                import tracker as tracker_                   # every older layer's draw as before; their last layers at zero) and which outlook's
+                import desc22 as desc22_                     # term plays (out_src: 0 the built one)
+                import outlook as outlook_
+                self.trk = tracker_.make_module(L["trk22"])
+                self.dsc = desc22_.make_module(L["desc22"])
+                self.vw = outlook_.value_module(int(L["size"]), int(L["vw"]["hid"]))
+                self.register_buffer("out_src", torch.zeros(()))
 
         def _load_from_state_dict(self, state_dict, prefix, *args, **kw):
+            if L.get("trk22") and prefix + "out_src" not in state_dict:     # (2.2a) no dial in the file: the built outlook
+                state_dict[prefix + "out_src"] = torch.zeros(())
+            if L.get("outlook"):                             # (2.1f) no dials in the file: strength 0, the first kind
+                for k_, v_ in (("out_g", torch.zeros(())), ("out_pick", torch.zeros(()))):
+                    if prefix + k_ not in state_dict:
+                        state_dict[prefix + k_] = v_
             if L.get("slowhalf"):                            # (2.1e) no dials in the file: mix 0, back 0, the second half
                 for k_, v_ in (("slow_mix", 0.0), ("slow_back", 0.0), ("slow_pick", 1.0)):
                     if prefix + k_ not in state_dict:

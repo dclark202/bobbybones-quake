@@ -164,6 +164,22 @@ if ck.get("head2") is not None:                              # (its value is the
         print("the slow plan inside the head (2.1d): horizons {}, the pull's strength {:.4f} on horizon {}, floor {}, refresh every {}".format(   # names
             ck["head2"]["slowplan"]["horizons"], float(head2["head2.pull_g"]), int(round(float(head2["head2.pull_h"]))),                         # its settings)
             ck["head2"]["slowplan"]["floor"], ck["head2"]["slowplan"]["every"]))
+    if ck["head2"].get("outlook"):                           # (2.1f) the outlook inside the head: its layers, strength and kind go with the head's
+        assert all("head2.out.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")) and "head2.out_g" in head2             and "head2.out_pick" in head2, "the head names the outlook and the checkpoint has not its weights or its dials"
+        print("the outlook inside the head (2.1f): kinds {}, the term's strength {:.4f}, the kind that plays {} ({})".format(
+            ck["head2"]["outlook"]["kinds"], float(head2["head2.out_g"]), int(round(float(head2["head2.out_pick"]))),
+            ck["head2"]["outlook"]["kinds"][int(round(float(head2["head2.out_pick"])))]))
+    if ck["head2"].get("trk22"):                             # (2.2a) the tracker, the desc outlooks, the second value go with the head's (head2.trk.*,
+        assert all("head2.trk.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")) and "head2.out_src" in head2 \
+            and all("head2.dsc.desc.{}".format(k_) in head2 for k_ in ("l1s.weight", "l1t.weight", "l2.weight", "l3.weight")), \
+            "the head names 2.2a's parts and the checkpoint has not their weights or out_src"     # head2.dsc.*, head2.vw.*); the map sense the desc
+        ms_x = ck.get("map_sense")                           # term reads: the checkpoint's "map_sense" (its layout, its weights); the server needs
+        assert ms_x is not None, "2.2a's desc term reads the map sense: the checkpoint has no map_sense"    # its tables in <QLBOT_ROOT>/data/maps
+        head2["map_sense"] = np.array(json.dumps(ms_x["layout"]))
+        head2.update({"map_sense." + k_: np.asarray(v_.detach().cpu().numpy() if hasattr(v_, "detach") else v_, np.float32) for k_, v_ in ms_x["model"].items()})
+        print("2.2a's parts inside the head: the tracker ({} outputs), the desc outlooks {}, out_src {} ({}); the map sense with it ({} maps)".format(
+            len(ck["head2"]["trk22"]["outs"]), ck["head2"]["desc22"]["sibs"], int(round(float(head2["head2.out_src"]))),
+            "desc" if int(round(float(head2["head2.out_src"]))) == 1 else "the built outlook", len(ms_x["layout"]["maps"])))
     if ck["head2"].get("slowhalf"):                          # (2.1e) the slow halves inside the head: every half's layers and the three dials go
         nk_ = len(ck["head2"]["slowhalf"]["clocks"])         # with the head's (the layout names their clocks; the read-back is the inp's columns)
         assert all("head2.slow.{}.{}.{}".format(k_, l_, w_) in head2 for k_ in range(nk_) for l_ in ("inp", "l2", "l3") for w_ in ("weight", "bias")) \
