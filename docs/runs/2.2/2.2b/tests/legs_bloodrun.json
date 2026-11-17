@@ -1,0 +1,151 @@
+{
+ "maps": {
+  "bloodrun": {
+   "him": {
+    "trips": 111,
+    "arrived": 0,
+    "met": 65,
+    "timeout": 41,
+    "died": 1,
+    "passed": 0,
+    "sec": 290.07500000001005,
+    "dealt": 0.0,
+    "taken": 490.0488052368164,
+    "applied_frames": 11482
+   },
+   "cut": {
+    "trips": 92,
+    "arrived": 65,
+    "met": 11,
+    "timeout": 13,
+    "died": 2,
+    "passed": 3,
+    "sec": 139.85000000001466,
+    "dealt": 0.0,
+    "taken": 224.89584350585938,
+    "applied_frames": 4285
+   },
+   "angle": {
+    "trips": 88,
+    "arrived": 62,
+    "met": 10,
+    "timeout": 13,
+    "died": 1,
+    "passed": 3,
+    "sec": 117.30000000000955,
+    "dealt": 0.0,
+    "taken": 326.30127716064453,
+    "applied_frames": 3601
+   },
+   "away": {
+    "trips": 357,
+    "arrived": 223,
+    "met": 106,
+    "timeout": 7,
+    "died": 17,
+    "passed": 0,
+    "sec": 525.4999999997959,
+    "dealt": 3505.6207580566406,
+    "taken": 4190.485547065735,
+    "applied_frames": 21008
+   },
+   "own": {
+    "sec": 2127.2750000000005,
+    "dealt": 9264.898529052734,
+    "taken": 11383.278966903687
+   },
+   "valid": {
+    "readings": 15574,
+    "him": 9567,
+    "cut": 9372,
+    "angle": 9360,
+    "away": 15567
+   }
+  }
+ },
+ "total": {
+  "him": {
+   "trips": 111,
+   "arrived": 0,
+   "met": 65,
+   "timeout": 41,
+   "died": 1,
+   "passed": 0,
+   "sec": 290.07500000001005,
+   "dealt": 0.0,
+   "taken": 490.0488052368164,
+   "applied_frames": 11482,
+   "reached_or_met": 0.586,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 1.69
+  },
+  "cut": {
+   "trips": 92,
+   "arrived": 65,
+   "met": 11,
+   "timeout": 13,
+   "died": 2,
+   "passed": 3,
+   "sec": 139.85000000001466,
+   "dealt": 0.0,
+   "taken": 224.89584350585938,
+   "applied_frames": 4285,
+   "reached_or_met": 0.826,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 1.61
+  },
+  "angle": {
+   "trips": 88,
+   "arrived": 62,
+   "met": 10,
+   "timeout": 13,
+   "died": 1,
+   "passed": 3,
+   "sec": 117.30000000000955,
+   "dealt": 0.0,
+   "taken": 326.30127716064453,
+   "applied_frames": 3601,
+   "reached_or_met": 0.818,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 2.78
+  },
+  "away": {
+   "trips": 357,
+   "arrived": 223,
+   "met": 106,
+   "timeout": 7,
+   "died": 17,
+   "passed": 0,
+   "sec": 525.4999999997959,
+   "dealt": 3505.6207580566406,
+   "taken": 4190.485547065735,
+   "applied_frames": 21008,
+   "reached_or_met": 0.922,
+   "dealt_per_s": 6.67,
+   "taken_per_s": 7.97
+  },
+  "own": {
+   "sec": 2127.2750000000005,
+   "dealt": 9264.898529052734,
+   "taken": 11383.278966903687,
+   "dealt_per_s": 4.36,
+   "taken_per_s": 5.35
+  },
+  "valid": {
+   "readings": 15574,
+   "him": 9567,
+   "cut": 9372,
+   "angle": 9360,
+   "away": 15567
+  }
+ },
+ "args": {
+  "policy": "data/sim_runs/duel_gru_2_2a/keep/policy_90.pt",
+  "out": "C:/Users/dacla/AppData/Local/Temp/claude/6307b5bbac0eb38b/20913c0b-bcc1-41cf-b2ff-37a8c1cf9369/scratchpad/legs_bloodrun.json",
+  "maps": "bloodrun",
+  "frames": 4000,
+  "matches": 16,
+  "p": 0.06,
+  "seed": 21
+ }
+}

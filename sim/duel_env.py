@@ -601,6 +601,46 @@ CMB_ARRIVE_R, CMB_SPAM_R, CMB_SPAM_RANGE, CMB_OUT_R, CMB_PATH = 300.0, 200.0, 15
 # kept every frame by step() and by the plugin), wherever he is; a way out that is an item still ends it when he gets there (taken).
 # From his own senses only (he cannot know whether the enemy sees him), so the arrival is fair as one of the keep choice's numbers.
 OUT_LIVE = float(os.environ.get("OUT_LIVE") or 0.0)
+# (2.2b, docs/runs/2.2/2.2b/CARD.md "The fight network"; the owner, 11-17) FIGHT=1 (a PLAY_VAR): the four fight options, each a place on the
+# map he heads for as he heads for an item, carried out by his own network (his way inputs, the legs' branch's suggestion, the look point),
+# nothing that moves him but his network. They ride on 1.7's order's points (the hunt's way to cmb_rt, the legs' look at cmb_lk) with the
+# target "the enemy" (EN_INTENT):
+#   0 at him     the hunt as it is: the place he believes the enemy at (no order's point)
+#   1 cut off    one of FG_NC candidate places (the 8 holding places and the FG_CHOKE chokepoints of the order maps nearest the brain's places
+#                ahead), the one the trainer picks by the tracker's pass odds at 2 and 4 s among those he reaches before the enemy; he goes
+#                there and looks at it. Kept from the reading. Arrived within CMB_ARRIVE_R of it or the enemy in view
+#   2 an angle   for that same place, the standing point of the walking map that sees it (the order maps' sight table), that he reaches before
+#                the enemy, FG_ANG_LO to FG_ANG_HI units from it, the quickest for him; he stands there and looks at the place. Kept.
+#                Arrived within HOLD_R (HOLD_Z up or down) of the standing point, or the enemy in view
+#   3 back off   1.7b's break off (the best way out the brain's places ahead do not see; an item up or due there), looking at the brain's
+#                place 1 s ahead; arrived by OUT_LIVE seconds quiet (1.7b), ended at an item taken
+# The trainer asks in the keep column (env.step's last; with the held draw's d + 2c + 4r): + FG_ASK + FG_KIND x kind + FG_CAND x candidate.
+# fight_feat() (at a tick's frame) gives the candidates' numbers (order_feat's columns) and validity, and keeps the places for the readings.
+# Without the asked bit nothing changes; with FIGHT off nothing of it runs (the simulator to the bit, fixed-seed replays: docs/runs/2.2/2.2b).
+FIGHT = float(os.environ.get("FIGHT") or 0.0) > 0
+FG_ASK, FG_KIND, FG_CAND = 2048, 4096, 65536
+FG_KINDS = ("him", "cut", "angle", "away")
+FG_CHOKE = 8
+FG_NC = 8 + FG_CHOKE                                       # (cut off's candidates: the holding places, then the chokepoints)
+FG_ANG_LO, FG_ANG_HI = 150.0, 1500.0
+FG_PASS_XY, FG_PASS_Z = 192.0, 128.0                       # (the enemy passed the place: within this across and up or down; the pass odds' rule)
+FG_IN_G = float(os.environ.get("FG_IN_G") or 1.0)         # (2.2b) a factor on the hands' new inputs (N_FG); 1 by default (the attention gate opens them)
+# (2.2b, change 13; the owner, 11-17) NEAR_MISS=1: a rocket, grenade or plasma ball that deals the enemy no damage but bursts near him pays
+# its shooter NEAR_PAY points of damage's pay (env.dmg_reward a point) times f, f = 1 at the splash's edge (the splash radius, its distance as
+# the splash reads it; nearer but behind a wall counts 1) falling straight to 0 at NEAR_OUT units; the enemy is charged the same (zero-sum).
+# At most one full near miss a second a shooter (a budget refilled at 1 a second, at most 1). Never in "dealt" or his feedback inputs; no
+# firing cost anywhere. Live NEAR_PAY (0 .. 10) and NEAR_OUT (above the largest splash radius .. 600). The pay term "near_miss" (PAY_SPLIT).
+NEAR_MISS = float(os.environ.get("NEAR_MISS") or 0.0) > 0
+NEAR_PAY = float(os.environ.get("NEAR_PAY") or 0.0)
+NEAR_OUT = float(os.environ.get("NEAR_OUT") or 300.0)
+assert 0.0 <= NEAR_PAY <= 10.0 and 120.0 < NEAR_OUT <= 600.0, "NEAR_PAY within 0 .. 10, NEAR_OUT within the splash radii .. 600"
+# (2.2b; the owner's correction, 11-17) JUDGE_PAY=1 with WIN_JUDGE and JUDGE_ITEMS: the PAID win part (WIN_ADD x the blend's win part, the
+# hands' and every learner's) is the judge WITH the items (wh_raw), not the item-blind judge (wb_raw). Off: as before, to the bit
+JUDGE_PAY = float(os.environ.get("JUDGE_PAY") or 0.0) > 0
+# (2.2b, change 7) FIGHT_START_P: a share of all rounds that start just after a frag: a pro start's moment for one seat (its stack, weapons,
+# place, the score with his frag added), the other fresh at a spawn point by the measured rule (_spawn: the far half from the enemy).
+# Taken out of the pro starts' machinery (PRO_START_P's moments); its own counters stats["fight_start"]
+FIGHT_START_P = float(os.environ.get("FIGHT_START_P") or 0.0)
 # (12:50) A choice holds for INTENT_HOLD seconds unless the item was taken or he died ("none" can be left at any read);
 # the way to the chosen item is worth its pickup (INTENT_VALUE x env.item_reward), paid in parts as the way is gained,
 # so a whole trip never pays more than the item itself.
@@ -947,6 +987,9 @@ LEGS_IN = LEGS and float(os.environ.get("LEGS_IN") or 0.0) > 0
 LEGS_IN_CHECK = LEGS_IN and float(os.environ.get("LEGS_IN_CHECK") or 0.0) > 0
 PLAY_VARS = PLAY_VARS + ("LEGS_IN",)
 PLAY_VARS = PLAY_VARS + ("COMBAT",)                                 # (1.7) the combat order: a network trained with it plays with it
+PLAY_VARS = PLAY_VARS + ("FIGHT", "FG_IN_G", "OUT_LIVE")           # (2.2b) the fight options and the hands' inputs of them
+assert not (COMBAT and FIGHT), "COMBAT (1.7's order) and FIGHT (2.2b's options) share the order's points: one or the other"
+CMB_PTS = COMBAT or FIGHT                                           # (the order's points drive his way and look)
 # v0.3.2 (the owner's play test of 2026-10-16: on his legs, 54% of his time, he has "blinders": they own his view's turn and
 # know nothing of the enemy). LEGS_TURN_ADD=1 (with LEGS; a PLAY_VAR): one more output, the last (TA_HEAD: his own turn
 # correction, the TA_BINS degrees a frame, the first of them 0), drawn every frame. On the frames his legs carry him his
@@ -1757,6 +1800,8 @@ PAY_TERMS = ("jerk", "weapon_switch", "hop", "blind_fire", "move_round", "course
              "item_points", "item_loss", "items_other", "item_seek", "way", "way_claw", "speed", "speed_run", "intent_switch",
              "runs", "stack_diff", "stack_keep", "drops", "know", "frag", "death", "deaths_other", "win_pay", "watch", "preaim",
              "lg_quiet", "win_part", "item_decay", "edge", "cover")
+if NEAR_MISS:                                               # (2.2b) the near miss's own term, with the switch only (the list as before without it)
+    PAY_TERMS = PAY_TERMS + ("near_miss",)
 PT_IX = {k_: i_ for i_, k_ in enumerate(PAY_TERMS)}
 WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay in games, summed", "its size", "his frames in games",
            "his games' frags (+1) and deaths (-1) counted")
@@ -2122,7 +2167,8 @@ PRO_START_COLS = ("pro starts begun", "pro starts ended", "frames of matches in 
                   "... of the counted seats", "pickups of any item, all seats", "the first seat's lead at the start, summed (abs)",
                   "counted seats begun", "of them with the worked-out stack (the demo's other player)", "the clock at the start, summed",
                   "his share of the frags in the ended starts (counted seats), summed", "ended starts with a frag")
-MOMENT_P = MID_START_P + SPAWN_START_P + RAIL_START_P + PRO_START_P
+MOMENT_P = MID_START_P + SPAWN_START_P + RAIL_START_P + PRO_START_P + FIGHT_START_P
+assert FIGHT_START_P <= 0 or PRO_START_P > 0, "FIGHT_START_P takes its moments from the pro starts': PRO_START_P must be on"
 MOMENTS = MOMENT_P > 0
 assert MID_START_P >= 0 and SPAWN_START_P >= 0 and RAIL_START_P >= 0 and PRO_START_P >= 0 and GAME_P + LATE_P + MOMENT_P <= 1.0 + 1e-9, \
     "GAME_P, LATE_P, MID_START_P, SPAWN_START_P, RAIL_START_P and PRO_START_P are shares of the games' time"
@@ -2308,6 +2354,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "FIN_RATE",                                                                                            # (2.1, the finish time's table: his own damage a second, re-measured as his aim changes)
              "FOLLOW_PAY",                                                                                          # (1.9a, the hands' pay for carrying an instruction out)
              "INTENT_SWITCH", "WEAPON_OWN",                                                                         # (2.1a:the switch cost and "a held weapon is choosable", read only in intend() and in the pay: live, so they go out with the fades and no restart is needed)
+             "NEAR_PAY", "NEAR_OUT",                                                                                # (2.2b, NEAR_MISS: the near miss's pay in points of damage, its outer distance)
              ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ", "DRILL_INS_VERBS", "FIN_RATE")                   # (B-265) the live names whose value is a string, not one number
 
@@ -2365,6 +2412,10 @@ def live_values(get):
         raise ValueError("INTENT_SWITCH must be within 0 .. 0.1")
     v["WEAPON_OWN"] = float(get("WEAPON_OWN") or 0.0) > 0   # (2.1a) a held weapon is choosable, live (a PLAY_VAR too); unset: off
     v["FOLLOW_PAY"] = float(get("FOLLOW_PAY") or 0.0)        # (1.9a) the hands' pay a second for carrying an instruction out; unset: 0
+    v["NEAR_PAY"] = float(get("NEAR_PAY") or 0.0)            # (2.2b, NEAR_MISS) a full near miss's pay in points of damage; unset: 0
+    v["NEAR_OUT"] = float(get("NEAR_OUT") or 300.0)          # ... the outer distance (the pay is 0 there); unset: 300
+    if not 0.0 <= v["NEAR_PAY"] <= 10.0 or not max(P_RADIUS.values()) < v["NEAR_OUT"] <= 600.0:
+        raise ValueError("NEAR_PAY must be within 0 .. 10 and NEAR_OUT above the largest splash radius ({}), at most 600".format(max(P_RADIUS.values())))
     if not 0.0 <= v["FOLLOW_PAY"] <= 0.2:
         raise ValueError("FOLLOW_PAY must be within 0 .. 0.2")
     cf_ = get("CONTACT_FREE")                                # (b1.4a) the chance a contact is free of the lock, live; unset: 0
@@ -3335,7 +3386,15 @@ _dgg = (os.environ.get("DODGE_G") or "").strip()
 DODGE_G = float(_dgg) if _dgg else 1.0
 assert 0.0 <= DODGE_G <= 1.0, "DODGE_G must be within 0 .. 1"
 PLAY_VARS = PLAY_VARS + ("DODGE_IN", "DODGE_G")
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS + N_DG
+# (2.2b, docs/runs/2.2/2.2b/CARD.md change 4: "the hands are told where he is headed and how eager the fight network is") the last N_FG
+# inputs (group "b22b fight", the hands' only; one attention token): the fight option he is on (at him, cut off, an angle, back off: one-hot;
+# none: an item, nothing, "the enemy" or a holding place of the item picker); its place to go (cmb_rt; at him: where he believes the enemy)
+# and its point to look at (cmb_lk), each as its direction from his crosshair (sine and cosine of the yaw, the pitch / 90), its distance
+# (/ 2000, at most 2), (the place: its height from him / 200, -3 .. 3), valid; the seconds he has been headed for his target, whatever it is
+# (/ 10, at most 2); the fight network's four scores as the trainer or a plugin gives them (env.fg_score, clipped to +-5). Every column
+# times FG_IN_G (a PLAY_VAR, 1 by default). Zeros with FIGHT off. From his own senses and his own networks only.
+N_FG = 20
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS + N_DG + N_FG
 CELL_COLS = None                                          # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -3514,6 +3573,7 @@ if HEAD_PAY_TRUTH:
 # by how soon it is back; its numbers fitted by tools/run/fit_items.py on his own games). The hands' win part (wb_raw, WIN_ADD) is the
 # judge as before. Unset: win_raw is wb_raw, as before. A label, never an input; nothing of the game changes.
 JUDGE_ITEMS = os.environ.get("JUDGE_ITEMS") or ""
+assert not JUDGE_PAY or (JUDGE_ITEMS and WIN_JUDGE), "JUDGE_PAY: the paid win part from the judge with the items needs WIN_JUDGE and JUDGE_ITEMS"
 # FOLLOW_PAY (1.9a; live; 0 = off) the hands' pay a second while the instruction he is under is being carried out (its state "doing":
 # docs/runs/2.1/INSTRUCTION.md's table: at the hold's place with its weapon, on the contested item's ground, at the spam's place with its
 # weapon and the point in reach, the enemy in view under push, at the cut-off's place, on his way to check). Temporary: it teaches the hands
@@ -4318,6 +4378,16 @@ class DuelEnv:
         self.cmb_ok = np.zeros(self.n, bool)
         self.cmb_lk = np.zeros((self.n, 3), np.float32)     # ... its point for his look, and whether it gives one
         self.cmb_lok = np.zeros(self.n, bool)
+        self.fgt_k = np.zeros(self.n, np.int64)             # (2.2b, FIGHT) the fight option he is on: 0 none, 1 at him, 2 cut off, 3 an angle, 4 back off
+        self.fgt_c = np.zeros(self.n, np.int64)             # ... its candidate
+        self.fgt_pass = np.zeros(self.n, bool)              # ... the enemy (the truth) passed its place since the trip began (cut off, an angle)
+        self.fgt_live = np.zeros(self.n, bool)              # ... the readings a fight option was asked at and applied
+        self.fg_F = None                                    # ... the last fight_feat(): the candidates' places for the readings
+        self.fg_score = np.zeros((self.n, 4), np.float32)   # ... the fight network's four scores (the trainer's, a plugin's), for the hands' inputs
+        self.nm_pay = np.zeros(self.n, np.float64)          # (2.2b, NEAR_MISS) this frame's near-miss pay
+        self.nm_bud = np.ones(self.n, np.float64)           # ... each shooter's budget (one full near miss a second)
+        # ... counters stats["near_miss"] (his counted seats as shooters): bursts near an enemy that dealt him nothing, near misses paid, their f
+        #     summed, the pay summed, f lost to the cap, his projectiles burst
         self.ins_v = np.zeros(self.n, np.int64)             # (2.1, INSTR) the verb of the instruction he is under (0: none)
         self.ins_tg = np.full(self.n, -1, np.int64)         # ... its place as a target of INTENTS (-1: a point only, or none)
         self.ins_p = np.zeros((self.n, 3), np.float32)      # ... its place as a point of the map, and whether one is given
@@ -4493,7 +4563,7 @@ class DuelEnv:
                         self.hold_tg = [[float(x_) for x_ in p_] for p_ in self.hold_pos]
         self.bsp_path = bsp                                 # (1.9a: item_race finds the map's walking table by it)
         self.om = None                                      # (1.7, COMBAT) the map's numbers for the order (tools/order_maps.py)
-        if (COMBAT or INSTR or DESC_OX) and self.route is not None:     # (2.1, INSTR: the seconds of walking to the instruction's place; 2.2a: DESC_OX)
+        if (COMBAT or INSTR or DESC_OX or FIGHT) and self.route is not None:     # (2.1, INSTR: the seconds of walking to the instruction's place; 2.2a: DESC_OX; 2.2b: FIGHT)
             of_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "order_maps", os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz")
             if os.path.exists(of_):
                 z_ = np.load(of_)
@@ -5159,8 +5229,10 @@ class DuelEnv:
         if self.intent[i] > 0 and not self.intent_done[i]:
             self.stats["intent_trips"][3] += 1
         self.intent[i], self.intent_t[i], self.intent_new[i], self.intent_done[i] = 0, 0.0, True, False
-        if COMBAT:                                           # (1.7) a new life ends the order with the target (its inputs and the
+        if CMB_PTS:                                          # (1.7) a new life ends the order with the target (its inputs and the
             self.cmb_k[i] = 0                                # legs' look point read the kind before the next reading)
+        if FIGHT:                                            # (2.2b) and the fight option
+            self.fgt_k[i], self.fgt_pass[i] = 0, False
         if INSTR:                                            # (2.1) and the instruction
             self.ins_v[i], self.ins_tg[i], self.ins_cur[i] = 0, -1, -1
             self.ins_q[i], self.ins_spk[i] = 0, -1
@@ -5830,7 +5902,7 @@ class DuelEnv:
         seats the reader reads (for the counters only). (1.7, COMBAT) The hunt's way and the legs' look of a seat under an
         order read the order's points (_cmb_points; new arrays, the readers' own untouched)"""
         bel, ok = self._bel_base(key, rows)
-        if COMBAT and key in ("hunt", "legs_look") and bel is not None and ok is not None and len(bel) == self.n:
+        if CMB_PTS and key in ("hunt", "legs_look") and bel is not None and ok is not None and len(bel) == self.n:
             on_ = self.cmb_k[:self.n] > 0
             if key == "legs_look":
                 on_ = on_ & self.cmb_lok[:self.n]
@@ -7648,6 +7720,9 @@ class DuelEnv:
         self.cmb_lk[c_] = pred[c_, 0]
         self.cmb_ok[c_] = True
         self.cmb_lok[c_] = pok[c_]
+        c_ = (k == 4) | (k == 5)                             # (2.2b, FIGHT) an angle (4), cut off at a kept place (5): the kept points
+        self.cmb_rt[c_], self.cmb_lk[c_] = self.cmb_frt[c_], self.cmb_flk[c_]
+        self.cmb_ok[c_] = self.cmb_lok[c_] = True
 
     def _cmb_arrive(self):
         """(1.7, COMBAT) after the hunt's own notes: cut off arrived (keepable) at its point; spam at its place to fire from or with
@@ -7674,6 +7749,8 @@ class DuelEnv:
         oa_ = at_ & ~self.cmb_fitem[:n]
         if OUT_LIVE > 0:                                     # (1.7b) arrived by living through it: OUT_LIVE seconds quiet, wherever he is
             oa_ = m & (k == 3) & self.cmb_ok & (self.out_qt[:n] >= OUT_LIVE) & ~end_
+            if FIGHT:                                        # (2.2b) ... lived through since the trip began (a quiet start is no arrival)
+                oa_ = oa_ & (self.intent_t[:n] >= OUT_LIVE)
         elif oa_.any() and self.om is not None:              # (a way out that is not an item: arrived where the brain's places do not see it)
             _, _, _, _, pred, pok = self._cmb_ahead()
             R = self.route
@@ -7681,6 +7758,10 @@ class DuelEnv:
             seen_ = self.om["vis"][R.locate(self.state[w_, :3])[:, None], R.locate(pred[w_].reshape(-1, 3)).reshape(-1, 3)].any(1) & pok[w_]
             oa_[w_[seen_]] = False
         arr_ = cut_ | spa_ | oa_
+        if FIGHT:                                            # (2.2b) cut off at its kept place within CMB_ARRIVE_R; an angle at its standing point
+            dz_ = np.abs(self.state[:n, 2] - self.cmb_rt[:n, 2])
+            dxy_ = np.linalg.norm(self.state[:n, :2] - self.cmb_rt[:n, :2], axis=1)
+            arr_ = arr_ | (m & (k == 5) & self.cmb_ok & (d_ < CMB_ARRIVE_R)) | (m & (k == 4) & self.cmb_ok & (dxy_ < HOLD_R) & (dz_ < HOLD_Z))
         new_ = (arr_ & ~self.intent_arr[:n]) | (end_ & ~self.intent_done[:n])          # (counted once)
         self.intent_done = self.intent_done | arr_ | end_
         self.intent_arr = (self.intent_arr | arr_) & ~end_
@@ -7689,6 +7770,157 @@ class DuelEnv:
         if c_ is not None:
             cnt_ = self._counted(np.arange(n))
             np.add.at(c_, 1 + 2 * len(CMB_KINDS) + k[new_ & cnt_], 1.0)
+
+    def _fg_valid(self, fk, fc):
+        """(2.2b, FIGHT) a fight option of kind fk [n] and candidate fc [n] is valid now (the last fight_feat()'s numbers; none yet: only
+        "at him")"""
+        n = len(fk)
+        F = self.fg_F
+        if F is None or len(F["vh"]) != n:
+            return fk == 0
+        ar = np.arange(n)
+        return np.select([fk == 0, fk == 1, fk == 2, fk == 3], [F["vh"], F["vc"][ar, fc], F["vs"][ar, fc], F["va"]], False)
+
+    def _fg_apply(self, live, changed, fq, fk, fc):
+        """(2.2b, FIGHT) the reading's fight options applied: at a reading that counts (live) the option asked (fq) or none; a new option
+        (changed) takes its points from the last fight_feat() and starts its trip's "the enemy passed the place" anew"""
+        n = self.n
+        F = self.fg_F
+        self.fgt_k = np.where(live, np.where(fq, fk + 1, 0), self.fgt_k[:n]).astype(np.int64)
+        self.fgt_c = np.where(live, np.where(fq, fc, 0), self.fgt_c[:n]).astype(np.int64)
+        cm_ = np.select([fk == 1, fk == 2, fk == 3], [5, 4, 3], 0)
+        self.cmb_k = np.where(live, np.where(fq, cm_, 0), self.cmb_k[:n]).astype(np.int64)
+        on_ = live & changed & fq & (fk > 0)
+        if on_.any() and F is not None:
+            w_ = np.nonzero(on_)[0]
+            c_ = fc[w_]
+            k_ = fk[w_]
+            self.cmb_frt[w_] = np.where((k_ == 1)[:, None], F["Pc"][w_, c_], np.where((k_ == 2)[:, None], F["Ps"][w_, c_], F["Pa"][w_]))
+            self.cmb_flk[w_] = np.where((k_ == 3)[:, None], F["Pa"][w_], F["Pc"][w_, c_])
+            self.cmb_fitem[w_] = (k_ == 3) & F["ia"][w_]
+        self.fgt_pass = np.where(live & changed, False, self.fgt_pass[:n])
+        en_ = self.intent[:n] == EN_INTENT
+        self.cmb_k = np.where(en_, self.cmb_k, 0)
+        self.fgt_k = np.where(en_, self.fgt_k, 0)
+        self.fgt_live = live & fq
+
+    def _fg_note(self):
+        """(2.2b, FIGHT; step() after the arrivals) the enemy (the truth) passed the place of a cut off or an angle he is on"""
+        n = self.n
+        k = self.fgt_k[:n]
+        m = (k == 2) | (k == 3)
+        if not m.any():
+            return
+        e_ = self._others_arr()[:n, 0]
+        pe_ = self.state[e_, :3]
+        sp_ = self.cmb_flk[:n]
+        ps_ = m & (np.linalg.norm(pe_[:, :2] - sp_[:, :2], axis=1) < FG_PASS_XY) & (np.abs(pe_[:, 2] - sp_[:, 2]) < FG_PASS_Z) & (self.hp[e_] > 0)
+        self.fgt_pass = self.fgt_pass[:n] | ps_
+
+    def fg_state(self):
+        """(2.2b, FIGHT) per seat after the step [n, 6] float32: the fight option he is on (0 none, 1 at him, 2 cut off, 3 an angle, 4 back off),
+        arrived (intent_arr), the enemy in view, the enemy passed its place, his seconds on the target, alive"""
+        n = self.n
+        return np.stack([self.fgt_k[:n], self.intent_arr[:n], np.asarray(self.visible, bool)[:n], self.fgt_pass[:n],
+                         self.intent_t[:n], self.hp[:n] > 0], 1).astype(np.float32)
+
+    def fight_feat(self):
+        """(2.2b, FIGHT) at a tick's frame, every seat's fight options' candidates and their numbers (order_feat()'s columns, CMB_FEAT) ->
+        dict(Xh [n, F] at him (the enemy's row), Xc [n, FG_NC, F] cut off's candidates (the holding places, then the chokepoints: their kind
+        read as a holding place; his and the enemy's seconds to the place itself), Xs [n, FG_NC, F] each candidate's standing point for an
+        angle, Xa [n, F] back off's best way out, C [n, CMB_CTX] the situation, vh [n], vc, vs [n, FG_NC], va [n] valid; Pc, Ps [n, FG_NC, 3],
+        Pa [n, 3] the places, ia [n] back off's place is an item). Kept (fg_F) for the readings' points. Reads only (the readers' counters
+        put back)"""
+        br_ = self.stats.get("brain_read")
+        br_ = None if br_ is None else np.copy(br_)
+        try:
+            F = self._fight_feat()
+        finally:
+            if br_ is not None:
+                self.stats["brain_read"] = br_
+            else:
+                self.stats.pop("brain_read", None)
+        self.fg_F = F
+        return F
+
+    def _fg_rows(self, pts, nodes, valid, pos, eye, nh, nb, bok, npd, pok):
+        """(2.2b) order_feat()'s numbers of places pts [n, m, 3] (their walking points nodes [n, m], valid [n, m]) read as holding places"""
+        n, m_ = pts.shape[:2]
+        X = np.zeros((n, m_, CMB_F), np.float32)
+        Fi = {f_: j_ for j_, f_ in enumerate(CMB_FEAT)}
+        V, WT = self.om["vis"], self.om["walk"]
+        yaw = np.radians(self.yaw[:n])
+        cy, sy = np.cos(yaw), np.sin(yaw)
+        tm = WT[nodes, nh[:, None]]
+        te = np.where(bok[:, None], WT[nodes, nb[:, None]], 60.0)
+        d = pts - eye[:, None, :]
+        X[..., Fi["k_hold"]] = 1.0
+        X[..., Fi["valid"]] = valid
+        X[..., Fi["t_me"]] = np.clip(tm / 10.0, 0.0, 2.0) * valid
+        X[..., Fi["t_en"]] = np.clip(te / 10.0, 0.0, 2.0) * valid
+        X[..., Fi["height"]] = np.clip((pts[..., 2] - pos[:, None, 2]) / 200.0, -3.0, 3.0) * valid
+        X[..., Fi["range"]] = np.clip(np.linalg.norm(d, axis=2) / 1000.0, 0.0, 4.0) * valid
+        X[..., Fi["fwd"]] = np.clip((cy[:, None] * d[..., 0] + sy[:, None] * d[..., 1]) / 1000.0, -4.0, 4.0) * valid
+        X[..., Fi["left"]] = np.clip((-sy[:, None] * d[..., 0] + cy[:, None] * d[..., 1]) / 1000.0, -4.0, 4.0) * valid
+        X[..., Fi["up"]] = np.clip(d[..., 2] / 1000.0, -4.0, 4.0) * valid
+        for h_, f_ in enumerate(("sees_1", "sees_2", "sees_4")):
+            X[..., Fi[f_]] = V[nodes, npd[:, h_, None]] * pok[:, None] * valid
+        X[..., Fi["seen_me"]] = V[nodes, nh[:, None]] * valid
+        return X, tm, te
+
+    def _fight_feat(self):
+        n = self.n
+        X, C, P = self._order_feat()
+        R, om = self.route, self.om
+        Fi = {f_: j_ for j_, f_ in enumerate(CMB_FEAT)}
+        F = dict(Xh=X[:, EN_INTENT].copy(), C=C, vh=X[:, EN_INTENT, Fi["valid"]] > 0.5)
+        ra_ = CMB_T + CMB_C0[3]
+        F.update(Xa=X[:, ra_].copy(), Pa=P[:, ra_].astype(np.float32).copy(), va=X[:, ra_, Fi["valid"]] > 0.5,
+                 ia=self.cmb_citem[:n, CMB_C0[3]].copy())
+        Xc = np.zeros((n, FG_NC, CMB_F), np.float32)
+        Xs = np.zeros((n, FG_NC, CMB_F), np.float32)
+        Pc = np.zeros((n, FG_NC, 3), np.float32)
+        Ps = np.zeros((n, FG_NC, 3), np.float32)
+        vc = np.zeros((n, FG_NC), bool)
+        vs = np.zeros((n, FG_NC), bool)
+        F.update(Xc=Xc, Xs=Xs, Pc=Pc, Ps=Ps, vc=vc, vs=vs)
+        if R is None or om is None:
+            return F
+        s = self.state[:n]
+        pos = s[:, :3].astype(np.float32)
+        eye = self._eye(s)
+        nh = R.locate(pos)
+        fut, fok, bel, bok, pred, pok = self._cmb_ahead()
+        nb = R.locate(bel)
+        npd = R.locate(pred.reshape(-1, 3)).reshape(n, 3)
+        V, WT = om["vis"], om["walk"]
+        sr_ = CMB_T + CMB_C0[2]
+        Pc[:, :8] = P[:, HOLD_INTENT:CMB_T]
+        Pc[:, 8:8 + FG_CHOKE] = P[:, sr_:sr_ + FG_CHOKE]
+        v0 = np.concatenate([X[:, HOLD_INTENT:CMB_T, Fi["valid"]], X[:, sr_:sr_ + FG_CHOKE, Fi["valid"]]], 1) > 0.5
+        cn = R.locate(Pc.reshape(-1, 3)).reshape(n, FG_NC)
+        Xc[:], tm, te = self._fg_rows(Pc, cn, v0.astype(np.float32), pos, eye, nh, nb, bok, npd, pok)
+        Xc[:, :8, Fi["pro_hold"]] = X[:, HOLD_INTENT:CMB_T, Fi["pro_hold"]]
+        for f_ in ("door", "corridor", "width", "tele_out"):
+            Xc[:, 8:, Fi[f_]] = X[:, sr_:sr_ + FG_CHOKE, Fi[f_]]
+        vc[:] = v0 & (tm < te) & (tm < 1e4) & pok[:, None]
+        Xc[..., Fi["valid"]] = vc
+        # an angle: for each candidate, the walking point that sees it, that he reaches first, FG_ANG_LO .. FG_ANG_HI units from it, his quickest
+        tmn = WT[:, nh].T                                            # [n, nodes] his seconds to every point
+        ten = np.where(bok[:, None], WT[:, nb].T, 60.0)              # ... the enemy's from where he believes him
+        reach = (tmn < ten) & (tmn < 1e4)
+        sn = np.zeros((n, FG_NC), np.int64)
+        for c_ in range(FG_NC):
+            if not vc[:, c_].any():
+                continue
+            dd_ = np.linalg.norm(R.nodes[None, :, :] - Pc[:, c_, None, :], axis=2)
+            ok_ = V[:, cn[:, c_]].T & reach & (dd_ > FG_ANG_LO) & (dd_ < FG_ANG_HI) & vc[:, c_, None]
+            tq_ = np.where(ok_, tmn, np.inf)
+            sn[:, c_] = tq_.argmin(1)
+            vs[:, c_] = np.isfinite(tq_.min(1))
+        Ps[:] = np.where(vs[..., None], R.nodes[sn], 0.0)
+        Xs[:], _, _ = self._fg_rows(Ps, sn, vs.astype(np.float32), pos, eye, nh, nb, bok, npd, pok)
+        return F
 
     def order_feat(self):
         """(1.7, COMBAT) every seat's candidates and their numbers, for the head at the keep reading (the frame after its tick) ->
@@ -7997,6 +8229,11 @@ class DuelEnv:
             ci_ = np.array(CMB_C0)[co_] + np.minimum(cc_, np.maximum(np.array(CMB_SLOTS)[co_] - 1, 0))
             okc_ = np.where(co_ > 0, self.cmb_cok[np.arange(n), np.minimum(ci_, CMB_NEW - 1)], True)
             co_ = np.where(okc_, co_, 0)                               # (a candidate that was none: the target as chosen)
+            if FIGHT:                                                  # (2.2b) a fight option asked: its kind and candidate, if valid now
+                fq_ = has_ & ((k_ & FG_ASK) > 0)
+                fk_ = np.where(fq_, (k_ // FG_KIND) % 4, 0)
+                fc_ = np.where(fq_, np.clip((k_ // FG_CAND) % 16, 0, FG_NC - 1), 0)
+                fq_ = fq_ & self._fg_valid(fk_, fc_)
             if KEEP_ZONE:                                              # (2.1) the quiet layer's draw and its coin (taken with the keep coin)
                 kqd_ = has_ & ((k_ & 512) > 0)
                 self.kqown = np.where(lock_, has_ & ((k_ & 1024) > 0), self.kqown[:n]) & has_
@@ -8008,6 +8245,8 @@ class DuelEnv:
             self.kown = np.zeros(n, bool)
             self.kqown = np.zeros(n, bool)
             cq_, co_, cc_, ci_ = np.zeros(n, bool), np.zeros(n, np.int64), np.zeros(n, np.int64), np.zeros(n, np.int64)
+        if not FIGHT or kin_ is None or len(kin_) < n:
+            fq_, fk_, fc_ = np.zeros(n, bool), np.zeros(n, np.int64), np.zeros(n, np.int64)
         self.intent_arr = self.intent_arr[:n] & ~self.intent_new[:n] & ~self.intent_gone[:n] & (self.intent[:n] > 0)   # (a reading at once ends an arrival)
         if KEEP_ZONE:                                        # (2.1) where the keep choice decides: in contact and at an arrival its zone
             zone_ = (self.seen_t[:n] < CONTACT_S) | self.intent_arr     # layer; in quiet the quiet layer where its coin says so, else the lock rule
@@ -8043,6 +8282,8 @@ class DuelEnv:
             self.stats["weapon_own"] = self.stats.get("weapon_own", np.zeros(2)) + wo_
         if COMBAT:                                           # (1.7) an order in place of the drawn target: "the enemy", its point the order's
             choice = np.where(co_ > 0, EN_INTENT, choice)
+        if FIGHT:                                            # (2.2b) a fight option: "the enemy", its point the option's
+            choice = np.where(fq_, EN_INTENT, choice)
         may = (self.intent == 0) | self.intent_done | (self.intent_t >= (INTENT_HOLD if self.hold_seat is None else self.hold_seat[:n])) | self.intent_gone     # a choice holds (INTENT_HOLD)
         if TARGETS_FREE == 1:                                # (a holding place can be left at any reading, as "nothing")
             may = may | (self.intent >= HOLD_INTENT)
@@ -8105,7 +8346,10 @@ class DuelEnv:
         live = live & may
         if KEEP_ZONE:
             self.keep_rec2 = (live.copy(), may.copy(), np.asarray(choice).copy())   # (a record for the tests: the reading as applied)
-        changed = live & ((choice != self.intent) | (co_ != self.cmb_k[:n]) | ((co_ > 0) & (cc_ != self.cmb_c[:n])))   # (1.7: another order is another target)
+        changed = live & ((choice != self.intent) | ((co_ != self.cmb_k[:n]) if not FIGHT else False) | ((co_ > 0) & (cc_ != self.cmb_c[:n])))   # (1.7: another order is another target)
+        if FIGHT:                                            # (2.2b) another fight option (or none) is another target
+            fkn_ = np.where(fq_, fk_ + 1, 0)
+            changed = changed | (live & ((fkn_ != self.fgt_k[:n]) | (fq_ & (fc_ != self.fgt_c[:n]))))
         same_ = kread_ & ended_ & live & ~changed & (self.intent > 0)    # (1.7a) a forced reading of the keep choice that drew the
         #                                                                  same target: a new choice of it (the lock rule keeps "reached")
         if ct_on and "contact" in self.stats:
@@ -8157,6 +8401,8 @@ class DuelEnv:
             al_ = cnt_ & (self.hp[:n] > 0)
             np.add.at(c_, 1 + nk_ + self.cmb_k[al_], 1.0)
             self.stats["cmb"] = c_
+        if FIGHT:                                            # (2.2b) the fight option he follows, its kept points (read at the reading)
+            self._fg_apply(live, changed, fq_, fk_, fc_)
         if WAYS:                                             # his way: read on the frames his intention is, held with it (see WAYS)
             self.way_was = self.way.copy()
             if way is not None:
@@ -8578,8 +8824,51 @@ class DuelEnv:
                               self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot),
                               self._ord(pos, eye, yaw, pit), self._yt(), self._sp(pos, c, si, known, visible, opp),
                               self._ins(pos, eye, yaw, pit, rot),
-                              self._dodge(pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick if self.focus_on else None)], 1)
+                              self._dodge(pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick if self.focus_on else None),
+                              self._fgo(pos, eye, yaw, pit)], 1)
         return obs.astype(np.float32)
+
+    def _fgo(self, pos, eye, yaw, pit):
+        """(2.2b, FIGHT) the inputs of N_FG (see there). Reads only; keeps nothing."""
+        n = self.n
+        out = np.zeros((n, N_FG), np.float32)
+        if not FIGHT:
+            return out
+        k = self.fgt_k[:n]
+        for j_ in range(4):
+            out[:, j_] = k == j_ + 1
+        br_ = self.stats.get("brain_read")                   # (its reading of the belief counts no reader: the counters as without it)
+        br_ = None if br_ is None else np.copy(br_)
+        bel, bok = self._bel_base("hunt", np.zeros(0, np.int64)) if k.any() else (None, None)
+        if br_ is not None:
+            self.stats["brain_read"] = br_
+        else:
+            self.stats.pop("brain_read", None)
+        if bel is None:
+            bel, bok = np.zeros((n, 3), np.float32), np.zeros(n, bool)
+        bel, bok = np.asarray(bel, np.float32)[:n], np.asarray(bok, bool)[:n]
+        him_ = k == 1
+        pt = np.where(him_[:, None], bel, self.cmb_rt[:n])
+        pok = np.where(him_, bok, (k > 1) & self.cmb_ok[:n])
+        lk = np.where(him_[:, None], bel, self.cmb_lk[:n])
+        lok = np.where(him_, bok, (k > 1) & self.cmb_lok[:n])
+        for c0_, p_, o_, ht_ in ((4, pt, pok, True), (10, lk, lok, False)):
+            ey_, ep_ = self._aim_at(eye, p_, yaw, pit)
+            of_ = o_.astype(np.float32)
+            out[:, c0_] = np.sin(np.radians(ey_)) * of_
+            out[:, c0_ + 1] = np.cos(np.radians(ey_)) * of_
+            out[:, c0_ + 2] = np.clip(ep_ / 90.0, -1.0, 1.0) * of_
+            out[:, c0_ + 3] = np.minimum(np.linalg.norm(p_ - eye, axis=1) / 2000.0, 2.0) * of_
+            if ht_:
+                out[:, c0_ + 4] = np.clip((p_[:, 2] - pos[:, 2]) / 200.0, -3.0, 3.0) * of_
+                out[:, c0_ + 5] = of_
+            else:
+                out[:, c0_ + 4] = of_
+        out[:, 15] = np.where(self.intent[:n] > 0, np.minimum(self.intent_t[:n] / 10.0, 2.0), 0.0)
+        sc_ = np.asarray(self.fg_score, np.float32)
+        if len(sc_) == n:
+            out[:, 16:20] = np.clip(sc_, -5.0, 5.0)
+        return out * np.float32(FG_IN_G)
 
     def _dodge(self, pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick):
         """(2.0d, DODGE_IN) the inputs of N_DG (see there). Keeps its own history of every player's facing and place (beside
@@ -10471,6 +10760,8 @@ class DuelEnv:
         intent_release()"""
         en_ = self.intent == EN_INTENT
         vis_ = np.asarray(self.visible, bool)[:len(en_)]
+        if FIGHT:                                            # (2.2b) back off is not reached by seeing the enemy (it is reached by living through it)
+            vis_ = vis_ & (np.asarray(self.cmb_k)[:len(en_)] != 3)
         self.intent_done = self.intent_done | (en_ & vis_)
         self.intent_arr = self.intent_arr | (en_ & vis_)      # (1.7a) arrived, not ended: the keep choice may keep the hunt
         self.intent_gone = self.intent_gone | (en_ & ~np.asarray(valid, bool))
@@ -11222,6 +11513,41 @@ class DuelEnv:
         t_ = np.trunc(np.asarray(v, np.float64))
         return np.where(np.asarray(to, np.float64) <= np.asarray(v, np.float64), t_, t_ + 1.0).astype(np.float32)
 
+    def _near_miss(self, i, wpn, ep, victims, s):
+        """(2.2b, NEAR_MISS) player i's projectile (wpn) bursts at ep: for each enemy of his it deals nothing to (not in victims), alive
+        and in play, the shooter is paid NEAR_PAY points of damage's pay x f (f 1 within the splash radius of his box, falling straight to 0
+        at NEAR_OUT), at most his budget (one full near miss a second); the enemy is charged the same. Nothing else is touched."""
+        hit_ = set(int(v_) for v_, d_, _, _, _ in victims if d_ > 0)
+        C = self.stats.setdefault("near_miss", np.zeros(6))
+        cnt_ = bool(self._counted(i)) and self.script[i] == 0
+        C[5] += float(cnt_)
+        R = float(P_RADIUS[wpn])
+        out_ = float(NEAR_OUT)
+        for v in (int(x_) for x_ in self._others_arr()[i]):
+            if v in hit_ or self.hp[v] <= 0 or (RESPAWN_QL and self.rsp_wait[v] > 0):
+                continue
+            c = s[v, :3]
+            hi_ = c + MAXS
+            if self.duck[v]:
+                hi_ = hi_.copy()
+                hi_[2] = c[2] + TOP_DUCK
+            d = float(np.linalg.norm(np.asarray(ep, np.float64) - np.clip(np.asarray(ep, np.float64), c + MINS, hi_)))
+            C[0] += float(cnt_)
+            f = 1.0 if d <= R else max(0.0, (out_ - d) / (out_ - R))
+            if f <= 0.0:
+                continue
+            fe = min(f, float(self.nm_bud[i]))
+            self.nm_bud[i] -= fe
+            C[4] += (f - fe) * cnt_
+            if fe <= 0.0:
+                continue
+            pay = float(NEAR_PAY) * fe * float(self.dmg_reward)
+            self.nm_pay[i] += pay
+            self.nm_pay[v] -= pay
+            C[1] += float(cnt_)
+            C[2] += fe * cnt_
+            C[3] += pay * cnt_
+
     def _explode(self, i, wpn, ep, direct_on, hit_dir, s, st, back=None):
         """projectile of player i (weapon wpn) explodes at ep; direct_on = player hit directly or None;
         back = the way it flew (RL_QL: the blast point is cut to whole units toward where it came from)"""
@@ -11256,6 +11582,8 @@ class DuelEnv:
                 kn = float(np.linalg.norm(kdir))
                 kdir = kdir / kn if kn > 1e-3 else np.array([0, 0, 1.0], np.float32)
                 victims.append((v, P_SPLASH[wpn] * f_, P_SPLASH[wpn] * f_, kdir, False))
+        if NEAR_MISS:                                     # (2.2b) a burst that deals the enemy nothing, near him: the near miss's pay
+            self._near_miss(i, wpn, ep, victims, s)
         for v, dmg, kpts, kdir, is_direct in victims:
             if RESPAWN_QL and self.rsp_wait[v] > 0:         # (RESPAWN_QL) a body waiting to respawn: the blast does nothing to it
                 continue
@@ -11318,6 +11646,8 @@ class DuelEnv:
                 kdir = kdir / kn if kn > 1e-3 else np.array([0, 0, 1.0], np.float32)
                 kp = int(RL_KNOCK_BASE * f_ * (RL_KNOCK_SELF if v == i else RL_KNOCK_OTHER))
                 victims.append((v, float(int(P_SPLASH[wpn] * f_)), float(kp), kdir, False))
+        if NEAR_MISS:                                     # (2.2b) the same for a rocket of RL_QL
+            self._near_miss(i, wpn, ep, victims, s)
         for v, dmg, kpts, kdir, is_direct in victims:
             if RESPAWN_QL and self.rsp_wait[v] > 0:         # (RESPAWN_QL) a body waiting to respawn: the blast does nothing to it
                 continue
@@ -11879,7 +12209,7 @@ class DuelEnv:
         new = r64
         if on:
             w_, v_, g_ = float(WIN_W), float(FADE_V), float(WIN_GAIN)
-            paid_ = (w_ * g_ + float(WIN_ADD)) * self.wb_raw
+            paid_ = (w_ * g_ + float(WIN_ADD)) * (self.wh_raw if (JUDGE_PAY and self.ji_P is not None) else self.wb_raw)   # (2.2b, JUDGE_PAY: the judge with the items)
             new = np.where(gm, (1.0 - v_) * oth + (1.0 - w_) * self.wb_cb + paid_, r64)
             reward[gm] = new[gm]
             if v_ > 0 or WIN_LONG:                           # (WIN_LONG) the win part into r_long too
@@ -12745,6 +13075,41 @@ class DuelEnv:
         PS_[13] += abs(float(d))
         PS_[16] += tick * DT
 
+    def _fight_start(self, m):
+        """(2.2b, FIGHT_START_P) match m, just put at a pro moment by _pro_start, becomes the moment just after a frag: one seat (drawn
+        evenly) keeps the moment's place, stack and weapons and has the frag added to his score; the other comes back fresh (the spawn's
+        health, no armor, the machine gun and the gauntlet only) at a spawn point by the measured rule (_spawn: the far half of the points
+        from the enemy). The win chance's base is read again after it. Counters: stats["fight_start"] (begun, his seat the survivor)"""
+        q = [int(x) for x in self._seats(m)]
+        if len(q) != 2:
+            return
+        j = int(self.rng_mom.random() < 0.5)
+        win_, new_ = q[j], q[1 - j]
+        self._spawn(new_, self.state[win_, :3].copy())
+        self.has[new_] = False
+        self.has[new_, MG] = self.has[new_, G] = True
+        self.ammo[new_] = 0.0
+        self.ammo[new_, MG] = 100.0
+        self.weapon[new_] = MG
+        self.life_t[new_], self.first_wp[new_] = 0.0, False
+        self.frags_r[win_] += 1.0
+        if self._counted(win_) or self._counted(new_):
+            fs_ = self.stats.setdefault("fight_start", np.zeros(2))
+            fs_[0] += 1.0
+            fs_[1] += float(bool(self._counted(win_)))
+        qa = np.array(q)
+        tick = int(self.g_tick[m])
+        d = int(self.frags_r[q[0]] - self.frags_r[q[1]])
+        self.g_p[m] = float(self._win_p(d, GAME_LEN - tick * DT)) if self.win_tab is not None else 0.5
+        if self.ws_tab is not None:
+            self.ws_p[m] = float(self._win_p(d, GAME_LEN - tick * DT, tab=self.ws_tab))
+        if self.wb_tab is not None:
+            self.wb_p[m] = float(self._wb_chance(m, GAME_LEN - tick * DT)[0])
+        self._wsh_start(m, GAME_LEN - tick * DT)
+        if EN_STACK:
+            self._es_set(qa, slice(None), spawn=False)
+        self._replaced = True
+
     def _moment_game(self, m, late):
         """a whole game or a late round begins in match m: its limit, and a whole game's frames for the mid-game moments"""
         self.g_end[m] = GAME_FRAMES
@@ -12759,7 +13124,7 @@ class DuelEnv:
         kp0 = float(self.kind_p[0])
         rm, rs = kp0 * MID_START_P / MID_MEAN, kp0 * SPAWN_START_P / SPAWN_START_LEN
         rr = kp0 * RAIL_START_P / RAIL_MEAN if self.rail_pairs is not None else 0.0     # (RAIL_START_P: rail range starts)
-        rp = kp0 * PRO_START_P / self._pro_mean_now() if PRO_START_P > 0 and self._pro_ok() else 0.0     # (PRO_START_P: pro starts)
+        rp = kp0 * (PRO_START_P + FIGHT_START_P) / self._pro_mean_now() if PRO_START_P > 0 and self._pro_ok() else 0.0     # (PRO_START_P: pro starts; 2.2b: FIGHT_START_P)
         if rg + rl + rm + rs + rr + rp <= 0:
             return False
         u = self.rng.random() * (r0 + rg + rl + rx + rm + rs + rr + rp)
@@ -12770,7 +13135,8 @@ class DuelEnv:
             return True
         if u >= rg + rl + rm + rs + rr:                      # (PRO_START_P) a pro start: a whole game's start, then the moment
             self._game_start(m, late=False)                  # (after the round's reset: _pro_start)
-            self._pro_put.append((int(m),) + self._pro_pick()[::-1])     # (m, moment, source: PEOPLE_START_SHARE)
+            fs_ = FIGHT_START_P > 0 and self.rng_mom.random() < FIGHT_START_P / (PRO_START_P + FIGHT_START_P)    # (2.2b: a fight start)
+            self._pro_put.append((int(m),) + self._pro_pick()[::-1] + ((True,) if fs_ else ()))     # (m, moment, source: PEOPLE_START_SHARE)
             return True
         kd = 3 if u < rg + rl + rm else 4 if u < rg + rl + rm + rs else 5
         bank = self.mom_bank[0 if kd == 4 else 1]            # (the bank: spawn moments, mid-game moments; a rail start: a mid moment)
@@ -13023,7 +13389,7 @@ class DuelEnv:
                 if MOMENTS and self.rail_pairs is not None:  # (RAIL_START_P: rail range starts)
                     rs_ += float(self.kind_p[0]) * RAIL_START_P / RAIL_MEAN
                 if PRO_START_P > 0 and self._pro_ok():       # (PRO_START_P: pro starts)
-                    rs_ += float(self.kind_p[0]) * PRO_START_P / self._pro_mean_now()
+                    rs_ += float(self.kind_p[0]) * (PRO_START_P + FIGHT_START_P) / self._pro_mean_now()
                 other = 1.0 / max(1e-9, r0_ + rg_ + rl_ + rm_ + rs_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
         p = self.item_run_p + pj + pr
         if self.rng.random() >= (p / RUN_LEN) / (p / RUN_LEN + (1.0 - p) / other):
@@ -14522,6 +14888,11 @@ class DuelEnv:
         a = np.array(actions, copy=True)
         n = self.n
         self.keep_in = None                                  # (1.4c) the keep column, if the caller sent one
+        if NEAR_MISS:                                        # (2.2b) this frame's near misses; each shooter's budget refilled (at most one a second)
+            if len(self.nm_pay) != n:
+                self.nm_pay, self.nm_bud = np.zeros(n, np.float64), np.ones(n, np.float64)
+            self.nm_pay[:] = 0.0
+            self.nm_bud = np.minimum(1.0, self.nm_bud + DT)
         if a.ndim == 2 and a.shape[1] == len(ACTION_DIMS) + 1:
             self.keep_in = a[:, -1].astype(np.int64)
             a = a[:, :-1]
@@ -14589,7 +14960,7 @@ class DuelEnv:
         if WAYS and a.shape[1] > WAY_HEAD:                   # his way: the thirteenth output; the shortest in an item run or a jump run
             wy_ = np.where(in_run, 0, a[:, WAY_HEAD])
         self.intend(ch_, human, wy_)
-        if COMBAT:                                           # (1.7) the order's points for this frame's ways and looks
+        if CMB_PTS:                                          # (1.7) the order's points for this frame's ways and looks (2.2b: the fight options')
             self._cmb_points()
         if INSTR or KNOWN_TRUTH or SPAWN_TRUTH:              # (2.1) the clocks of the spawn rows and of the labels
             self._ins_clock()
@@ -15215,6 +15586,9 @@ class DuelEnv:
             if PAY_SPLIT:
                 self._pt("dmg_dealt", ar, self.dmg_reward * dealt)
                 self._pt("dmg_taken", ar, -self.dmg_reward * self.dmg_taken_w * np.asarray(taken, np.float64))
+        if NEAR_MISS:                                        # (2.2b) the near misses of this frame: paid to the shooter, charged to the enemy (never in dealt)
+            reward += self.nm_pay[:len(reward)].astype(reward.dtype)
+            self._pt("near_miss", ar, self.nm_pay[:len(ar)])
         if high_ is not None:                                # (HIGH_PAY) a hit from above is worth more to both, one from below less
             reward += self.dmg_reward * (high_[0] - self.dmg_taken_w * high_[1])
         self._ps("high", reward)
@@ -15517,8 +15891,10 @@ class DuelEnv:
                 self.intent_gone = valid & ~soon_b & (self.intent > 0) & (self.intent < HOLD_INTENT)
             if EN_ON:                                        # the enemy as the target: reached when he is in view, given up when
                 en_, vis_ = self.note_hunt(valid)            # nothing is known of him any more (FIGHT_TARGET, HUNT)
-                if COMBAT:                                   # (1.7) the order's own arrivals and ends
+                if CMB_PTS:                                  # (1.7) the order's own arrivals and ends (2.2b: the fight options')
                     self._cmb_arrive()
+                if FIGHT:                                    # (2.2b) the enemy passed the place of his cut off or angle
+                    self._fg_note()
                 self.stats["en_frames"] += np.array([(en_ & (self.script == 0) & (self.hp > 0)).sum(), (en_ & self.legs_on).sum(),
                                                      (en_ & vis_ & (self.script == 0)).sum()], np.float64)
             if self.hold_n:                                  # a holding place as the target (TARGETS): reached where he stands at it,
@@ -16020,8 +16396,10 @@ class DuelEnv:
                 self._late_start(m_)
             self._late_m = []
         if PRO_START_P > 0 and self._pro_put:                # ... and for the pro starts: the moment of a pros' duel
-            for m_, k_, s_ in self._pro_put:
-                self._pro_start(m_, k_, s_)
+            for pp_ in self._pro_put:
+                self._pro_start(pp_[0], pp_[1], pp_[2])
+                if len(pp_) > 3:                             # (2.2b, FIGHT_START_P) ... and a fight start: one seat just fragged
+                    self._fight_start(pp_[0])
             self._pro_put = []
         if len(dead) or len(out) or len(ends) or self._replaced:
             self.state = s = self.w.state()
