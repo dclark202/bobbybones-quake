@@ -319,6 +319,10 @@ def play(job):
                 for p_m in (pol, opp_pol):                                      # for the map sense's table)
                     if p_m is not None and hasattr(p_m, "set_maps"):
                         p_m.set_maps(mp)
+        fx_ = None                                                              # (2.2b) the fight options' numbers after the frame before (a 2.2b network
+        if hasattr(env, "fight_feat") and (getattr(pol, "fight_due", False) or getattr(opp_pol, "fight_due", False)):   # at a keep reading)
+            import fight22 as fight22_e
+            fx_ = fight22_e.reader_fx(env)
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -333,7 +337,8 @@ def play(job):
                         **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
                         **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}),
                         **({"ox": (tuple(v_[ev] for v_ in ox_) if getattr(pol, "desc_due", False) else (ox_[0][ev], ox_[1][ev]))}
-                           if (ox_ is not None and (pol.order_due or getattr(pol, "desc_due", False))) else {}))
+                           if (ox_ is not None and (pol.order_due or getattr(pol, "desc_due", False))) else {}),
+                        **({"fx": {k_: v_[ev] for k_, v_ in fx_.items()}} if (fx_ is not None and getattr(pol, "fight_due", False)) else {}))
         a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]
         if kp_ and pol.keep_on:
             a[ev, -1] = al[:, -1]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
@@ -342,10 +347,18 @@ def play(job):
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
                                  **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}),
                                  **({"ox": (tuple(v_[od] for v_ in ox_) if getattr(opp_pol, "desc_due", False) else (ox_[0][od], ox_[1][od]))}
-                                    if (ox_ is not None and (opp_pol.order_due or getattr(opp_pol, "desc_due", False))) else {}))
+                                    if (ox_ is not None and (opp_pol.order_due or getattr(opp_pol, "desc_due", False))) else {}),
+                                 **({"fx": {k_: v_[od] for k_, v_ in fx_.items()}} if (fx_ is not None and getattr(opp_pol, "fight_due", False)) else {}))
             a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
             if kp_ and opp_pol.keep_on:
                 a[od, -1] = ao[:, -1]
+        if hasattr(env, "fg_score") and (getattr(pol, "fgt", None) is not None or getattr(opp_pol, "fgt", None) is not None):
+            fs_ = np.zeros((n, 4), np.float32)                                  # (2.2b) each side's four scores: the hands' inputs
+            for m_, p_ in ((ev, pol),) + (((od, opp_pol),) if opp_pol is not None else ()):
+                fsc_ = p_.fight_scores() if getattr(p_, "fgt", None) is not None else None
+                if fsc_ is not None:
+                    fs_[m_] = fsc_
+            env.fg_score = fs_
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
             if getattr(E, "COMBAT", False):                                     # (1.7) the brain's places ahead: the combat order's

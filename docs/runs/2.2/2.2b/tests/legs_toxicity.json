@@ -1,0 +1,151 @@
+{
+ "maps": {
+  "toxicity": {
+   "him": {
+    "trips": 105,
+    "arrived": 0,
+    "met": 76,
+    "timeout": 22,
+    "died": 3,
+    "passed": 0,
+    "sec": 201.75000000002873,
+    "dealt": 0.0,
+    "taken": 581.515007019043,
+    "applied_frames": 7933
+   },
+   "cut": {
+    "trips": 117,
+    "arrived": 72,
+    "met": 28,
+    "timeout": 15,
+    "died": 0,
+    "passed": 6,
+    "sec": 188.72500000002577,
+    "dealt": 0.0,
+    "taken": 346.4093322753906,
+    "applied_frames": 5972
+   },
+   "angle": {
+    "trips": 102,
+    "arrived": 65,
+    "met": 24,
+    "timeout": 9,
+    "died": 0,
+    "passed": 4,
+    "sec": 116.57500000000938,
+    "dealt": 0.0,
+    "taken": 174.09444427490234,
+    "applied_frames": 3529
+   },
+   "away": {
+    "trips": 350,
+    "arrived": 212,
+    "met": 110,
+    "timeout": 3,
+    "died": 19,
+    "passed": 0,
+    "sec": 495.22499999982347,
+    "dealt": 4492.694625854492,
+    "taken": 4864.960370063782,
+    "applied_frames": 19795
+   },
+   "own": {
+    "sec": 2197.7250000000004,
+    "dealt": 8781.681198120117,
+    "taken": 13597.401504516602
+   },
+   "valid": {
+    "readings": 15510,
+    "him": 10469,
+    "cut": 10154,
+    "angle": 10146,
+    "away": 15498
+   }
+  }
+ },
+ "total": {
+  "him": {
+   "trips": 105,
+   "arrived": 0,
+   "met": 76,
+   "timeout": 22,
+   "died": 3,
+   "passed": 0,
+   "sec": 201.75000000002873,
+   "dealt": 0.0,
+   "taken": 581.515007019043,
+   "applied_frames": 7933,
+   "reached_or_met": 0.724,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 2.88
+  },
+  "cut": {
+   "trips": 117,
+   "arrived": 72,
+   "met": 28,
+   "timeout": 15,
+   "died": 0,
+   "passed": 6,
+   "sec": 188.72500000002577,
+   "dealt": 0.0,
+   "taken": 346.4093322753906,
+   "applied_frames": 5972,
+   "reached_or_met": 0.855,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 1.84
+  },
+  "angle": {
+   "trips": 102,
+   "arrived": 65,
+   "met": 24,
+   "timeout": 9,
+   "died": 0,
+   "passed": 4,
+   "sec": 116.57500000000938,
+   "dealt": 0.0,
+   "taken": 174.09444427490234,
+   "applied_frames": 3529,
+   "reached_or_met": 0.873,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 1.49
+  },
+  "away": {
+   "trips": 350,
+   "arrived": 212,
+   "met": 110,
+   "timeout": 3,
+   "died": 19,
+   "passed": 0,
+   "sec": 495.22499999982347,
+   "dealt": 4492.694625854492,
+   "taken": 4864.960370063782,
+   "applied_frames": 19795,
+   "reached_or_met": 0.92,
+   "dealt_per_s": 9.07,
+   "taken_per_s": 9.82
+  },
+  "own": {
+   "sec": 2197.7250000000004,
+   "dealt": 8781.681198120117,
+   "taken": 13597.401504516602,
+   "dealt_per_s": 4.0,
+   "taken_per_s": 6.19
+  },
+  "valid": {
+   "readings": 15510,
+   "him": 10469,
+   "cut": 10154,
+   "angle": 10146,
+   "away": 15498
+  }
+ },
+ "args": {
+  "policy": "data/sim_runs/duel_gru_2_2a/keep/policy_90.pt",
+  "out": "C:/Users/dacla/AppData/Local/Temp/claude/6307b5bbac0eb38b/20913c0b-bcc1-41cf-b2ff-37a8c1cf9369/scratchpad/legs_toxicity.json",
+  "maps": "toxicity",
+  "frames": 4000,
+  "matches": 16,
+  "p": 0.06,
+  "seed": 21
+ }
+}

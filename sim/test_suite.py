@@ -282,6 +282,18 @@ class Policy:
             self.dsc22 = desc22_g.NpDesc(self.h2W, self.h2, dict(layout=ms_["layout"], model={k_: (v_.detach().cpu().numpy() if hasattr(v_, "detach")
                                                                                                    else np.asarray(v_)) for k_, v_ in ms_["model"].items()})
                                          if ms_ else None)
+        self.fgt = None                                      # (2.2b, sim/fightnet.py NpFight) the fight network: its readings at a keep reading (the
+        self.fight_g = self.fight_w = 0.0                    # simulator's fight_feat(): act(fx=)), its four scores in his list at the save's FGT_G,
+        self.fg_S = self.fg_W = self.fg_valid = self.fg_cand = self.fg_on = self.fg_gf = self.fg_q = None   # its weapon scores x FGT_W
+        self.fg_last = None
+        fck_ = ck.get("fight22")
+        if fck_ is not None and self.h2 is not None:
+            import fightnet as fightnet_g
+            self.fgt = fightnet_g.NpFight(fck_, self.h2W, self.h2)
+            dl_ = fck_.get("dials") or {}
+            self.fight_g, self.fight_w = float(dl_.get("FGT_G", 0.0)), float(dl_.get("FGT_W", 0.0))
+            self.frng = np.random.default_rng(int(seed) + 2222)     # (its coins and numbers: a stream of their own)
+            self.fg_shut = fightnet_g.shut_mask(int(self.h2["n_target"]))
         self.hrng = np.random.default_rng(int(seed) + 2121)  # ... its numbers and coins: a stream of their own
         self.hd_g = self.hd_on = self.held_pick = None       # ... each seat's held numbers, its trip's coin; this frame's targets under it
         self.hd_t = 0
@@ -309,6 +321,24 @@ class Policy:
             import btoken as btoken_
             self.brain_at = self.W
             self.W = self.brain_at + btoken_.packed_width(self.brainP["H"])
+
+    @property
+    def fight_due(self):
+        """(2.2b) a seat's keep reading is on this frame: act() needs fx= (the simulator's fight_feat() after the frame before, with "fk": its
+        fgt_k) and kf; after act() the caller gives the simulator the four scores (fight_scores())"""
+        return self.fgt is not None and self.k_r is not None and bool(np.any(self.k_r))
+
+    def fight_scores(self):
+        """(2.2b) the four scores of every seat (held from its last reading; clipped as the simulator's inputs read them), or None"""
+        return None if self.fg_S is None else np.clip(self.fg_S, -5.0, 5.0).astype(np.float32)
+
+    def set_fight(self, g=None, w=None):
+        """(2.2b, checks) play the fight network's list at this share (FGT_G) and its weapon scores at this factor (FGT_W)"""
+        assert self.fgt is not None, "this network has no fight network"
+        if g is not None:
+            self.fight_g = float(g)
+        if w is not None:
+            self.fight_w = float(w)
 
     @property
     def needs_xl(self):
@@ -678,7 +708,7 @@ class Policy:
             x[:, -2:] = obs[:, -2:]                          # stay as they are (the trainer's HAS_CELLS)
         return x
 
-    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None):
+    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None, fx=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
         --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, KEEP_FEAT]: (1.4c,
         with keep_on) the simulator's keep_feat() rows after the frame before: one more column comes back, the keep choice.
@@ -780,6 +810,27 @@ class Policy:
                 if len(self.dims) > 12:
                     w0_ = int(np.sum(self.dims[:12]))
                     logits[:, w0_:w0_ + head2_.CMB_W] += np.float32(pa_) * ohs[:, o0_ + head2_.CMB_T:]
+        if self.fgt is not None:                             # (2.2b) THE FIGHT NETWORK at a keep reading, as the trainer's rollout: the options
+            B_ = len(logits)                                 # the simulator made after the frame before, the brain's state of its tick, his inputs, his
+            if self.fg_S is None or len(self.fg_S) != B_:    # target scores before the pull, the head's state his outputs read, his memory after this frame
+                self.fg_S, self.fg_W = np.zeros((B_, 4), np.float32), np.zeros((B_, 10), np.float32)
+                self.fg_valid, self.fg_cand = np.zeros((B_, 4), bool), np.zeros(B_, np.int64)
+                self.fg_on, self.fg_gf = np.zeros(B_, bool), np.zeros((B_, 4), np.float32)
+            if self.k_r is not None and len(self.k_r) == B_ and self.k_r.any() and h2s is not None:
+                assert fx is not None and kf is not None and bst is not None, \
+                    "(2.2b) the fight network reads at a keep reading: give act() fx=fight22.reader_fx(env) (fight_due) and kf"
+                r_ = np.nonzero(self.k_r)[0]
+                si_f = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
+                kfa_ = np.asarray(kf, np.float32)
+                F_ = {k_: np.asarray(v_)[r_] for k_, v_ in fx.items() if k_ != "fk"}
+                o_f = self.fgt.reading(F_, np.asarray(bst[0].s, np.float32)[r_], xa[r_], logits[r_, si_f], h2s[r_, :int(self.h2["size"])],
+                                       hfast[r_, :self.H], kfa_[r_, 2], np.asarray(fx["fk"])[r_], kfa_[r_, 0])
+                self.fg_S[r_], self.fg_W[r_], self.fg_valid[r_], self.fg_cand[r_] = o_f["S"], o_f["W"], o_f["valid"], o_f["cand"]
+                self.fg_last = (r_, o_f)
+            if self.fight_w > 0:                             # (its weapon scores x FGT_W on the weapon key's, rounded to half precision as played)
+                logits = logits.copy()
+                w0_ = int(np.sum(self.dims[:6]))
+                logits[:, w0_:w0_ + 10] += (np.float32(self.fight_w) * self.fg_W).astype(np.float16).astype(np.float32)
         if hh is not None:                                   # (v0.4) the head ticks on its frames; its target and way join the hands'
             _, t_add, w_add, hh = self.hm.np_tick(self.headP, self.head, x, hfast, hh, events)
             logits[:, self.head_si] += t_add
@@ -845,9 +896,31 @@ class Policy:
                 self.hd_g = np.where(fr_[:, None], gn_, self.hd_g)
                 self.hd_on = np.where(fr_, cn_, self.hd_on)
             self.held_pick = (self.hd_on.copy(), (lsm_ + self.hd_g).argmax(1))
+            self.fg_q = None
+            if self.fgt is not None and self.fight_g > 0:    # (2.2b) THE ONE LIST: at a new trip its coin (FGT_G) and the four's own numbers; under
+                if fr_.any():                                # it the items with "the enemy" and the places shut beside the four scores of the valid options
+                    gf_ = self.frng.gumbel(size=(B_, 4)).astype(np.float32)
+                    self.fg_gf = np.where(fr_[:, None], gf_, self.fg_gf)
+                    self.fg_on = np.where(fr_, self.frng.random(B_) < self.fight_g, self.fg_on)
+                jl_ = self.hd_on & self.fg_on
+                if jl_.any():
+                    import fightnet as fightnet_g
+                    raw_ = logits[:, si_]
+                    jz_ = np.concatenate([np.where(self.fg_shut[None, :], np.float32(fightnet_g.NEG), raw_),
+                                          fightnet_g.masked_scores(self.fg_S, self.fg_valid)], 1)
+                    jz_ = jz_ - jz_.max(1, keepdims=True)
+                    jz_ = jz_ - np.log(np.exp(jz_).sum(1, keepdims=True))
+                    jp_ = (jz_ + np.concatenate([self.hd_g, self.fg_gf], 1)).argmax(1)
+                    nt_ = raw_.shape[1]
+                    tg_ = np.where(jp_ >= nt_, fightnet_g.EN_INTENT, jp_)
+                    self.held_pick = (self.hd_on.copy(), np.where(jl_, tg_, self.held_pick[1]))
+                    fq_ = jl_ & (jp_ >= nt_)
+                    self.fg_q = np.where(fq_, fightnet_g.FG_ASK + fightnet_g.FG_KIND * np.maximum(jp_ - nt_, 0) + fightnet_g.FG_CAND * self.fg_cand, 0)
             if self.k_r is None or len(self.k_r) != B_:
                 self.k_r = np.zeros(B_, bool)
             kcol = 3 * self.hd_on.astype(np.int64) + 4 * self.k_r.astype(np.int64)
+            if self.fg_q is not None:
+                kcol = kcol + self.fg_q.astype(np.int64)
         elif (self.keep_g > 0 or self.cmb_g > 0) and kf is not None and h2s is not None:   # (1.4c) the keep choice: the head's state this frame's outputs read
             import head2 as head2_                           # (before its tick), the hands' memory after the frame, its own numbers
             si_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))

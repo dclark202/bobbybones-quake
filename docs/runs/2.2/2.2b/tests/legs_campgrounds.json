@@ -1,0 +1,151 @@
+{
+ "maps": {
+  "campgrounds": {
+   "him": {
+    "trips": 89,
+    "arrived": 0,
+    "met": 51,
+    "timeout": 33,
+    "died": 0,
+    "passed": 0,
+    "sec": 232.52500000003573,
+    "dealt": 0.0,
+    "taken": 200.09864807128906,
+    "applied_frames": 9237
+   },
+   "cut": {
+    "trips": 76,
+    "arrived": 42,
+    "met": 23,
+    "timeout": 10,
+    "died": 1,
+    "passed": 1,
+    "sec": 118.30000000000977,
+    "dealt": 0.0,
+    "taken": 199.70986938476562,
+    "applied_frames": 3314
+   },
+   "angle": {
+    "trips": 107,
+    "arrived": 83,
+    "met": 14,
+    "timeout": 9,
+    "died": 0,
+    "passed": 4,
+    "sec": 102.1500000000061,
+    "dealt": 0.0,
+    "taken": 107.16812896728516,
+    "applied_frames": 2523
+   },
+   "away": {
+    "trips": 383,
+    "arrived": 252,
+    "met": 90,
+    "timeout": 7,
+    "died": 26,
+    "passed": 0,
+    "sec": 566.6749999997585,
+    "dealt": 4250.149654388428,
+    "taken": 4934.647786140442,
+    "applied_frames": 22654
+   },
+   "own": {
+    "sec": 2180.3500000000136,
+    "dealt": 9369.217555999756,
+    "taken": 12237.727725982666
+   },
+   "valid": {
+    "readings": 15471,
+    "him": 8934,
+    "cut": 8568,
+    "angle": 8568,
+    "away": 15471
+   }
+  }
+ },
+ "total": {
+  "him": {
+   "trips": 89,
+   "arrived": 0,
+   "met": 51,
+   "timeout": 33,
+   "died": 0,
+   "passed": 0,
+   "sec": 232.52500000003573,
+   "dealt": 0.0,
+   "taken": 200.09864807128906,
+   "applied_frames": 9237,
+   "reached_or_met": 0.573,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 0.86
+  },
+  "cut": {
+   "trips": 76,
+   "arrived": 42,
+   "met": 23,
+   "timeout": 10,
+   "died": 1,
+   "passed": 1,
+   "sec": 118.30000000000977,
+   "dealt": 0.0,
+   "taken": 199.70986938476562,
+   "applied_frames": 3314,
+   "reached_or_met": 0.855,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 1.69
+  },
+  "angle": {
+   "trips": 107,
+   "arrived": 83,
+   "met": 14,
+   "timeout": 9,
+   "died": 0,
+   "passed": 4,
+   "sec": 102.1500000000061,
+   "dealt": 0.0,
+   "taken": 107.16812896728516,
+   "applied_frames": 2523,
+   "reached_or_met": 0.907,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 1.05
+  },
+  "away": {
+   "trips": 383,
+   "arrived": 252,
+   "met": 90,
+   "timeout": 7,
+   "died": 26,
+   "passed": 0,
+   "sec": 566.6749999997585,
+   "dealt": 4250.149654388428,
+   "taken": 4934.647786140442,
+   "applied_frames": 22654,
+   "reached_or_met": 0.893,
+   "dealt_per_s": 7.5,
+   "taken_per_s": 8.71
+  },
+  "own": {
+   "sec": 2180.3500000000136,
+   "dealt": 9369.217555999756,
+   "taken": 12237.727725982666,
+   "dealt_per_s": 4.3,
+   "taken_per_s": 5.61
+  },
+  "valid": {
+   "readings": 15471,
+   "him": 8934,
+   "cut": 8568,
+   "angle": 8568,
+   "away": 15471
+  }
+ },
+ "args": {
+  "policy": "data/sim_runs/duel_gru_2_2a/keep/policy_90.pt",
+  "out": "C:/Users/dacla/AppData/Local/Temp/claude/6307b5bbac0eb38b/20913c0b-bcc1-41cf-b2ff-37a8c1cf9369/scratchpad/legs_campgrounds.json",
+  "maps": "campgrounds",
+  "frames": 4000,
+  "matches": 16,
+  "p": 0.06,
+  "seed": 21
+ }
+}

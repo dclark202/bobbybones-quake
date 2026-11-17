@@ -215,8 +215,11 @@ def main():
     p.add_argument("--seats", type=int, default=8)
     ap.add_argument("--old", default="18", help="(2.1a, the blend) the list a network comes from: 18, or 20d")
     ap.add_argument("--new", default="21", help="... and the list it goes to: 21, or 21d")
+    ap.add_argument("--group", default="b21 instruction", help="(2.2b) the group of the new columns: 'b21 instruction' (the default), or 'b22b fight'")
+    ap.add_argument("--token", default="instr", help="(2.2b) the attention token's name of the new group: 'instr' (the default), or 'fight22'")
     a = ap.parse_args()
-    global OLD, NEW
+    global OLD, NEW, GROUP, TOKEN
+    GROUP, TOKEN = a.group, a.token
     OLD, NEW = (int(a.old) if a.old.isdigit() else a.old), (int(a.new) if a.new.isdigit() else a.new)
     sys.exit(int({"convert": convert, "stats": stats, "same": same}[a.cmd](a) or 0))
 

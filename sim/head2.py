@@ -586,15 +586,16 @@ def make_module(L, seed=4044):
                 self.register_buffer("out_pick", torch.zeros(()))
             if L.get("trk22"):                               # (2.2a) the tracker, the desc outlooks, the second value (each its own random stream:
                 import tracker as tracker_                   # every older layer's draw as before; their last layers at zero) and which outlook's
-                import desc22 as desc22_                     # term plays (out_src: 0 the built one)
+                self.trk = tracker_.make_module(L["trk22"])  # term plays (out_src: 0 the built one). (2.2b: the tracker alone, its pass odds in
+            if L.get("trk22") and L.get("desc22"):           # it, where the desc outlooks and the second value were taken out: tools/fight22_init.py)
+                import desc22 as desc22_
                 import outlook as outlook_
-                self.trk = tracker_.make_module(L["trk22"])
                 self.dsc = desc22_.make_module(L["desc22"])
                 self.vw = outlook_.value_module(int(L["size"]), int(L["vw"]["hid"]))
                 self.register_buffer("out_src", torch.zeros(()))
 
         def _load_from_state_dict(self, state_dict, prefix, *args, **kw):
-            if L.get("trk22") and prefix + "out_src" not in state_dict:     # (2.2a) no dial in the file: the built outlook
+            if L.get("trk22") and L.get("desc22") and prefix + "out_src" not in state_dict:     # (2.2a) no dial in the file: the built outlook
                 state_dict[prefix + "out_src"] = torch.zeros(())
             if L.get("outlook"):                             # (2.1f) no dials in the file: strength 0, the first kind
                 for k_, v_ in (("out_g", torch.zeros(())), ("out_pick", torch.zeros(()))):

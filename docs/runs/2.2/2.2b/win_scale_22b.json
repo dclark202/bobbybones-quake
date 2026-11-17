@@ -1,0 +1,504 @@
+{
+ "k_items": 1.0,
+ "k_fight": 1.0,
+ "ratio_items_to_win": 0.2064550792972259,
+ "ratio_fight_to_win": 0.43644446110692425,
+ "abs": {
+  "items": 1048.6985622424459,
+  "fight": 2216.9407525332826,
+  "win": 5079.548373487448,
+  "other": 77.6382719499017
+ },
+ "frames": 1209840,
+ "judges": {
+  "item_blind": {
+   "mean": 0.0,
+   "spread": 0.03600463784169175,
+   "frames": 1209840.0
+  },
+  "with_items": {
+   "mean": 0.0,
+   "spread": 0.03400923578542843,
+   "frames": 1209840.0
+  },
+  "spread_ratio": 0.9445793048929731
+ },
+ "frags": {
+  "n": 454,
+  "frag_term_le0": 0,
+  "fragger_total_le0": 2,
+  "win_le0_items_judge": 7,
+  "win_le0_blind_judge": 7,
+  "victim_total_ge0": 1
+ },
+ "margins": {
+  "n": 160,
+  "mean_abs": 2.70625,
+  "over_10": 3,
+  "note": "the score of the games under way when the 4,000 frames (100 s) ended, not finished games"
+ },
+ "ledger": [
+  {
+   "term": "win_part",
+   "group": "win",
+   "learners": "the item picker x k_items, the fight network x k_fight (+ the hands)",
+   "sum": 0.0,
+   "size": 5079.548373487448,
+   "minus": -2539.774186743724,
+   "plus": 2539.774186743724,
+   "size_share": 0.5875372413444774
+  },
+  {
+   "term": "dmg_dealt",
+   "group": "fight",
+   "learners": "the fight network (+ the hands)",
+   "sum": 743.7897042416735,
+   "size": 743.7897042416735,
+   "minus": 0.0,
+   "plus": 743.7897042416735,
+   "size_share": 0.08603208766580661
+  },
+  {
+   "term": "dmg_taken",
+   "group": "fight",
+   "learners": "the fight network (+ the hands)",
+   "sum": -725.5390616138466,
+   "size": 725.5390616138466,
+   "minus": -725.5390616138466,
+   "plus": 0.0,
+   "size_share": 0.08392108656218777
+  },
+  {
+   "term": "death",
+   "group": "fight",
+   "learners": "the fight network (+ the hands)",
+   "sum": -477.0,
+   "size": 477.0,
+   "minus": -477.0,
+   "plus": 0.0,
+   "size_share": 0.05517326413980025
+  },
+  {
+   "term": "frag",
+   "group": "fight",
+   "learners": "the fight network (+ the hands)",
+   "sum": 454.0,
+   "size": 454.0,
+   "minus": 0.0,
+   "plus": 454.0,
+   "size_share": 0.052512918070166274
+  },
+  {
+   "term": "item_RA",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 0.0,
+   "size": 343.49286561459303,
+   "minus": -171.74643280729651,
+   "plus": 171.74643280729651,
+   "size_share": 0.03973086499935189
+  },
+  {
+   "term": "item_YA",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 0.0,
+   "size": 219.3526540743187,
+   "minus": -109.67632703715935,
+   "plus": 109.67632703715935,
+   "size_share": 0.025371911788278023
+  },
+  {
+   "term": "item_MH",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 0.0,
+   "size": 190.392820186913,
+   "minus": -95.1964100934565,
+   "plus": 95.1964100934565,
+   "size_share": 0.022022208298729654
+  },
+  {
+   "term": "big_order",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 0.0,
+   "size": 172.60000114142895,
+   "minus": -86.30000057071447,
+   "plus": 86.30000057071447,
+   "size_share": 0.01996416237632261
+  },
+  {
+   "term": "item_flat_other",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 0.0,
+   "size": 74.2910430271877,
+   "minus": -37.14552151359385,
+   "plus": 37.14552151359385,
+   "size_share": 0.00859303844897336
+  },
+  {
+   "term": "item_decay",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 1.3552527156068805e-20,
+   "size": 46.63079145540189,
+   "minus": -23.315395727700945,
+   "plus": 23.315395727700945,
+   "size_share": 0.005393654033578258
+  },
+  {
+   "term": "preaim",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": -1.1059910347797908e-08,
+   "size": 45.207975882703835,
+   "minus": -22.603987946881873,
+   "plus": 22.603987935821962,
+   "size_share": 0.005229080911115593
+  },
+  {
+   "term": "near_miss",
+   "group": "fight",
+   "learners": "the fight network (+ the hands)",
+   "sum": 0.0,
+   "size": 30.486901213240344,
+   "minus": -15.243450606620172,
+   "plus": 15.243450606620172,
+   "size_share": 0.003526335122520139
+  },
+  {
+   "term": "watch",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 18.494681414411843,
+   "minus": -9.247340707205922,
+   "plus": 9.247340707205922,
+   "size_share": 0.0021392283917375243
+  },
+  {
+   "term": "know",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 6.167705066673079e-07,
+   "size": 11.737195848782648,
+   "minus": -5.86859761600607,
+   "plus": 5.868598232776577,
+   "size_share": 0.0013576088193405702
+  },
+  {
+   "term": "stack_keep",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": -6.79004350459752,
+   "size": 6.79004350459752,
+   "minus": -6.79004350459752,
+   "plus": 0.0,
+   "size_share": 0.0007853854586999874
+  },
+  {
+   "term": "drops",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": -3.725290298461914e-09,
+   "size": 5.899999964982271,
+   "minus": -2.9499999843537807,
+   "plus": 2.9499999806284904,
+   "size_share": 0.0006824365964209205
+  },
+  {
+   "term": "rail",
+   "group": "fight",
+   "learners": "the fight network (+ the hands)",
+   "sum": 0.0,
+   "size": 0.23753464221954346,
+   "minus": -0.11876732110977173,
+   "plus": 0.11876732110977173,
+   "size_share": 2.747497181872499e-05
+  },
+  {
+   "term": "item_seek",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 2.726419550790811e-07,
+   "size": 3.428985138090763e-05,
+   "minus": -1.7008604712914275e-05,
+   "plus": 1.7281246667993356e-05,
+   "size_share": 3.966211797805684e-09
+  },
+  {
+   "term": "high",
+   "group": "fight",
+   "learners": "the fight network (+ the hands)",
+   "sum": -1.079768271697529e-06,
+   "size": 2.5891573470047816e-05,
+   "minus": -1.3485670870872673e-05,
+   "plus": 1.2405902599175143e-05,
+   "size_share": 2.9948063355513476e-09
+  },
+  {
+   "term": "deaths_other",
+   "group": "fight",
+   "learners": "the fight network (+ the hands)",
+   "sum": 6.1462633311748505e-06,
+   "size": 2.4820677936077118e-05,
+   "minus": -9.337207302451134e-06,
+   "plus": 1.5483470633625984e-05,
+   "size_share": 2.8709388257779767e-09
+  },
+  {
+   "term": "items_other",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": -3.5578623041885096e-06,
+   "size": 1.0930131305617562e-05,
+   "minus": -7.243996804903036e-06,
+   "plus": 3.686134500714526e-06,
+   "size_share": 1.264257906934041e-09
+  },
+  {
+   "term": "item_points",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 3.4852191415921455e-06,
+   "size": 7.819498941372648e-06,
+   "minus": -2.167139899890251e-06,
+   "plus": 5.6523590414823965e-06,
+   "size_share": 9.044597076168586e-10
+  },
+  {
+   "term": "jerk",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "weapon_switch",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "hop",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "blind_fire",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "move_round",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "course",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "fire_toggle",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "shot_price",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "blind_rocket",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "style",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "item_loss",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "way",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "way_claw",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "speed",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "speed_run",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "intent_switch",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "runs",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "stack_diff",
+   "group": "items",
+   "learners": "the item picker (+ the hands)",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "win_pay",
+   "group": "win",
+   "learners": "the item picker x k_items, the fight network x k_fight (+ the hands)",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "lg_quiet",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "edge",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  },
+  {
+   "term": "cover",
+   "group": "other",
+   "learners": "the hands only",
+   "sum": 0.0,
+   "size": 0.0,
+   "minus": 0.0,
+   "plus": 0.0,
+   "size_share": 0.0
+  }
+ ],
+ "files": [
+  "data/sim_runs/scratch_22b_start/ws_pay_aerowalk.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_battleforged.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_bloodrun.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_campgrounds.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_cure.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_furiousheights.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_hektik.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_lostworld.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_sinister.json",
+  "data/sim_runs/scratch_22b_start/ws_pay_toxicity.json"
+ ]
+}
