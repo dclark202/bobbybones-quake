@@ -26,7 +26,7 @@ $LOG = Join-Path $HERE "start.log"
 function Log($m) { $l = (Get-Date -Format "MM-dd HH:mm:ss ") + $m; Add-Content -Path $LOG -Value $l; $l }
 if (-not $From) { $From = Join-Path $R0 "keep\policy_end_21d.pt" }
 if (-not $FromOpt) { $FromOpt = Join-Path $R0 "keep\opt_end_21d.pt" }
-if (-not $Samples) { $Samples = Join-Path $SR "scratch_22a_sample3" }
+if (-not $Samples) { $Samples = Join-Path $SR "scratch_22a_sample5" }
 
 if ($Minutes -le 60) { Log "-Minutes (over 60) is needed: not started"; exit 1 }
 if ($Updates -le 0) { Log "-Updates (the run's --max-updates, the owner's length) is needed: not started"; exit 1 }

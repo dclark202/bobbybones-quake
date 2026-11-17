@@ -74,6 +74,40 @@ def rates(samples):
     return out, dict(eh=(float(eh.mean()), float(eh.std())), ea=(float(ea.mean()), float(ea.std())), n=dict({k_: int(v_[1]) for k_, v_ in acc.items()}, stack=int(len(eh))))
 
 
+def pass_rates(samples):
+    """(2.2a) the base rate of the pass odds' labels in the samples, per horizon: at each keep reading, every place target there (an item or a
+    holding place, valid), the enemy within sim/passodds.py's 192 across and 128 up or down of it at the reading's frame or within 1, 2, 4 s,
+    no reset of his and no death of either in the window, the window inside the sample"""
+    import tracker as TR
+    hit_n, n_ = np.zeros(3), np.zeros(3)
+    for z in samples:
+        pos, clr, died = z["pos"], z["clr"], z["died"]
+        F, n = clr.shape
+        foe = np.arange(n) ^ 1
+        rt, ri, P = z["rt"], z["ri"], z["pts"]
+        valid = z["tgt"][..., 0] > 0.5
+        place = valid & np.isin(np.arange(P.shape[1]), np.asarray(TR.PASS_TARGETS))[None, :]
+        for r_ in range(len(rt)):
+            t, i = int(rt[r_]), int(ri[r_])
+            if t < 1:
+                continue
+            for h_, d_ in enumerate(TR.PASS_FR):
+                if t + d_ > F:
+                    continue
+                if clr[t:t + d_, i].any() or died[t:t + d_, i].any() or died[t:t + d_, foe[i]].any():
+                    continue
+                e_ = pos[t - 1:t + d_, foe[i]]                    # (the enemy's place at frames t .. t + d: after the steps t - 1 .. t + d - 1)
+                pk_ = place[r_]
+                if not pk_.any():
+                    continue
+                pp_ = P[r_][pk_]
+                dxy = np.linalg.norm(e_[:, None, :2] - pp_[None, :, :2], axis=-1)
+                dz = np.abs(e_[:, None, 2] - pp_[None, :, 2])
+                hit_n[h_] += ((dxy < TR.PASS_R_XY) & (dz < TR.PASS_R_Z)).any(0).sum()
+                n_[h_] += pk_.sum()
+    return [float(hit_n[h_] / max(1.0, n_[h_])) for h_ in range(3)], [int(x_) for x_ in n_]
+
+
 def ctl_rates(metrics):
     """in control's base rates from 2.1d's own control readout (its last record with frames): the mean of each label, from the counts above,
     below and at a half (two: 0.5 counted half)"""
@@ -130,9 +164,15 @@ def norm_of(samples, rt, st, ctl):
             sm[k_], ss[k_] = mu_, max(sd_, 1e-3)
         if ("trk " + o_) in const:
             const.remove("trk " + o_)
+    for h_, nm_ in enumerate(D.PASS_NAMES):                   # (2.2a: the pass odds by design from their measured base rates)
+        k_ = tn.index(nm_)
+        p_ = st["pass"][h_]
+        tm[k_], ts[k_] = p_, max(math.sqrt(max(p_ * (1.0 - p_), 0.0)), 1e-3)
+        if nm_ in const:
+            const.remove(nm_)
     return dict(sit_mean=[float(x_) for x_ in sm], sit_sd=[float(x_) for x_ in ss], tgt_mean=[float(x_) for x_ in tm], tgt_sd=[float(x_) for x_ in ts],
                 measured=True, rows=int(len(S)), target_rows=int(len(Gv)), constant=const,
-                trk_by_design=dict(ctl=ctl, near={k_: round(v_, 5) for k_, v_ in rt.items()}, stack=st))
+                trk_by_design=dict(ctl=ctl, near={k_: round(v_, 5) for k_, v_ in rt.items()}, stack=st, pass_rates=st["pass"], pass_n=st["pass_n"]))
 
 
 def add(a):
@@ -153,13 +193,16 @@ def add(a):
     names = [" | ".join(x_) for x_ in ck["input_names"]]
     xc, xn, miss = TR.extra_cols(ck["input_names"])
     oc = list(L["obs_cols"]) + [c_ for c_ in xc if c_ not in L["obs_cols"]]
-    TL = TR.layout(oc, [names[c_] for c_ in oc], bel=int(ck["belief"]["hid"]), ctl_d=CONTROL_D, fight_d=FIGHT_D)
+    TL = None                                                 # (made below, once the pass odds' base rates are measured)
     samples = [np.load(p_) for p_ in a.samples.split(",") if p_]
     got_ = sorted(str(z_["map"]) for z_ in samples)
     assert got_ == sorted(MAPS), "the norm is measured on all ten training maps (the review): the samples have {}".format(got_)
     rt, st = rates(samples)
+    st["pass"], st["pass_n"] = pass_rates(samples)
     ctl, cu, cf = ctl_rates(a.metrics)
     nm = norm_of(samples, rt, st, ctl)
+    TL = TR.layout(oc, [names[c_] for c_ in oc], bel=int(ck["belief"]["hid"]), ctl_d=CONTROL_D, fight_d=FIGHT_D, pass_in=len(D.TGT_COLS),
+                   pass_prior=st["pass"])
     nm["ctl_from"] = dict(metrics=os.path.basename(a.metrics), update=cu, frames=cf)
     nm["samples"] = [os.path.basename(p_) for p_ in a.samples.split(",") if p_]
     DL = D.layout(OL.KINDS22, OL.FACTS, head=int(L["size"]), n_target=int(L["n_target"]), hid=128, norm=nm, cmb_feat=CMB_FEAT, cmb_ctx=CMB_CTX)
@@ -175,7 +218,8 @@ def add(a):
     m2.load_state_dict(new, strict=True)
     for k_, v_ in m2.state_dict().items():
         ck["model"]["head2." + k_] = v_.detach().clone()
-    for nm_ in ("out.l3.weight", "out.l3.bias", "out.l3f.weight", "out.l3f.bias", "trk.l3.weight", "trk.l3.bias", "vw.l2.weight", "vw.l2.bias") + \
+    for nm_ in ("out.l3.weight", "out.l3.bias", "out.l3f.weight", "out.l3f.bias", "trk.l3.weight", "trk.l3.bias", "vw.l2.weight", "vw.l2.bias",
+                "trk.p2.weight") + \
             tuple("dsc.{}.l3.{}".format(s_, w_) for s_ in DL["sibs"] for w_ in ("weight", "bias")):
         assert float(ck["model"]["head2." + nm_].abs().sum()) == 0.0, nm_ + " not at zero"
     ck["head2"] = L2

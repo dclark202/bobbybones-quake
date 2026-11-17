@@ -261,6 +261,12 @@ def out22_lines(m_, u_, log):
     log("update {}: tracker rows near {} in control {} | pending the split {} (resolved {}, dropped {}) | loss {} last layer {}".format(
         u_, tk_.get("rows_near"), tk_.get("rows_ctl"), tk_.get("pending"), tk_.get("split_resolved"), tk_.get("split_dropped"), tk_.get("loss"),
         tk_.get("l3")))
+    ps_ = o2_.get("pass") or {}                              # (2.2a, the owner's go: the odds the enemy passes each place)
+    log("update {}: pass odds (Brier skill / AUC at 1, 2, 4 s): ".format(u_) + " | ".join(
+        "{} {}".format(sp_, " ".join("{}/{}".format(q_(ps_, sp_, h_, "skill"), q_(ps_, sp_, h_, "auc")) for h_ in ("1s", "2s", "4s")))
+        for sp_ in ("all", "in_view", "out_view", "in_ctl", "out_ctl")) + " | rate {} | rows {} questions {} loss {} scorer {}{}".format(
+        [q_(ps_, "all", h_, "rate") for h_ in ("1s", "2s", "4s")], ps_.get("rows"), ps_.get("questions"), ps_.get("loss"), ps_.get("p2"),
+        " | SKIPPED: {}".format(ps_.get("skipped")) if ps_.get("skipped") else ""))
     ms_ = m_.get("map_sense") or {}
     log("update {}: map sense: {} samples, R2 dealt {} taken {} exchange {} (the shared part alone {}) corrections {} / {}".format(
         u_, ms_.get("frames"), q_(ms_, "r2", "dealt"), q_(ms_, "r2", "taken"), ms_.get("r2_exchange"), ms_.get("r2_seeds"), ms_.get("corr_abs"),

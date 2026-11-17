@@ -202,6 +202,32 @@ def test_desc():
         and abs(float(T1.mean(-1).abs().max())) < 0.05, float(np.abs(T1.numpy() - T2).max()))
 
 
+def test_pass():
+    """the pass odds' label by hand and against sim/passodds.py's own: the enemy walks along x at 10 units a frame from his place at 0 (he
+    stands at the origin facing +x); a place at x 1000 is within 192 across from frame 81 (x 810): not within 1 s (40 frames) or 2 s (80: x 800,
+    200 away), within 4 s. A second place at x 150 is within 192 at once: all three. A frag in the truth's row 100 of seat 1: its 4 s window from 0 masked; from frame 55 the 1 s window counts, 2 and 4 s masked"""
+    import passodds as PO
+    T, N = 200, 2
+    cols = list(PO.COLS)
+    aux = torch.zeros(T + 1, N, len(cols))
+    aux[:, :, cols.index("en_fwd")] = (torch.arange(T + 1).float() * 10.0)[:, None]
+    aux[:, :, cols.index("trk_on")] = 1.0
+    aux[100, 1, cols.index("frag")] = 1.0
+    done = torch.zeros(T, N)
+    pts = torch.tensor([[[1000.0, 0.0, 0.0], [150.0, 0.0, 0.0]]])                 # [rows, places, 3]
+    C = {c_: k_ for k_, c_ in enumerate(cols)}
+    ew = TR.enemy_world(aux, C)
+    ev = (aux[..., C["frag"]] > 0.5) | (aux[..., C["fragged"]] > 0.5)
+    on = aux[..., C["trk_on"]] > 0.5
+    y, m = TR.pass_labels_rows(ew, done, ev, on, torch.tensor([0, 0]), torch.tensor([0, 1]), pts.expand(2, -1, -1), T)
+    yr, mr = PO.labels(aux, done, cols, 8, pts[None].expand(1, N, -1, -1))
+    ok_ = (y[0, 0].tolist() == [0.0, 0.0, 1.0] and y[0, 1].tolist() == [1.0, 1.0, 1.0] and m[0].tolist() == [1.0, 1.0, 1.0]
+           and m[1].tolist() == [1.0, 1.0, 0.0] and torch.equal(y[0], yr[0, 0]) and torch.equal(m[0], mr[0, 0, 0]) and torch.equal(m[1], mr[0, 1, 0]))
+    y2, m2 = TR.pass_labels_rows(ew, done, ev, on, torch.tensor([55]), torch.tensor([1]), pts[:1], T)
+    chk("the pass odds' label by hand (a place reached at 4 s, one at once) and the same as sim/passodds.py's; a frag inside the window masks it "
+        "({})".format(m2[0].tolist()), ok_ and m2[0].tolist() == [1.0, 0.0, 0.0], (y[0].tolist(), m.tolist(), m2.tolist()))
+
+
 def test_nonfinite():
     o = torch.randn(4, 18)
     o[1, 3] = float("nan")
@@ -352,6 +378,7 @@ def main():
     test_quantiles()
     test_desc()
     test_nonfinite()
+    test_pass()
     test_rule()
     if a.scratch:
         if os.path.exists(a.scratch):

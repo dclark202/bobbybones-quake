@@ -62,21 +62,25 @@ def sit_names():
             + ["trk " + o_ for o_ in tracker_.OUTS] + ["map sense here " + m_ for m_ in MS_NAMES] + ["brain places the enemy"])
 
 
+PASS_NAMES = ("pass 1s", "pass 2s", "pass 4s")               # (2.2a, the owner's go: the tracker's odds the enemy passes the target's place)
+N_ORDER = len(TGT_COLS)                                       # (the pass odds' scorer reads a target's first N_ORDER numbers, standardised)
+
+
 def tgt_names():
-    return list(TGT_COLS) + ["map sense " + m_ for m_ in MS_NAMES]
+    return list(TGT_COLS) + ["map sense " + m_ for m_ in MS_NAMES] + list(PASS_NAMES)
 
 
 def groups():
     """the columns of the situation and of a target that are the map sense's and the tracker's"""
     sn, tn = sit_names(), tgt_names()
     return dict(sit_map=[i_ for i_, n_ in enumerate(sn) if n_.startswith("map sense")], tgt_map=[i_ for i_, n_ in enumerate(tn) if n_.startswith("map sense")],
-                sit_trk=[i_ for i_, n_ in enumerate(sn) if n_.startswith("trk ")])
+                sit_trk=[i_ for i_, n_ in enumerate(sn) if n_.startswith("trk ")], tgt_trk=[i_ for i_, n_ in enumerate(tn) if n_.startswith("pass ")])
 
 
 def layout(kinds, facts, head=256, n_target=N_T, hid=128, clip=5.0, norm=None, cmb_feat=None, cmb_ctx=None):
     sn, tn = sit_names(), tgt_names()
     g_ = groups()
-    masks = dict(desc=dict(sit=[], tgt=[]), desc_nomap=dict(sit=g_["sit_map"], tgt=g_["tgt_map"]), desc_notrk=dict(sit=g_["sit_trk"], tgt=[]))
+    masks = dict(desc=dict(sit=[], tgt=[]), desc_nomap=dict(sit=g_["sit_map"], tgt=g_["tgt_map"]), desc_notrk=dict(sit=g_["sit_trk"], tgt=g_["tgt_trk"]))
     L = dict(version=VERSION, head=int(head), n_target=int(n_target), kinds=list(kinds), facts=list(facts), hid=int(hid), clip=float(clip),
              sit=sn, tgt=tn, sibs=list(SIBS), masks=masks, plays="desc",
              tgt_idx=[list(cmb_feat).index(c_) for c_ in TGT_COLS] if cmb_feat is not None else None,
@@ -154,7 +158,14 @@ def ms_numbers(fwd, msL, tables, seat_map, places, pok, bel, bok, wme, wen, has)
     return out
 
 
-def raw_inputs(L, oxX, oxC, oxP, has, wpn, en_own, trk_read, tok_P, tok_ok, tok_hand, ms_fwd, msL, tables, seat_map):
+def order_norm(L, X19):
+    """the targets' order numbers standardised by the layout's norm (their first N_ORDER), clipped, rounded: what the pass odds' scorer reads"""
+    N_ = L["norm"]
+    g_ = (np.asarray(X19, np.float32) - np.asarray(N_["tgt_mean"][:N_ORDER], np.float32)) / np.asarray(N_["tgt_sd"][:N_ORDER], np.float32)
+    return np.clip(g_, -np.float32(IN_CLIP), np.float32(IN_CLIP)).astype(np.float16).astype(np.float32)
+
+
+def raw_inputs(L, oxX, oxC, oxP, has, wpn, en_own, trk_read, tok_P, tok_ok, tok_hand, ms_fwd, msL, tables, seat_map, pass_fn=None):
     """the raw (unscaled) inputs of every seat at a keep reading -> (sit [n, S], tgt [n, NT, D]). oxX, oxC, oxP: order_feat()'s target rows
     [n, >= NT, CMB_F], situation [n, CMB_CTX], places [n, >= NT, 3]; has [n, 9] his weapons, wpn [n] the weapon in his hand; en_own [n, 6] the
     brain's chances of the enemy's weapons; trk_read [n, 18] the tracker's readable outputs; tok_P [n, 3], tok_ok [n], tok_hand [n] the brain's
@@ -169,7 +180,12 @@ def raw_inputs(L, oxX, oxC, oxP, has, wpn, en_own, trk_read, tok_P, tok_ok, tok_
     ms_h = ms_numbers(ms_fwd, msL, tables, seat_map, Pl[:, :1], np.ones((n, 1), bool), tok_P, tok_ok, wpn, tok_hand, has)[:, 0]
     sit = np.concatenate([C, np.asarray(has, np.float32)[:, :len(WEAPONS)], np.asarray(en_own, np.float32), np.asarray(trk_read, np.float32), ms_h,
                           np.asarray(tok_ok, np.float32)[:, None]], 1)
-    tgt = np.concatenate([X, ms_t], 2)
+    po_ = np.zeros(X.shape[:2] + (len(PASS_NAMES),), np.float32)     # (the pass odds: the tracker's scorer on the places' numbers; none: 0)
+    if pass_fn is not None:                                   # (a place: an item or a holding place there; elsewhere 0)
+        import tracker as tracker_
+        pk_ = valid & np.isin(np.arange(NT), np.asarray(tracker_.PASS_TARGETS))[None, :]
+        po_ = np.asarray(pass_fn(order_norm(L, X)), np.float32) * pk_[..., None]
+    tgt = np.concatenate([X, ms_t, po_], 2)
     return sit.astype(np.float32), tgt.astype(np.float32)
 
 
@@ -298,6 +314,7 @@ class NpDesc:
         import tracker as tracker_
         self.L, self.TL, self.DL = L, L["trk22"], L["desc22"]
         self.trkW = tracker_.np_params(W)
+        self.W2 = W
         self.dscW = np_params(W, "desc")
         assert self.trkW is not None and self.dscW is not None, "the layout names 2.2a's parts and the weights are not there"
         self.src = int(round(float(np.asarray(W.get("out_src", 0.0)))))
@@ -318,11 +335,14 @@ class NpDesc:
         """the normalised inputs of these rows (sit [r, S], tgt [r, NT, D]) and the tracker's readable outputs"""
         import tracker as tracker_
         import mapsense as ms_
-        trr_ = tracker_.np_readable(tracker_.np_forward(self.trkW, tracker_.np_inp(self.TL, brain_s, xa)))
+        h_ = tracker_.np_trunk(self.trkW, tracker_.np_inp(self.TL, brain_s, xa))
+        trr_ = tracker_.np_readable((h_ @ self.trkW[4].T + self.trkW[5]).astype(np.float32))
+        pp_ = tracker_.np_pass_params(self.W2) if self.TL.get("pass") else None
+        pfn_ = (lambda g_: tracker_.np_pass(pp_, h_, g_)) if pp_ is not None else None
         eo_ = 1.0 / (1.0 + np.exp(-np.asarray(trk_brain, np.float32)[:, TRK_OWN]))
         fwd_ = (lambda x_, row_: ms_.np_forward(self.msP, x_, row_)) if self.msP is not None else None
         sr_, tr_ = raw_inputs(self.DL, ox[0], ox[1], ox[2], ox[3], ox[4], eo_, trr_, tokP, tokok, tokhand, fwd_, self.msL,
-                              self.tables(maps) if self.msL is not None else {}, np.asarray(maps))
+                              self.tables(maps) if self.msL is not None else {}, np.asarray(maps), pass_fn=pfn_)
         si_, tg_ = np_inputs(self.DL, sr_, tr_)
         self.last_raw = (sr_, tr_)
         return si_, tg_, trr_

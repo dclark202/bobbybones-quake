@@ -185,6 +185,11 @@ def main():
             "by the truth of in control resolved (in {}, out {})".format(nin_, nout_), (tl_.get("rows_ctl") or 0) > 0 and (tl_.get("split_resolved") or 0) > 0
             and nin_ > 0 and nout_ > 0 and num_(((tl_.get("all") or {}).get("ctl_two") or {}).get("skill")),
             [(t_.get("rows_ctl"), t_.get("split_resolved"), t_.get("pending")) for t_ in tk_])
+    pa_ = [q_.get("pass") or {} for q_ in Q_]                # (2.2a, the owner's go: the pass odds every update)
+    chk("the pass odds every update: rows, questions, Brier skill and AUC at 1, 2, 4 s (all; in view / out of view; in control / out), a loss",
+        all((p_.get("rows") or 0) > 0 and (p_.get("questions") or 0) > 0 and p_.get("loss") is not None and all(
+            num_(((p_.get(sp_) or {}).get(h_) or {}).get("brier")) for sp_ in ("all", "in_view", "out_view", "in_ctl", "out_ctl") for h_ in ("1s", "2s", "4s"))
+            for p_ in pa_), [(p_.get("rows"), p_.get("questions"), p_.get("loss"), (p_.get("all") or {}).get("4s")) for p_ in pa_][-2:])
     vw_ = [q_.get("vw") or {} for q_ in Q_]
     chk("the second value learns every update", all(num_(v_.get("loss_before")) and num_(v_.get("loss_after")) for v_ in vw_), vw_[-1:])
     at_ = [q_.get("attack") or {} for q_ in Q_]

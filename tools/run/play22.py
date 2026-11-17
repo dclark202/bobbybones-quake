@@ -67,7 +67,7 @@ def play_rec(E, pol, env, mp, frames, desc=False, brain=False):
     nA = len(E.ACTION_DIMS)
     obs = env.observe()
     h = pol.zeros(n)
-    rec = dict(obs=[], kf=[], pose=[], zmap=[], xl=[], clr=[], act=[], ox=[], kr=[], aux=[], hp=[])
+    rec = dict(obs=[], kf=[], pose=[], zmap=[], xl=[], clr=[], act=[], ox=[], kr=[], aux=[], hp=[], pos=[])
     rd = dict(t=[], i=[], sb=[], xa=[], P=[], ok=[], hand=[], ox=[])
     pol.set_maps(mp) if hasattr(pol, "set_maps") else None
     for t in range(frames):
@@ -101,6 +101,7 @@ def play_rec(E, pol, env, mp, frames, desc=False, brain=False):
         obs, r_, done, info = env.step(act)
         rec["aux"].append(np.asarray(info["aux"], np.float32).copy() if "aux" in info else None)
         rec["hp"].append(np.stack([np.asarray(env.hp[:n], np.float32), np.asarray(env.armor[:n], np.float32)], 1))
+        rec["pos"].append(np.asarray(env.state[:n, :3], np.float32).copy())   # (2.2a: every seat's place after the step: the pass odds' base rates)
         d = np.asarray(done, bool).copy()
         rec["clr"].append(d)
         if d.any():
@@ -142,6 +143,7 @@ def sample(a):
     np.savez_compressed(a.out, sit=sit, tgt=tgt, died=ax[:, :, C["died"]] > 0.5, con=ax[:, :, C["en_in_view"]] > 0.5,
                         alive=ax[:, :, C["en_alive"]][:, foe] > 0.5, en_alive=ax[:, :, C["en_alive"]] > 0.5, fo_win=ax[:, :, C["fo_win"]],
                         fo_lose=ax[:, :, C["fo_lose"]], hp=hp, clr=np.stack(rec["clr"]), rt=np.concatenate(rd["t"]), ri=np.concatenate(rd["i"]),
+                        pos=np.stack(rec["pos"]), pts=OX[2][:, :17].astype(np.float32),
                         map=a.map, frames=a.frames)
     # the frames for `same`
     rp = os.path.splitext(a.out)[0] + "_frames.npz"
@@ -212,7 +214,7 @@ def desc(a):
         sd["head2.out_pick"] = torch.tensor(0.0)
         sd["head2.out_src"] = torch.tensor(1.0)
         g_ = torch.Generator().manual_seed(2227)
-        for k_ in ("head2.dsc.desc.l3.weight", "head2.trk.l3.weight"):
+        for k_ in ("head2.dsc.desc.l3.weight", "head2.trk.l3.weight") + (("head2.trk.p2.weight",) if "head2.trk.p2.weight" in sd else ()):
             w_ = sd[k_]
             sd[k_] = torch.randn(w_.shape, generator=g_) * (3.0 / float(w_.shape[1]) ** 0.5)
         sd["head2.dsc.desc.l3.bias"] = torch.randn(sd["head2.dsc.desc.l3.bias"].shape, generator=g_) * 0.3
@@ -288,10 +290,12 @@ def desc(a):
     trk_b = __import__("btoken").np_mlp(pol.brainP["trk"], SB)
     si_n, tg_n, tr_n = pol.dsc22.inputs_rows(SB, XA, PP, OK, HD, trk_b, OX, np.full(len(SB), a.map))
     with torch.no_grad():
-        trr_t = TR.readable(hm.trk(TR.inp(TL, torch.from_numpy(SB), torch.from_numpy(XA))))
+        h_t = hm.trk.trunk(TR.inp(TL, torch.from_numpy(SB), torch.from_numpy(XA)))
+        trr_t = TR.readable(hm.trk.l3(h_t))
+        pfn_t = (lambda g_: torch.sigmoid(hm.trk.pass_logits(h_t, torch.from_numpy(g_))).numpy()) if TL.get("pass") else None
         eo_t = torch.sigmoid(torch.from_numpy(trk_b)[:, D.TRK_OWN].float())
         sr_, tr_ = D.raw_inputs(DL, OX[0], OX[1], OX[2], OX[3], OX[4], eo_t.numpy(), trr_t.numpy(), PP, OK, HD, MS.torch_fwd(msm, "cpu"),
-                                ck["map_sense"]["layout"], tabs, np.full(len(SB), a.map))
+                                ck["map_sense"]["layout"], tabs, np.full(len(SB), a.map), pass_fn=pfn_t)
         si_t, tg_t = D.inputs(DL, torch.from_numpy(sr_), torch.from_numpy(tr_))
         S_ = torch.from_numpy(np.random.default_rng(5).normal(0, 0.5, (len(SB), int(ck["head2"]["size"]))).astype(np.float32))
         tm_t = D.term(hm.dsc, DL, S_, si_t, tg_t, 1.0, 0).numpy()
@@ -301,6 +305,9 @@ def desc(a):
     d_tg = float(np.abs(tg_t.numpy() - tg_n).max())
     d_tm = float(np.abs(tm_t - tm_n).max())
     n_tm = int((tm_t != tm_n).sum())
+    pc_ = [i_ for i_, n2_ in enumerate(DL["tgt"]) if n2_.startswith("pass ")]
+    print("d. the pass odds in the description: torch against numpy at most {:.2e}; their spread over the places {:.3f}".format(
+        float(np.abs(tg_t.numpy()[..., pc_] - tg_n[..., pc_]).max()) if pc_ else -1.0, float(np.std(tg_n[..., pc_])) if pc_ else -1.0), flush=True)
     print("d. TRAINER (torch) = READERS (numpy) on {} recorded keep readings x 17 targets: the situation's inputs differ by at most {:.2e}, the "
           "targets' by {:.2e} (half-precision steps), the term by {:.2e} ({} of {} numbers differ); the tracker's outputs by {:.2e}".format(
               len(SB), d_si, d_tg, d_tm, n_tm, tm_t.size, float(np.abs(trr_t.numpy() - tr_n).max())), flush=True)

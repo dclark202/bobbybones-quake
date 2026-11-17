@@ -4355,7 +4355,8 @@ def main():
         assert MS_ON, "--out22: with --map-sense (the desc outlook's map-sense numbers)"
         assert BEL and BTOK_ON and TRK_ON and set(groups) == {2}, "--out22: duels, the brain and its token, the simulator's truth"
         assert getattr(E_, "DESC_OX", False), "--out22: the simulator with DESC_OX=1 (order_feat()'s targets' numbers)"
-        miss_ = [c_ for c_ in ("died", "en_in_view", "en_alive", "fo_win", "fo_lose", "ctl_lab") if c_ not in E_.AUX_COLS]
+        miss_ = [c_ for c_ in ("died", "en_in_view", "en_alive", "fo_win", "fo_lose", "ctl_lab", "x", "y", "z", "yaw", "en_fwd", "en_left", "en_up",
+                               "frag", "fragged", "trk_on") if c_ not in E_.AUX_COLS]
         assert not miss_, "--out22: the simulator's truth lacks {} (FIGHT_TRUTH=1, CONTROL_TRUTH=1, TRACK_TRUTH=1)".format(miss_)
         TRK_L, DSC_L = H2L["trk22"], H2L["desc22"]
         assert int(TRK_L["ctl_d"]) == int(E_.CONTROL_D) and int(TRK_L["fight_d"]) == int(E_.FIGHT_D) and int(TRK_L["tick"]) == BK, \
@@ -4413,13 +4414,17 @@ def main():
         outputs: the tracker on the brain's state and his inputs of this frame; the brain's chances of the enemy's weapons; the map sense (the
         rollout's copy) at each target's place and his own against where the brain believes the enemy"""
         desc22_.check_blank(dox_[0])                         # (the review: a blank description, the simulator without its map numbers: raise)
-        trr_ = tracker_.readable(net_.head2.trk(tracker_.inp(TRK_L, sb_, x_)))
+        tin_ = tracker_.inp(TRK_L, sb_, x_)
+        h_ = net_.head2.trk.trunk(tin_)
+        trr_ = tracker_.readable(net_.head2.trk.l3(h_))
+        pfn_ = ((lambda g_: torch.sigmoid(net_.head2.trk.pass_logits(h_, torch.from_numpy(g_).to(dev))).float().cpu().numpy())
+                if TRK_L.get("pass") else None)               # (2.2a: the odds the enemy passes each place, the tracker's scorer)
         eo_ = torch.sigmoid(net_.track(sb_)[:, desc22_.TRK_OWN].float())
         sr_, tr_ = desc22_.raw_inputs(DSC_L, dox_[0], dox_[1], dox_[2], dox_[3], dox_[4], eo_.cpu().numpy(), trr_.cpu().numpy(),
                                       np.asarray(tok_.P, np.float32), np.asarray(tok_.valid, bool), np.asarray(tok_.hand).argmax(1),
-                                      mapsense_.torch_fwd(MS_ACT[0], dev), MS_L, MS_TAB, SEAT_MAP)
+                                      mapsense_.torch_fwd(MS_ACT[0], dev), MS_L, MS_TAB, SEAT_MAP, pass_fn=pfn_)
         si_, tg_ = desc22_.inputs(DSC_L, torch.from_numpy(sr_).to(dev), torch.from_numpy(tr_).to(dev))
-        return si_, tg_, trr_
+        return si_, tg_, trr_, tin_
 
     def o22_league_sit(onet_, sb_, x_, sit_, dox_):
         """(2.2a) a league network's own situation: its tracker's outputs in place of the learner's (the rest is the same seats' numbers)"""
@@ -4600,6 +4605,70 @@ def main():
                 for p_ in pol.head2.vw.parameters():
                     p_.grad = None
         st_["secs_outlooks"] = round(time.time() - t0_, 3)
+
+    def o22_pass_learn(R, T_o, I_o, C_o, b_aux_, b_done_, T_):
+        """(2.2a, the owner's go of 11-16) the tracker's odds the enemy passes each place, on the outlook's rows: labels by sim/passodds.py's rule
+        from the rollout's truth (the enemy within 192 across and 128 up or down at the reading's frame or within 1, 2, 4 s), the places items
+        and holding places there; scored before (all; the enemy in view / out of view; in control / out by his own readout at the head's tick),
+        then one pass of the lesson with the tracker's Adam (its trunk and its scorer: nothing into the brain)"""
+        t0_ = time.time()
+        st_ = O22_ST[0]
+        rw_ = R.get("o22_rows")
+        if rw_ is None or "tin" not in rw_ or len(rw_["tin"]) != len(T_o):
+            st_["pass"] = dict(skipped="no rows from the rollout" if rw_ is None or "tin" not in rw_ else "the rows do not line up")
+            return
+        cn_ = ("x", "y", "z", "yaw", "en_fwd", "en_left", "en_up", "frag", "fragged", "trk_on", "en_in_view")
+        C = {c_: k_ for k_, c_ in enumerate(cn_)}                # (only these columns of the truth, at full precision: [T + 1, N, 11])
+        ax_ = b_aux_[:T_ + 1][..., [list(E_.AUX_COLS).index(c_) for c_ in cn_]].float()
+        ew_ = tracker_.enemy_world(ax_, C)
+        ev_ = (ax_[..., C["frag"]] > 0.5) | (ax_[..., C["fragged"]] > 0.5)
+        on_ = ax_[..., C["trk_on"]] > 0.5
+        rt_, ri_ = T_o.cpu().long(), I_o.cpu().long()
+        okr_ = rw_["ok"].bool()
+        G19_ = rw_["tgt"][..., :desc22_.N_ORDER]
+        pk_ = (G19_[..., 0].float() > -0.5) & torch.isin(torch.arange(G19_.shape[1]), torch.tensor(tracker_.PASS_TARGETS))[None, :] & okr_[:, None]
+        Y_, M_ = tracker_.pass_labels_rows(ew_, b_done_[:T_].cpu(), ev_, on_, rt_, ri_, rw_["pts"].float(), T_)
+        Mq_ = pk_[..., None].float() * M_[:, None, :]                         # [R, P, 3]: the questions that count
+        acc_ = tracker_.PassAcc()
+        P_ = []
+        with torch.no_grad():
+            for i_ in range(0, len(rt_), 8192):
+                h_ = pol.head2.trk.trunk(rw_["tin"][i_:i_ + 8192].to(dev))
+                P_.append(torch.sigmoid(pol.head2.trk.pass_logits(h_, G19_[i_:i_ + 8192].to(dev))).float().cpu())
+        P_ = torch.cat(P_) if P_ else torch.zeros(0, G19_.shape[1], 3)
+        inv_ = ax_[rt_, ri_, C["en_in_view"]] > 0.5
+        ctl_ = C_o.cpu().bool()
+        for sp_, sel_ in (("all", torch.ones(len(rt_), dtype=torch.bool)), ("in_view", inv_), ("out_view", ~inv_), ("in_ctl", ctl_), ("out_ctl", ~ctl_)):
+            for h_ in range(3):
+                q_ = (Mq_[sel_][..., h_] > 0.5)
+                if bool(q_.any()):
+                    pp_ = torch.zeros(int(q_.sum()), 3)
+                    yy_ = torch.zeros(int(q_.sum()), 3)
+                    pp_[:, h_] = P_[sel_][..., h_][q_]
+                    yy_[:, h_] = Y_[sel_][..., h_][q_]
+                    acc_.d[sp_][h_]["P"].append(pp_[:, h_].numpy())
+                    acc_.d[sp_][h_]["Y"].append(yy_[:, h_].numpy())
+        l_ = None
+        with PLAN_LOCK, torch.enable_grad():
+            for g_ in TRK_OPT.param_groups:
+                g_["lr"] = float(a.out22_lr)
+            pm_ = torch.randperm(len(rt_), generator=TRK_GEN)
+            for i_ in range(0, len(rt_), 4096):
+                j_ = pm_[i_:i_ + 4096]
+                mq_ = Mq_[j_].to(dev)
+                if float(mq_.sum()) == 0:
+                    continue
+                lg_ = pol.head2.trk.pass_logits(pol.head2.trk.trunk(rw_["tin"][j_].to(dev)), G19_[j_].to(dev))
+                ls_ = (torch.nn.functional.binary_cross_entropy_with_logits(lg_.float(), Y_[j_].to(dev), reduction="none") * mq_).sum() / mq_.sum()
+                TRK_OPT.zero_grad(set_to_none=True)
+                ls_.backward()
+                torch.nn.utils.clip_grad_norm_(pol.head2.trk.parameters(), 1.0)
+                TRK_OPT.step()
+                l_ = float(ls_)
+        for p_ in pol.head2.trk.parameters():
+            p_.grad = None
+        st_["pass"] = dict(acc_.record(), rows=int(len(rt_)), questions=int(Mq_.sum()), loss=round(l_, 5) if l_ is not None else None,
+                           p2=round(float(pol.head2.trk.p2.weight.norm()), 5), secs=round(time.time() - t0_, 3))
 
     def o22_atk_out(o_, pick_, EN_, eb_):
         """(2.2a, the attack readout 2) the played kind's centred outlook of the enemy target, by the stack edge's bin"""
@@ -6008,6 +6077,7 @@ def main():
             b_owi = torch.zeros(T, N, device=dev)                        # the win chance with the items x the gain (segw, winit8)
             b_vwi = torch.zeros(T + 1, N, device=dev)                    # the head's second value a frame (segw's bootstrap; its own lesson's GAE)
             DR_SIT, DR_TGT, DR_EB, DR_OK = [], [], [], []                # (aligned with OR_*: the desc inputs of each row, its stack edge's bin, inputs or not)
+            DR_TIN, DR_PTS = [], []                                      # (2.2a, the pass odds' rows: the tracker's input, the places)
             ATK_ = torch.zeros(5, 6, dtype=torch.float64, device=dev)    # by stack edge bin: his readings, on the enemy target, the tracker's he-dies-first
             #                                                              sum, I-die-first sum, the readings with them, (spare)
             O22_IX = {c_: list(E_.AUX_COLS).index(c_) for c_ in ("died", "en_in_view", "en_alive", "fo_win", "fo_lose", "ctl_lab", "ctl_one", "ctl_mh", "ctl_ra")}
@@ -6130,8 +6200,9 @@ def main():
             with torch.no_grad():
                 if O22_PLAY and t % BK == 0 and DOX_ is not None and (DPLAY_ or not O22_OFF[0]):   # (2.2a) A KEEP READING: the description of every
                     try:                                                 # seat's 17 targets and the situation (the simulators' numbers after the tick's
-                        sit_, tgt_, trr_ = o22_inputs(net, BS_.s, x, TOK_, DOX_)     # frame, the brain's state and token of that tick, his inputs of
-                        DSC_ = dict(DSC_, sit=sit_, tgt=tgt_, trk=trr_)              # this frame), the desc term of the seats whose network plays it,
+                        sit_, tgt_, trr_, tin_ = o22_inputs(net, BS_.s, x, TOK_, DOX_)   # frame, the brain's state and token of that tick, his inputs of
+                        DSC_ = dict(DSC_, sit=sit_, tgt=tgt_, trk=trr_, tin=tin_, pts=DOX_[2][:, :NI_H])   # this frame), the desc term of the seats whose
+                        #                                                  network plays it (2.2a, the pass odds' rows: the tracker's input, the places)
                         if OG_P > 0 and OS_P == 1:                                   # held to the next reading
                             DSC_["term"] = desc22_.term(net.head2.dsc, DSC_L, H2S.s, sit_, tgt_, OG_P, OK_P, nonfinite=NF_D)
                         if OO_ON and OS_O == 1:
@@ -6140,7 +6211,7 @@ def main():
                     except Exception:
                         if DPLAY_:                                       # (desc's term plays: part of play, a failure stops the run as the built
                             raise                                        # outlook's would)
-                        DSC_ = dict(DSC_, sit=None, tgt=None, trk=None)
+                        DSC_ = dict(DSC_, sit=None, tgt=None, trk=None, tin=None, pts=None)
                         o22_fail()
                 if OUT_PLAY and OT_ON and t % BK == 0 and not (O22_PLAY and OS_P == 1) and OG_P > 0:   # (the review: the built term's seats whose
                     NF_B[0] += outlook_.nonfinite_rows(outlook_.outlook(net.head2.out, H2S.s)[:, OK_P])   # outlook is not finite: 0, counted)
@@ -6752,6 +6823,10 @@ def main():
                                     DR_SIT.append(DSC_["sit"][rw_].half().cpu() if ok_d else torch.zeros(len(rw_), len(DSC_L["sit"]), dtype=torch.float16))
                                     DR_TGT.append(DSC_["tgt"][rw_].half().cpu() if ok_d else torch.zeros(len(rw_), NI_H, len(DSC_L["tgt"]), dtype=torch.float16))   # (on the
                                     #                                      host as they are made: the card holds only the reading's own)
+                                    if TRK_L.get("pass"):
+                                        DR_TIN.append(DSC_["tin"][rw_].half().cpu() if ok_d else torch.zeros(len(rw_), int(TRK_L["width"]), dtype=torch.float16))
+                                        DR_PTS.append(torch.from_numpy(np.asarray(DSC_["pts"], np.float16))[rw_.cpu()] if ok_d
+                                                      else torch.zeros(len(rw_), NI_H, 3, dtype=torch.float16))
                                     eb_ = torch.from_numpy(o22_edge_bin(O22_FR, FOE_)).to(dev)
                                     DR_EB.append(eb_[rw_].to(torch.int8))
                                     ATK_[:, 0] += torch.bincount(eb_[rmk_].long(), minlength=5)[:5].double()
@@ -7073,11 +7148,12 @@ def main():
                          rows_failed=bool(DR_FAIL[0]))
             if not O22_OFF[0] and not DR_FAIL[0] and OUT_ROWS is not None and DR_SIT:
                 try:
-                    O22_ROWS = dict(sit=torch.cat(DR_SIT).cpu(), tgt=torch.cat(DR_TGT).cpu(), eb=torch.cat(DR_EB).cpu(), ok=torch.cat(DR_OK).cpu())
+                    O22_ROWS = dict(sit=torch.cat(DR_SIT).cpu(), tgt=torch.cat(DR_TGT).cpu(), eb=torch.cat(DR_EB).cpu(), ok=torch.cat(DR_OK).cpu(),
+                                    **(dict(tin=torch.cat(DR_TIN), pts=torch.cat(DR_PTS)) if DR_TIN else {}))
                 except Exception:
                     O22_ROWS = None
                     o22_fail()
-            DR_SIT = DR_TGT = DR_EB = DR_OK = None
+            DR_SIT = DR_TGT = DR_EB = DR_OK = DR_TIN = DR_PTS = None
         if KEEP:
             C["kf"] = KF_                                                # (1.4c) what the keep choice reads on the next rollout's first frame
         if CMB:
@@ -9115,6 +9191,11 @@ def main():
                             o22_learn(R, T_o, I_o, S_o, G_o, B_o, D_o, TR_o, C_o, Zp_, Zn_, OK_o, FZp_, FZn_, FM_o, out_now, b_done, T)
                         except Exception:
                             o22_fail()
+                    if O22 and not O22_OFF[0] and TRK_L.get("pass") and "the pass odds" not in O22_PARTOFF:   # (2.2a, the owner's go: the tracker's
+                        try:                                             # pass odds, scored, then learnt; its own guard)
+                            o22_pass_learn(R, T_o, I_o, C_o, b_aux, b_done, T)
+                        except Exception:
+                            o22_part("the pass odds")
                     S_o = G_o = B_o = Y_o = Zp_ = Zn_ = out_now = None
                 except Exception:
                     out_fail()

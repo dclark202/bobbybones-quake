@@ -50,6 +50,11 @@ EXTRA = (("enemy", "noticed in view"), ("enemy", "seen or heard recently"), ("en
          ("memory", "enemy seen with plasma gun"), ("memory", "enemy seen with heavy machine gun"), ("memory", "enemy seen with gauntlet"),
          ("memory", "time since his own respawn"), ("memory", "enemy's last death known"), ("memory", "time since the enemy's last death"),
          ("v02 believed", "seconds since he last heard him"))
+PASS_HORIZ = (1.0, 2.0, 4.0)                                  # (2.2a, the owner's go of 11-16: the odds the enemy passes each target's place)
+PASS_FR = tuple(int(round(h_ / 0.025)) for h_ in PASS_HORIZ)
+PASS_R_XY, PASS_R_Z = 192.0, 128.0                            # ("passes": sim/passodds.py's rule, within this across and up or down)
+PASS_TARGETS = tuple(range(1, 8)) + tuple(range(9, 17))       # (the targets that are a place: the items and the holding places)
+PASS_HID = 64
 SEEN_BINS = (1.0, 3.0, 10.0)                                  # (the range's width by seconds since he last saw or heard the enemy)
 O22 = ("hp", "armor", "es_h", "es_a", "seen_t", "reach", "win_b", "win_it")   # (the simulators' per-seat numbers after each step: sim/train_duel_rnn.py)
 
@@ -67,12 +72,17 @@ def extra_cols(input_names, extra=EXTRA):
     return idx, got, miss
 
 
-def layout(obs_cols, obs_names, bel=256, hid=128, every_near=2, every_ctl=5, tick=8, ctl_d=3600, fight_d=200):
-    """obs_cols: the input columns (head2's obs_cols + the counters), obs_names: their names"""
+def layout(obs_cols, obs_names, bel=256, hid=128, every_near=2, every_ctl=5, tick=8, ctl_d=3600, fight_d=200, pass_in=0, pass_prior=None):
+    """obs_cols: the input columns (head2's obs_cols + the counters), obs_names: their names. pass_in: (2.2a) the number of a target's place
+    numbers the pass odds' scorer reads (0: no pass odds); pass_prior: the measured base rate of each horizon (its last layer's bias)"""
     oc = [int(c) for c in obs_cols]
-    return dict(version=VERSION, bel=int(bel), obs_cols=oc, obs_names=list(obs_names), width=int(bel) + len(oc), hid=int(hid),
-                outs=list(OUTS), qs=list(QS), every_near=int(every_near), every_ctl=int(every_ctl), tick=int(tick),
-                h_near=max(WIN_F.values()), ctl_d=int(ctl_d), fight_d=int(fight_d), win_f=dict(WIN_F))
+    L = dict(version=VERSION, bel=int(bel), obs_cols=oc, obs_names=list(obs_names), width=int(bel) + len(oc), hid=int(hid),
+             outs=list(OUTS), qs=list(QS), every_near=int(every_near), every_ctl=int(every_ctl), tick=int(tick),
+             h_near=max(WIN_F.values()), ctl_d=int(ctl_d), fight_d=int(fight_d), win_f=dict(WIN_F))
+    if pass_in:
+        L["pass"] = dict(n_in=int(pass_in), hid=PASS_HID, horiz=list(PASS_HORIZ), fr=list(PASS_FR), r_xy=PASS_R_XY, r_z=PASS_R_Z,
+                         targets=list(PASS_TARGETS), prior=[float(p_) for p_ in (pass_prior or (0.1, 0.1, 0.1))])
+    return L
 
 
 def make_module(L):
@@ -93,11 +103,26 @@ def make_module(L):
             with torch.no_grad():
                 self.l3.weight.zero_()
                 self.l3.bias.zero_()
+            if L.get("pass"):                                # (2.2a) THE PASS ODDS: one scorer for every place (the trunk's state + the place's numbers ->
+                P_ = L["pass"]                               # 3 logits), from a random stream of its own, its last layer at zero with the measured
+                with torch.random.fork_rng(devices=[]):      # base rates as its bias
+                    torch.manual_seed(SEED + 5)
+                    self.p1 = nn.Linear(int(L["hid"]) + int(P_["n_in"]), int(P_["hid"]))
+                    self.p2 = nn.Linear(int(P_["hid"]), len(P_["horiz"]))
+                with torch.no_grad():
+                    self.p2.weight.zero_()
+                    self.p2.bias.copy_(torch.tensor([math.log(p_ / (1.0 - p_)) for p_ in P_["prior"]]))
+
+        def trunk(self, x):
+            return torch.relu(self.l2(torch.relu(self.l1(x.float()))))
 
         def forward(self, x):
-            h = torch.relu(self.l1(x.float()))
-            h = torch.relu(self.l2(h))
-            return self.l3(h)
+            return self.l3(self.trunk(x))
+
+        def pass_logits(self, h, g):
+            """h [B, hid] the trunk's state, g [B, R, n_in] the places' numbers -> [B, R, 3] logits"""
+            hh = h[:, None, :].expand(-1, g.shape[1], -1)
+            return self.p2(torch.relu(self.p1(torch.cat([hh, g.float()], -1))))
     return Tracker()
 
 
@@ -126,10 +151,105 @@ def np_params(W, prefix="trk."):
     return tuple(np.asarray(W[prefix + k_], np.float32) for k_ in ks)
 
 
-def np_forward(PW, x):
+def np_trunk(PW, x):
     h = np.maximum(np.asarray(x, np.float32) @ PW[0].T + PW[1], 0.0)
-    h = np.maximum(h @ PW[2].T + PW[3], 0.0)
-    return (h @ PW[4].T + PW[5]).astype(np.float32)
+    return np.maximum(h @ PW[2].T + PW[3], 0.0)
+
+
+def np_forward(PW, x):
+    return (np_trunk(PW, x) @ PW[4].T + PW[5]).astype(np.float32)
+
+
+def np_pass_params(W, prefix="trk."):
+    ks = ("p1.weight", "p1.bias", "p2.weight", "p2.bias")
+    if not all(prefix + k_ in W for k_ in ks):
+        return None
+    return tuple(np.asarray(W[prefix + k_], np.float32) for k_ in ks)
+
+
+def np_pass(PP, h, g):
+    """pass_logits' chances in numpy: h [B, hid], g [B, R, n_in] -> [B, R, 3]"""
+    g = np.asarray(g, np.float32)
+    hh = np.repeat(np.asarray(h, np.float32)[:, None, :], g.shape[1], 1)
+    z = np.maximum(np.concatenate([hh, g], -1) @ PP[0].T + PP[1], 0.0) @ PP[2].T + PP[3]
+    return (1.0 / (1.0 + np.exp(-z))).astype(np.float32)
+
+
+def pass_labels_rows(ew, dn, ev, on, rows_t, rows_i, pts, T, chunk=4096):
+    """(2.2a) sim/passodds.py's labels for rows: the enemy's place on the map every frame ew [T + 1, N, 3], dn [T, N] his round's resets, ev
+    [T + 1, N] a frag or fragged, on [T + 1, N] his truth there; rows (rows_t, rows_i) with the places pts [R, P, 3] -> (y [R, P, 3]: the enemy
+    within PASS_R_XY across and PASS_R_Z up or down of the place at the reading's frame or within 1, 2, 4 s; m [R, 3]: the questions that count:
+    his truth at the reading and over the window, no reset, frag or fragged in it, the window inside the rollout)"""
+    import torch
+    dev = ew.device
+    cd = torch.cat([torch.zeros_like(dn[:1].float()), torch.cumsum((dn > 0.5).float(), 0)], 0)
+    ce = torch.cat([torch.zeros_like(ev[:1].float()), torch.cumsum((ev > 0.5).float(), 0)], 0)
+    oncum = torch.cat([torch.zeros_like(on[:1].float()), torch.cumsum((~on).float(), 0)], 0)
+    R, Pn = pts.shape[0], pts.shape[1]
+    y = torch.zeros(R, Pn, len(PASS_FR), device=dev)
+    m = torch.zeros(R, len(PASS_FR), device=dev)
+    W = max(PASS_FR)
+    off = torch.arange(W + 1, device=dev)
+    for c0 in range(0, R, chunk):
+        t_, i_, p_ = rows_t[c0:c0 + chunk].long(), rows_i[c0:c0 + chunk].long(), pts[c0:c0 + chunk].float()
+        ff = (t_[:, None] + off[None]).clamp(max=T)                          # [r, W + 1] frames t .. t + W
+        e_ = ew[ff, i_[:, None]]                                             # [r, W + 1, 3]
+        hit = ((torch.linalg.norm(e_[:, :, None, :2] - p_[:, None, :, :2], dim=-1) < PASS_R_XY)
+               & ((e_[:, :, None, 2] - p_[:, None, :, 2]).abs() < PASS_R_Z))  # [r, W + 1, P]
+        for h_, d_ in enumerate(PASS_FR):
+            y[c0:c0 + chunk, :, h_] = hit[:, :d_ + 1].any(1).float()
+            t2 = (t_ + d_).clamp(max=T)
+            clean = ((cd[t2, i_] - cd[t_, i_]) < 0.5) & ((ce[(t2 + 1).clamp(max=T + 1), i_] - ce[t_ + 1, i_]) < 0.5) & \
+                ((oncum[(t2 + 1).clamp(max=T + 1), i_] - oncum[t_, i_]) < 0.5)
+            m[c0:c0 + chunk, h_] = (clean & on[t_, i_] & (t_ + d_ <= T)).float()
+    return y, m
+
+
+def enemy_world(aux, C):
+    """the enemy's place on the map every frame [T + 1, N, 3] from the simulator's truth (his place, facing, the enemy relative): passodds'"""
+    import torch
+    aux = aux.float()
+    yaw = torch.deg2rad(aux[..., C["yaw"]])
+    me = aux[..., [C["x"], C["y"], C["z"]]]
+    rel = aux[..., [C["en_fwd"], C["en_left"], C["en_up"]]]
+    c, s = torch.cos(yaw), torch.sin(yaw)
+    return torch.stack([me[..., 0] + c * rel[..., 0] - s * rel[..., 1], me[..., 1] + s * rel[..., 0] + c * rel[..., 1], me[..., 2] + rel[..., 2]], -1)
+
+
+class PassAcc:
+    """(2.2a) the pass odds' scores before the lesson: per horizon and split (all; the enemy in view / out of view; in control / out by his
+    own readout), the Brier against the best constant and the AUC"""
+
+    SPLITS = ("all", "in_view", "out_view", "in_ctl", "out_ctl")
+
+    def __init__(self):
+        self.d = {s_: [dict(P=[], Y=[]) for _ in PASS_HORIZ] for s_ in self.SPLITS}
+
+    def add(self, split, P, Y, cap=400000):
+        P, Y = np.asarray(P, np.float32), np.asarray(Y, np.float32)
+        for h_ in range(len(PASS_HORIZ)):
+            if sum(len(x_) for x_ in self.d[split][h_]["P"]) < cap:
+                self.d[split][h_]["P"].append(P[:, h_])
+                self.d[split][h_]["Y"].append(Y[:, h_])
+
+    def record(self):
+        from control import auc as auc_
+        out = {}
+        for s_ in self.SPLITS:
+            r_ = {}
+            for h_, hz_ in enumerate(PASS_HORIZ):
+                P_ = np.concatenate(self.d[s_][h_]["P"]) if self.d[s_][h_]["P"] else np.zeros(0)
+                Y_ = np.concatenate(self.d[s_][h_]["Y"]) if self.d[s_][h_]["Y"] else np.zeros(0)
+                if len(Y_) < 2:
+                    r_["{:g}s".format(hz_)] = dict(n=int(len(Y_)))
+                    continue
+                br_ = float(((P_ - Y_) ** 2).mean())
+                bc_ = float(Y_.var())
+                au_ = auc_(P_, Y_)
+                r_["{:g}s".format(hz_)] = dict(n=int(len(Y_)), rate=round(float(Y_.mean()), 4), brier=round(br_, 5), brier_const=round(bc_, 5),
+                                               skill=round(1.0 - br_ / bc_, 4) if bc_ > 0 else None, auc=None if math.isnan(au_) else round(float(au_), 4))
+            out[s_] = r_
+        return out
 
 
 def np_readable(o):
