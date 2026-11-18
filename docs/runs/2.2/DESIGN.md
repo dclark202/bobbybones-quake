@@ -5,6 +5,11 @@
 > **item picker** (items only) under a **fight network** (fight or not, and how), with the hands practising the plays first. The current
 > design is [2.2b's card](2.2b/CARD.md); 2.2c is the section "2.2c: firing at a spot he cannot see" below. The three-jobs table, the
 > steps table and the odds on this page are kept as the record of 11-16.
+>
+> **Superseded again on 2026-11-18.** 2.2b failed (RUNS.md #60, [postmortem](2.2b/POSTMORTEM.md)): the four fight options and the
+> practice trips are out for good (owner: nothing forces him to play a certain way). The section "2.2c: firing at a spot he cannot see"
+> below was never built; the 2.2c that runs is [2.2c's card](2.2c/CARD.md): a contest pay for pressure on the enemy's items from afar,
+> a rail chain, and the fight network as one aggression number on "the enemy". Its row 8 ("dealt as practice first") is withdrawn.
 
 Blends [2.1f's card](../2.1/2.1f/CARD.md) (the outlook) and [the 2.2 proposal](README.md) (new plays on trial trips) into one suite
 (owner, 11-16: 2.1 is done, the lock is out; 2.1f moves here; start from 2.1d's end). The critical review behind the 2.2 proposal is

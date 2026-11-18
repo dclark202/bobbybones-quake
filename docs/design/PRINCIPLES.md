@@ -9,6 +9,7 @@ has worked in a run, and its mark is changed when a later run confirms or breaks
 |---|---|
 | ✅ proven | It worked in a run and held in the checks or a play test |
 | 🟡 believed | It follows from a failure or from the owner's reading of one; not yet shown by a run of its own |
+| ❌ broken | A run built on it failed; kept as the record, not to be followed |
 
 ## 1. Describe how a player does it, then build exactly that ✅
 
@@ -44,9 +45,18 @@ needs and its own pay.
 **The principle:** do not force a second job into a part that has settled into one. Read what the part actually does from its
 behaviour, keep it at that, and build the new job beside it. A chooser works on a small set of options of one kind.
 
-**Not yet proven:** 2.2b is the first test. That the old decider was "saturated" is a reading, not a measurement.
+**Not yet proven.** 2.2b (RUNS.md #60) tested it with four fight options and failed, but by how the options were taught (principle 3),
+not by the split itself. 2.2c keeps the split in a smaller form: the item picker keeps its whole list, "the enemy" in it, and the
+fight network adds one number to that option's score. That the old decider was "saturated" is a reading, not a measurement.
 
-## 3. The hands practise a play before whatever chooses it is judged on it 🟡
+## 3. The hands practise a play before whatever chooses it is judged on it ❌ (as dealt practice)
+
+**Broken by 2.2b (RUNS.md #60).** Practice trips dealt at random moments, with a dealt weapon, were worth less than his own choice at
+every update for all four options (the trips' damage trade 0.84 against 1.00 on his own choices, all run), and the chooser learnt
+that the plays were bad. The owner (11-18): "Anything which forces him to use a specific method will not work ... dictating that he
+play a certain way makes him worse. Full stop." **What replaces it:** nothing is dealt to him. A new behaviour is brought out by a pay
+on what leads up to it, on events that already happen in his games (the pre-aim pay is the model: zero-sum, at every fresh sighting,
+graded), and by the inputs it needs; his own network chooses. The text below is the record of 11-17.
 
 **Case: 1.7a.** His choice of the fighting orders fell from 2% to 0.02% because, when they were first chosen, his hands did not know
 what to do with them; they did not pay, and the chooser learnt that they were worthless. 1.9a and 2.2a repeated the shape: each
@@ -67,9 +77,14 @@ the old hand-written rule). The opposite was 2.0b: 59 raw, fast-moving inputs fe
 
 **The principle:** new knowledge is first a prediction with its own lesson and a measured accuracy; a decider reads the prediction,
 never the raw numbers. **Proven:** that such predictions learn well. **Not yet proven:** that a decider uses them well (2.2b's fight
-network is the first to read them).
+network was the first to read them, and its failure had other causes; 2.2c's lever reads them again).
 
-## 5. A new part plays a little from the start; it is not kept fully silent 🟡
+## 5. A new part plays a little from the start; it is not kept fully silent ❌ (as built in 2.2b)
+
+**Broken by 2.2b.** Half the practice was picked by the fight network itself, and it fed on its own ranking: at update 60 it picked
+back off 3,281 times and go at him 18. A share picked by the part did not correct the part; it starved what the part ranked low.
+2.2c does the opposite: the lever is at zero through update 10 while the new pays work on the hands, then it is added in full, with
+the decay on it from the start. The text below is the record of 11-17.
 
 **Case: the fight network's start (2.2b's design).** Kept fully silent, a chooser's scores have nothing to correct them: a score can
 climb every update because the choice is never played. The first fix was a tie to hand-set starting shares; the owner did not trust
@@ -86,6 +101,10 @@ corrects itself over a number set by hand.
 what was opening. Where several things opened together (1.7a's order, pointer and fire push; 2.2b's updates 60 to 100) the cause of
 a fall could not be told, and that is said on the card.
 
+**Changed by the owner, 2026-11-18:** the no-op proof and the live dial stay; "one thing at a time, opened slowly" does not. Changes
+that only work together open together, at a size meant to change his behaviour ("these small subtle changes absolutely will not
+work"; 2.2b's near-miss pay alone moved nothing). 2.2c opens three pays and the lever as one unit, each at full size from its start.
+
 ## 7. One list, no modes ✅ for the items, 🟡 for the fight
 
 **Case: the item choice since 2.1d; the fight options in 2.2b.** Every option gets a score and he heads for the highest, re-scored
@@ -93,11 +112,15 @@ every tick. A new decider adds its options to that list; it does not switch him 
 "what I do not want to happen is to have any type of blinders ... where they would force him into an action"; "'fight while going to
 this item' is a total possibility".
 
+**After 2.2b:** the principle stands; the four fight options as rows of the list failed (principle 3) and are out. In 2.2c the fight
+side is one number on the list's own "the enemy" row.
+
 ## 8. Each decider is paid for its own job, and winning is the currency they share 🟡
 
 **Case: 2.2b's pay split.** The item picker is paid for items and the chance of winning; the fight network for damage, frags and the
 chance of winning; the chance of winning is at least as large as each one's own pay, and it comes from a judge that reads the whole
-state (stacks and items). **Not yet proven.**
+state (stacks and items). **Not yet proven:** in 2.2b's first 60 updates it cost nothing and showed no gain (checks level with the
+start). Kept in 2.2c on the owner's word.
 
 ## 9. How we build ✅
 

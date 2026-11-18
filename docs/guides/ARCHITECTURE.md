@@ -4,7 +4,9 @@ What the parts are and where their code is. **This changes as we build**: the co
 truth; when this page and the code disagree, fix this page. For where the design is going: [PLAN.md](../PLAN.md).
 
 Known to be out of date on 2026-11-17: "the strategy head (target, keep choice, weapon scores)" (the keep choice went in 2.1c; from
-2.2b the decision layer is an item picker and a fight network: [2.2b's card](../runs/2.2/2.2b/CARD.md)).
+2.2b the decision layer is an item picker and a fight network: [2.2b's card](../runs/2.2/2.2b/CARD.md); from 2.2c (2026-11-18) the
+fight network is an aggression lever, one number added to the item picker's score of "the enemy", and the four fight options are out:
+[2.2c's card](../runs/2.2/2.2c/CARD.md), [its build record](../runs/2.2/2.2c/BUILD.md)).
 
 ## Architecture
 
