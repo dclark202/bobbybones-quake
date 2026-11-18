@@ -5,8 +5,10 @@ updates done = the LINES of metrics.jsonl (never the trainer's own "update": a -
   FGT_GATE     -30 (shut) at the start, -12 from the first update -> 0 at update 20: the hands' new token "fight22" (change 4)
   FGT_G        0 -> 1 over updates 60 to 100: the share of his new trips whose list has the four fight options (change 10)
   FGT_W        0 -> 1 over updates 60 to 100: the fight network's weapon nudge opens ...
-  H2_WADD      1 -> 0 over updates 0 to 10, then 0 to the end (THE RESTART, 11-17: it was 60 to 100): the item picker's weapon push leaves
-               over the window in which the item picker is frozen (--h2-freeze); its weapon scores never learn (--h2-wsc-freeze)
+  H2_WADD      1 -> 0 written over clocks 0 to 7, then 0 to the end (THE RESTART, 11-17: it was 60 to 100): a written value plays 2 to 3
+               updates later, so 0 PLAYS by update 10, inside the window in which the item picker is frozen (--h2-freeze); its weapon scores
+               never learn (--h2-wsc-freeze). H2_WPG is never written: 0 from the start (start_live.py, --head2-wpg 0), the weapon key's credit
+               the hands' own
   THE RESTART's two alarms (alarms_22b.py), every update from update 1, each a MAJOR line: the gauntlet in hand (v14.in_hand.g) over 0.05;
   the weapon choice's speed (weapon.kl) over 0.045 (three times its normal 0.015). And every update the freeze's proof (the trainer's
   h2_freeze block) in one plain line, MAJOR if a held parameter moved.
@@ -38,8 +40,9 @@ import alarms_22b  # noqa: E402  (the restart's two alarms and the freeze's proo
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 SCHEDULE = {"PRACTICE_P": [(0, 0.0), (20, 0.12), (60, 0.12), (60.001, 0.05)], "NEAR_PAY": [(0, 0.0), (20, 5.0)],
             "FGT_GATE": [(0, -30.0), (0.001, -12.0), (20, 0.0)], "FGT_G": [(60, 0.0), (100, 1.0)], "FGT_W": [(60, 0.0), (100, 1.0)],
-            "H2_WADD": [(0, 1.0), (10, 0.0)]}                    # (the restart, 11-17: over the freeze's window, then 0 for the run)
-UNSCHEDULED = ("PULL_G", "HELD_G", "NEAR_OUT")               # (never written by the ramp)
+            "H2_WADD": [(0, 1.0), (7, 0.0)]}                     # (the restart, 11-17: written 0 at clock 7 so that 0 PLAYS by update 10: a
+#                                                                       written value plays 2 to 3 updates later; then 0 for the run)
+UNSCHEDULED = ("PULL_G", "HELD_G", "NEAR_OUT", "H2_WPG")     # (H2_WPG: 0 from start_live.py, never written: the weapon key the hands' own)               # (never written by the ramp)
 BIAS_AT, BIAS_WIN = 60, 10
 REPORT_AT = 60
 SIZE_FLAG = 40.0
@@ -534,8 +537,8 @@ def main():
 
     threading.Thread(target=flags_guard, daemon=True).start()
     log("ramp_22b on for {} (scale {}): PRACTICE_P 0 -> 0.12 over updates 0 to 20, held to 60, then 0.05; NEAR_PAY 0 -> 5 over 0 to 20; the hands' "
-        "token -30, then -12 -> 0 over 0 to 20; H2_WADD 1 -> 0 over 0 to 10, then 0 (the restart: the item picker's weapon push leaves while it is "
-        "frozen); FGT_G and FGT_W 0 -> 1 over 60 to 100; FGT_BIAS once at 60 ({}); the report at "
+        "token -30, then -12 -> 0 over 0 to 20; H2_WADD written 1 -> 0 over clocks 0 to 7 so that 0 plays by update 10, then 0 (the restart: the "
+        "item picker's weapon push leaves while it is frozen; the weapon key is taught by the hands' own pay from the start, H2_WPG 0 never written); FGT_G and FGT_W 0 -> 1 over 60 to 100; FGT_BIAS once at 60 ({}); the report at "
         "60 ({}); saves kept at {} ... and the end; never written: {}; FREE: the clock never holds or steps back, a check under 40% is a MAJOR "
         "PROBLEM; every update: the gauntlet in hand over 5% and the weapon KL over 0.045 are MAJOR, the freeze's proof in a line{}".format(a.run, SCALE[0], "decided already: {}".format(BIAS_D[0].get("bias")) if BIAS_D[0] else "not yet",
                            "made already" if REP_D[0] else "not yet", marks_now(140), UNSCHEDULED, " (resumed)" if a.resume else ""))

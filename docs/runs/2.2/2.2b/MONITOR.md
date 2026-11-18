@@ -48,8 +48,9 @@ update-100 optimizer.
 0-200 at update 10); its folder is `duel_gru_2_2b_failed_1117`. The run you monitor keeps the name 2.2b and the folder
 `data/sim_runs/duel_gru_2_2b`. As built for the restart: the item picker frozen but for its forecast's last layer through update 10
 (`metrics.jsonl` block `h2_freeze`: `held_max` must be exactly 0 through update 10, and `weapon_max` exactly 0 for the whole run; the ramp's
-line "the item picker FROZEN ..." every update); its weapon push `H2_WADD` 1 → 0 over updates 0 to 10 as the ramp writes it (the value
-actually played lags the written one by about 2 to 3 updates, so 0 first plays at about update 12 or 13: read `fight.played.h2_wadd`).
+line "the item picker FROZEN ..." every update); its weapon push `H2_WADD` written 1 → 0 over clocks 0 to 7 so that 0 is played by update 10 (a written value plays about 2 to 3
+updates later: read `fight.played.h2_wadd`; 0 not played at update 10 is worth a line). His weapon choice is taught by the hands' own pay
+from the start (`--head2-wpg 0`, live `H2_WPG` 0, never written): the item picker has no part in it.
 
 ## Never
 
