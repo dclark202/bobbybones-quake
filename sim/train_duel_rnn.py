@@ -409,6 +409,13 @@ LIVE_RANGE["H2_WADD"] = (0.0, 1.0)
 LIVE_RANGE["FGT_GATE"] = (-30.0, 0.0)
 LIVE_RANGE["OUT_SRC"] = (0.0, 1.0)
 LIVE_INT = LIVE_INT + ("OUT_SRC",)
+LIVE_TRAINER = LIVE_TRAINER + ("LEV_G",)                             # (2.2c, --lever) the lever's share: x the fight network's one number on "the enemy"
+LIVE_RANGE["LEV_G"] = (0.0, 1.0)
+LIVE_RANGE["CONTEST_W"] = (0.0, 1.0)                                 # (2.2c, the simulator's CONTEST and RAIL_CHAIN) the contest pay's share, the free
+LIVE_RANGE["CEDE_W"] = (0.0, 0.5)                                    # pickup's charge; the rail's pickup and long-line pays; the far rail's pay
+LIVE_RANGE["RAIL_PICK_PAY"] = (0.0, 1.0)
+LIVE_RANGE["RAIL_LINE_PAY"] = (0.0, 1.0)
+LIVE_RANGE["RAIL_FAR_PAY"] = (0.0, 1.0)
 LIVE_RANGE["KEEPQ_G"] = (0.0, 1.0)                         # his quiet seconds the keep choice's quiet layer decides (with KEEP_ZONE=1; the
 LIVE_RANGE["KEEP_TEACH"] = (0.0, 100.0)                      # rest: the lock rule); the weight of the keep choice's lesson toward the stay
 LIVE_RANGE["STAY_W"] = (0.0, 100.0)                          # value's sign (both layers, all run); a factor on the stay value's own lesson
@@ -1315,6 +1322,14 @@ def main():
                     "learn nothing for the whole run: no gradient, no decay, no Adam movement; their largest difference to the start logged every update")
     ap.add_argument("--win-scale-items", type=float, default=1.0, help="(--fight22, change 9) the item picker's win-chance part x this (measured on the start's games)")
     ap.add_argument("--win-scale-fight", type=float, default=1.0, help="(--fight22, change 9) the fight network's win-chance part x this (measured on the start's games)")
+    ap.add_argument("--lever", type=int, default=0, help="(2.2c, docs/runs/2.2/2.2c/CARD.md change 2; with --fight22 1 and a fight network of the "
+                    "lever's layout: tools/lever22_init.py) THE AGGRESSION LEVER: the fight network's one number x live LEV_G added to the item "
+                    "picker's score of 'the enemy' (rounded to half precision, stored as played); no fight options, no practice, no weapon "
+                    "nudge, nothing shut; it learns by PPO from his every target decision with its own pay; its two forecasts as 2.2b's")
+    ap.add_argument("--lev-g", type=float, default=0.0, help="(--lever) the start of live LEV_G: the lever's share (0: he plays as without it)")
+    ap.add_argument("--lev-from", type=int, default=0, help="(--lever) the rollouts of the run's updates up to this one (its own count, as --h2-choice-warm's) "
+                    "play the lever at share 0 whatever LEV_G says; from the next one at LEV_G (2.2c: 10, the lever on from update 11's rollout, "
+                    "with the item picker's choices taught again)")
     ap.add_argument("--fight-epochs", type=int, default=2, help="(--fight22) its lesson's passes over the rollout's rows")
     ap.add_argument("--fight-pass-every", type=int, default=4, help="(--fight22) the pass odds' rows: every this-th of his seats at a reading")
     ap.add_argument("--old-judge-replay", type=int, default=0, help="(2.2b's guard) 1: allow a win-chance pay from the item-blind judge (a replay or "
@@ -2557,10 +2572,16 @@ def main():
                   a.control_lr, a.control_warm, "this process's start" if a.control_start < 0 else a.control_start,
                   CTL_L["every"], CTL_L["horizon"], CTL_L["width"]), flush=True)
     BA_SEND = bool(getattr(E_, "BLIND_AHEAD", False)) or bool(getattr(E_, "COMBAT", False))   # (v0.4.3, BLIND_AHEAD; 1.7, COMBAT: the cut-off's
+    AH_IN = bool(getattr(E_, "AHEAD_IN", False))             # (2.2c, AHEAD_IN) the hands' inputs of the brain's places ahead: the same places sent
+    BA_SEND = BA_SEND or AH_IN
+    if AH_IN:
+        assert RF_READ and AH, "AHEAD_IN=1: with BRAIN_READ=1 and the readout ahead (--ahead): its places are the hands' new inputs"
+        print("2.2c (AHEAD_IN): the readout ahead's places (1, 2, 4 s) go to the simulators with the brain's answer: the hands' inputs of "
+              "group 'b22c ahead'", flush=True)
     if bool(getattr(E_, "COMBAT", False)):               # and the spam's places) the readout ahead's places go with the brain's answer
         assert RF_READ and AH, "COMBAT=1: with BRAIN_READ=1 and the readout ahead (--ahead): the order's places are the brain's"
         print("combat order (1.7): the readout ahead's places (1, 2, 4 s) go to the simulators with the brain's answer", flush=True)
-    elif BA_SEND:
+    elif BA_SEND and not AH_IN:
         assert RF_READ and AH and bool(getattr(E_, "BLIND_BRAIN", False)), \
             "BLIND_AHEAD=1: with BRAIN_READ=1, BLIND_BRAIN=1 and the readout ahead (--ahead): its places are what the waiver reads"
         print("blind ahead (v0.4.3): the out-of-view shot cost also waived where the brain says the enemy will be in {} s "
@@ -4485,6 +4506,9 @@ def main():
     FGT_BV = [None]                                          # ... live FGT_BIAS (None: never set), applied to the four scores' bias once a new value comes
     FGT_BIAS_APPLIED = [None]                                # ... the last value applied (kept in the checkpoint: a resume does not apply it again)
     FG_ST = [None]                                           # ... the update's record (its lesson's)
+    LEVER = bool(FGT and a.lever)                            # (2.2c, --lever) the fight network as the aggression lever (sim/fightnet.py VERSION_LEVER)
+    LEV_GV = [float(a.lev_g)]                                # ... live LEV_G: its share
+    assert not a.lever or FGT, "--lever 1 needs --fight22 1"
     if FGT:
         assert FG_CK is not None and FG_CK["layout"].get("norm") is not None, \
             "--fight22: a network with the fight network and its measured norm (tools/fight22_init.py layout, then norm)"
@@ -4501,7 +4525,9 @@ def main():
         assert not miss_, "--fight22: the simulator's truth lacks {} (FIGHT_TRUTH=1, CONTROL_TRUTH=1, TRACK_TRUTH=1)".format(miss_)
         FL = FG_CK["layout"]
         assert (fightnet_.EN_INTENT, fightnet_.HOLD_INTENT, fightnet_.FG_ASK, fightnet_.FG_KIND, fightnet_.FG_CAND) ==             (int(E_.EN_INTENT), int(E_.HOLD_INTENT), int(E_.FG_ASK), int(E_.FG_KIND), int(E_.FG_CAND)), "sim/fightnet.py's numbers are not the simulator's"
-        assert int(FL["n_target"]) == ACTION_DIMS[I_HEAD] and int(FL["nw_key"]) == HAND_D, "the fight network's layout does not fit the network"
+        assert fightnet_.is_lever(FL) == LEVER, "--lever {} with a fight network of layout version {}: the lever's layout (tools/lever22_init.py) " \
+            "goes with --lever 1, 2.2b's with --lever 0".format(int(a.lever), FL.get("version"))
+        assert int(FL["n_target"]) == ACTION_DIMS[I_HEAD] and (LEVER or int(FL["nw_key"]) == HAND_D), "the fight network's layout does not fit the network"
         FN = fightnet_.make_module(FL).to(dev)
         FN.load_state_dict({k_: torch.as_tensor(np.asarray(v_.detach().cpu().numpy() if hasattr(v_, "detach") else v_)) for k_, v_ in FG_CK["model"].items()})
         FN_ACT = copy.deepcopy(FN).eval()                    # (the copy that plays: in step with FN before every rollout)
@@ -4531,7 +4557,17 @@ def main():
             if TRK22_OPT_CK is not None:
                 TRK_OPT.load_state_dict(TRK22_OPT_CK)
             TRK_GEN = torch.Generator().manual_seed(2203)
-        print("2.2b (--fight22): the fight network {} inputs ({}) -> {} -> {} -> 4 scores, {} weapon scores, 2 values; its Adam {} at {}; "
+        if LEVER:
+            LEV_GV[0] = float(a.lev_g)
+            FGT_GV[0] = FGT_WV[0] = PRACT_V[0] = 0.0
+            assert a.fgt_g <= 0 and a.fgt_w <= 0 and a.practice_p <= 0, "--lever: no fight options, no weapon nudge, no practice (--fgt-g 0 --fgt-w 0 --practice-p 0)"
+            print("2.2c (--lever): THE AGGRESSION LEVER {} inputs ({}) -> {} -> {} -> 1 number on 'the enemy' x LEV_G {:.3f}, 2 values; its Adam {} at {}; "
+                  "H2_WADD {:.3f}, the hands' token gate {:.1f}; its decay H2_L2 from the first update; the win part x {:.3f} (items) and x {:.3f} "
+                  "(fight)".format(FL["width"], ", ".join("{} {}".format(k_, w_) for k_, w_ in FL["parts"]), FL["hid"], FL["hid"], LEV_GV[0],
+                                   "from the checkpoint" if FG_CK.get("opt") is not None else "new", a.fight22_lr, H2_WADD_V[0], FGT_GATE_V[0],
+                                   a.win_scale_items, a.win_scale_fight), flush=True)
+        else:
+          print("2.2b (--fight22): the fight network {} inputs ({}) -> {} -> {} -> 4 scores, {} weapon scores, 2 values; its Adam {} at {}; "
               "FGT_G {:.3f}, FGT_W {:.3f}, PRACTICE_P {:.3f}, H2_WADD {:.3f}, the hands' token gate {:.1f}; the bias of the four {:.4f} (applied: {}); "
               "practice trips held {:.1f} s, their dealt weapon +{:.1f}; the item picker's choice lesson off for its first {} updates; the win part "
               "x {:.3f} (items) and x {:.3f} (fight); the tracker {}".format(
@@ -4549,8 +4585,10 @@ def main():
             fk_ = torch.load(f_, weights_only=False, map_location="cpu").get("fight22") if os.path.exists(f_) else None
             if fk_ is not None and fk_.get("model") is not None:
                 dl_ = fk_.get("dials") or {}
+                if fightnet_.is_lever(fk_.get("layout")) != LEVER:   # (a league file of the other kind: no fight network of its own here)
+                    continue
                 SNAP_FN[id(sd_)] = ({k_: torch.as_tensor(np.asarray(v_.detach().cpu().numpy() if hasattr(v_, "detach") else v_)).to(dev)
-                                     for k_, v_ in fk_["model"].items()}, float(dl_.get("FGT_G", 0.0)), float(dl_.get("FGT_W", 0.0)))
+                                     for k_, v_ in fk_["model"].items()}, float(dl_.get("LEV_G" if LEVER else "FGT_G", 0.0)), float(dl_.get("FGT_W", 0.0)))
                 n_fn_ += 1
         print("2.2b: league files with a fight network of their own: {} of {}".format(n_fn_, len(snaps) + len(anchors)), flush=True)
 
@@ -4559,7 +4597,7 @@ def main():
         with PLAN_LOCK:
             return dict(layout=FL, model={k_: v_.detach().cpu().clone() for k_, v_ in FN.state_dict().items()}, opt=copy.deepcopy(FN_OPT.state_dict()),
                         applied_bias=FGT_BIAS_APPLIED[0], dials=dict(FGT_G=float(FGT_GV[0]), FGT_W=float(FGT_WV[0]), PRACTICE_P=float(PRACT_V[0]),
-                                                                     H2_WADD=float(H2_WADD_V[0])))
+                                                                     H2_WADD=float(H2_WADD_V[0]), **({"LEV_G": float(LEV_GV[0])} if LEVER else {})))
 
     def fg_learn(FGR, update):
         """(2.2b) THE FIGHT NETWORK'S LESSON on the learner's copy (FN), its own Adam: its two forecasts (the damage and frags part; the win part x
@@ -4567,6 +4605,8 @@ def main():
         weapon scores on his decisions: the practice trips' (the mixture: practice's chance x (half even, half its own softmax) + the rest x his
         list where it was on) and the one list's (its pick, the item picker's scores numbers), each event's advantage the two parts' brought to the
         same size and added; the clipped term around the probability as played. Decay on its first and last layers (H2_L2, rule 11). -> its record"""
+        if LEVER:                                                # (2.2c) the lever's own lesson
+            return fg_learn_lever(FGR, update)
         t0_ = time.time()
         X, V0, pay, dn = FGR["X"], FGR["V"].to(dev), FGR["pay"].to(dev), FGR["done"].to(dev)
         J_, NMf = X.shape[0], X.shape[1]
@@ -4673,6 +4713,168 @@ def main():
                                    flat_fight=round(fl_, 4), flat_items=round(il_, 4), win=round(wl_, 4)))
         return rec_
 
+    def fg_learn_lever(FGR, update):
+        """(2.2c, --lever) THE LEVER'S LESSON on the learner's copy (FN), its own Adam: its two forecasts as 2.2b's (the damage and frags part,
+        the win part x --win-scale-fight; GAE on the ticks), and its one number by the clipped term on his every target decision: the
+        probability of what he picked from his target logits as played less the lever's add, plus LEV_G (as played) x the lever now, against
+        the probability as played; the advantage the two parts' brought to the same size and added. At LEV_G 0 the term's gradient is 0 (it
+        learns from update 10, the card). Decay (H2_L2) on its first and last layers from the first update (rule 13) -> its record"""
+        t0_ = time.time()
+        X, V0, pay, dn = FGR["X"], FGR["V"].to(dev), FGR["pay"].to(dev), FGR["done"].to(dev)
+        J_, NMf = X.shape[0], X.shape[1]
+        T_ = J_ * BK
+        payJ = pay[:T_].reshape(J_, BK, NMf, 3).sum(1)
+        dJ = (dn[:T_].reshape(J_, BK, NMf).sum(1) > 0).float()
+        gam_ = float(H2L["gamma"]) ** BK
+        lam_ = (a.head2_lam if a.head2_lam > 0 else a.lam) ** BK
+        pd_, pw_ = payJ[..., 1], payJ[..., 2] * float(a.win_scale_fight)
+        Ad_, Rd_ = fightnet_.gae_ticks(pd_, V0[..., 0], dJ, gam_, lam_)
+        Aw_, Rw_ = fightnet_.gae_ticks(pw_, V0[..., 1], dJ, gam_, lam_)
+        ones_ = torch.ones_like(Ad_)
+        As_ = fightnet_.std_adv(Ad_, ones_) + fightnet_.std_adv(Aw_, ones_)
+        err_ = dict(dmg=round(float(((V0[:J_, :, 0] - Rd_) ** 2).mean()), 6), win=round(float(((V0[:J_, :, 1] - Rw_) ** 2).mean()), 6),
+                    dmg_var=round(float(Rd_.var()), 6), win_var=round(float(Rw_.var()), 6))
+        ev_ = FGR["ev"]
+        NE_ = int(len(ev_["t"])) if ev_ else 0
+        rec_ = dict(rows=int(J_ * NMf), events=NE_, forecast_err_before=err_)
+        EN_ = int(E_.EN_INTENT)
+        if NE_:
+            jE_ = (ev_["t"] // BK).clamp(max=J_ - 1).to(dev)
+            sE_ = ev_["seat"].long().to(dev)
+            AE_ = As_[jE_, sE_]
+            pk_e = ev_["pick"].to(dev).long()
+            rec_.update(picked_enemy=round(float((pk_e == EN_).float().mean()), 4), g_played=round(float(ev_["g"].float().mean()), 4),
+                        add_abs_played=round(float(ev_["la"].float().abs().mean()), 5),
+                        adv_enemy=round(float(AE_[pk_e == EN_].mean()), 4) if bool((pk_e == EN_).any()) else None,
+                        adv_item=round(float(AE_[pk_e != EN_].mean()), 4) if bool((pk_e != EN_).any()) else None)
+        L_ = dict(v=0.0, pg=0.0, clip=0.0, n=0, kl=0.0)
+        SH_ = None
+        with PLAN_LOCK, torch.enable_grad():
+            for g_ in FN_OPT.param_groups:
+                g_["lr"] = float(a.fight22_lr)
+            Xf_ = X.reshape(J_ * NMf, -1)
+            Rdf_, Rwf_ = Rd_.reshape(-1), Rw_.reshape(-1)
+            for ep_ in range(max(1, int(a.fight_epochs))):
+                pm_ = torch.randperm(J_ * NMf, generator=TRK_GEN)
+                nb_ = max(1, (J_ * NMf) // 16384)
+                eb_ = torch.randperm(NE_, generator=TRK_GEN).chunk(nb_) if NE_ else [None] * nb_
+                for b_, rr_ in enumerate(pm_.chunk(nb_)):
+                    xb_ = Xf_[rr_].to(dev).float()
+                    _, Vb_ = FN(xb_)
+                    lv_ = 0.5 * ((Vb_[:, 0] - Rdf_[rr_.to(dev)]) ** 2).mean() + 0.5 * ((Vb_[:, 1] - Rwf_[rr_.to(dev)]) ** 2).mean()
+                    loss_ = lv_
+                    e_ = eb_[b_] if b_ < len(eb_) else None
+                    if e_ is not None and len(e_):
+                        e_ = e_.to(dev)
+                        xe_ = X[jE_[e_].cpu(), sE_[e_].cpu()].to(dev).float()
+                        Le_, _ = FN(xe_)
+                        z_ = ev_["it"].to(dev)[e_].float() + fightnet_.lever_vec(ev_["g"].to(dev)[e_].float() * Le_, ACTION_DIMS[I_HEAD], torch)
+                        lp_ = torch.log_softmax(z_, -1).gather(1, pk_e[e_][:, None]).squeeze(1)
+                        lp0_ = ev_["lp"].to(dev)[e_].float()
+                        ae_ = fightnet_.std_adv(AE_[e_], torch.ones_like(AE_[e_]))
+                        pg_, cf_ = fightnet_.ppo_term(lp_, lp0_, ae_, torch.ones_like(ae_), clip)
+                        loss_ = loss_ + pg_
+                        L_["pg"] += float(pg_)
+                        L_["clip"] += cf_
+                        L_["kl"] += float((lp0_ - lp_).mean())
+                    FN_OPT.zero_grad(set_to_none=True)
+                    loss_.backward()
+                    torch.nn.utils.clip_grad_norm_(FN.parameters(), 1.0)
+                    FN_OPT.step()
+                    fightnet_.l2_decay(FN, H2_L2_[0], a.fight22_lr)
+                    L_["v"] += float(lv_)
+                    L_["n"] += 1
+            with torch.no_grad():                                # (the lever's size on a sample of rows: rule 13, flagged over 40)
+                xs_ = Xf_[torch.randperm(J_ * NMf, generator=TRK_GEN)[:8192]].to(dev).float()
+                Ls_, _ = FN(xs_)
+                SH_ = dict(lever_mean=round(float(Ls_.mean()), 5), lever_abs=round(float(Ls_.abs().mean()), 5), lever_max=round(float(Ls_.abs().max()), 5),
+                           lever_sd=round(float(Ls_.std()), 5), **fightnet_.sizes(FN))
+        for p_ in FN.parameters():
+            p_.grad = None
+        n_ = max(1, L_["n"])
+        fl_ = float(pay[..., 1].abs().sum())
+        wl_ = float(pay[..., 2].abs().sum())
+        il_ = float(pay[..., 0].abs().sum())
+        rec_.update(loss_value=round(L_["v"] / n_, 6), loss_pg=round(L_["pg"] / n_, 6), clip_share=round(L_["clip"] / n_, 4),
+                    approx_kl=round(L_["kl"] / n_, 6), sizes=SH_, secs=round(time.time() - t0_, 2), decay=float(H2_L2_[0]),
+                    win_scale=dict(fight=float(a.win_scale_fight), items=float(a.win_scale_items),
+                                   fight_ratio=round(float(a.win_scale_fight) * wl_ / max(fl_, 1e-9), 4),
+                                   items_ratio=round(float(a.win_scale_items) * wl_ / max(il_, 1e-9), 4),
+                                   flat_fight=round(fl_, 4), flat_items=round(il_, 4), win=round(wl_, 4)))
+        return rec_
+
+    def fg_record_lever(FGR, update):
+        """(2.2c, --lever) the update's "fight" block (the card's "Reported every update"): what played; the lever's size and its average when he
+        is ahead, level and behind on stack (his effective stack less the enemy's true: over 25, within 25, under -25) and in the 5 s after his
+        frag, and how often he is headed for the enemy in each; his frags and damage a minute; the contest pay (the enemy's big pickups under
+        pressure, steals, free pickups and his distance then, the pay's size), his shells at items (in and out of view, by weapon), the rail
+        (in hand, shots and far hits a minute, the rail chain's pays); every new pay term's size and share of his pay; its lesson"""
+        dr_ = float(a.dmg_reward) if a.dmg_reward > 0 else 0.005
+        lvc_ = np.asarray(FGR["lvc"], np.float64)
+        lvf_ = np.asarray(FGR["lvf"], np.float64)
+        sz_ = np.asarray(FGR["sz"], np.float64)
+        ag_ = agg if isinstance(agg, dict) else {}
+        by_ = {}
+        for s_, nm_ in enumerate(("ahead", "level", "behind", "after_frag_5s", "all")):
+            n_ = lvc_[s_, 0]
+            by_[nm_] = dict(readings=int(n_), lever_mean=round(lvc_[s_, 1] / n_, 5) if n_ else None, lever_abs=round(lvc_[s_, 2] / n_, 5) if n_ else None,
+                            headed_for_enemy=round(lvc_[s_, 3] / n_, 4) if n_ else None, add_mean=round(lvc_[s_, 4] / n_, 5) if n_ else None)
+        rd_ = max(1.0, sz_[4])
+        sizes_ = dict(items=round(sz_[0] / rd_, 4), lever_add_abs=round(sz_[1] / rd_, 5), lever_abs=round(sz_[5] / rd_, 5), lever_mean=round(sz_[7] / rd_, 5),
+                      lever_max=round(float(FGR.get("lvmax", 0.0)), 5))
+        mins_ = max(1e-9, lvf_[0] * 0.025 / 60.0)
+        play_ = dict(seat_minutes=round(mins_, 2), frags_min=round(lvf_[1] / mins_, 4), damage_min=round(lvf_[2] / dr_ / mins_, 2),
+                     headed_for_enemy=round(lvf_[3] / max(1.0, lvf_[0]), 4))
+        pm_ = max(1e-9, float(ag_.get("players_min", 0.0)) or mins_)
+        proj_ = {}
+        for w_ in ("rl", "gl", "pg"):
+            sh_, sv_, hi_ = float(ag_.get(w_ + "_shots", 0)), float(ag_.get(w_ + "_shots_vis", 0)), float(ag_.get(w_ + "_hits", 0))
+            proj_[w_] = dict(fired_min_in_view=round(sv_ / mins_, 3), fired_min_out_of_view=round((sh_ - sv_) / mins_, 3), hits_min=round(hi_ / mins_, 3))
+        C_ = np.asarray(ag_.get("contest", np.zeros(len(getattr(E_, "CB_COLS", ())) or 24)), np.float64)
+        CB_ = np.asarray(ag_.get("contest_burst", np.zeros((3, 2, 3))), np.float64).reshape(3, 2, 3)
+        con_ = None
+        if len(C_) >= 24:
+            nb_ = max(1.0, C_[0])
+            con_ = dict(enemy_big_pickups=int(C_[0]), under_pressure_share=round(C_[1] / nb_, 4), pressure_mean=round(C_[2] / nb_, 4),
+                        rung1_mean=round(C_[3] / nb_, 4), rung2_mean=round(C_[4] / nb_, 4), rung3_mean=round(C_[5] / nb_, 4), taken_off_mean=round(C_[6] / nb_, 4),
+                        free_pickups=int(C_[7]), free_distance_mean=round(C_[8] / max(1.0, C_[7]), 1),
+                        free_distance_bins=dict(under_1000=int(C_[21]), d1000_2000=int(C_[22]), over_2000=int(C_[23])),
+                        enemy_weapon_pickups=int(C_[9]), weapon_under_pressure_share=round(C_[10] / max(1.0, C_[9]), 4), steals=int(C_[11]),
+                        pickup_pay_to_him=round(C_[12], 4), pickup_pay_from_him=round(C_[13], 4), by_second_to_him=round(C_[14], 4),
+                        by_second_from_him=round(C_[15], 4), by_second_frames=int(C_[16]), cap_reached=int(C_[17]),
+                        bursts_near_item_nobody_took=int(C_[18]), bursts_4_to_8s_before_pickup=int(C_[19]), his_big_pickups=int(C_[20]),
+                        his_big_pickups_min=round(C_[20] / mins_, 4),
+                        shells_at_items={w_: {v_: dict(up=int(CB_[j_, k_, 0]), coming_4s=int(CB_[j_, k_, 1]), taken_4s=int(CB_[j_, k_, 2]))
+                                              for k_, v_ in enumerate(("in_view", "out_of_view"))} for j_, w_ in enumerate(("rl", "gl", "pg"))})
+        R_ = np.asarray(ag_.get("rail", np.zeros(15)), np.float64)
+        RC_ = np.asarray(ag_.get("rail_chain", np.zeros(6)), np.float64)
+        rmin_ = max(1e-9, R_[0] * 0.025 / 60.0) if len(R_) > 0 else 1e-9
+        rail_ = dict(in_hand_share=round(float(R_[7:10].sum()) / max(1.0, R_[0]), 5) if len(R_) >= 10 else None,
+                     shots_min=round(float(R_[1:4].sum()) / rmin_, 4) if len(R_) >= 4 else None,
+                     far_hits_min=round(float(R_[5] + R_[6]) / rmin_, 4) if len(R_) >= 7 else None,
+                     far_pay_got=round(float(R_[13]), 4) if len(R_) >= 15 else None, far_pay_lost=round(float(R_[14]), 4) if len(R_) >= 15 else None,
+                     pickup_pays=int(RC_[0]), far_sightings=int(RC_[1]), far_sightings_rail_in_hand=int(RC_[2]),
+                     long_line_pay_net=round(float(RC_[3]), 5), long_line_pay_size=round(float(RC_[4]), 5))
+        PT_ = np.asarray(ag_.get("pay_terms", np.zeros((3, len(E_.PAY_TERMS)))), np.float64)
+        terms_ = {}
+        if PT_.ndim == 2 and PT_.shape[1] == len(E_.PAY_TERMS):
+            tot_ = max(1e-12, float(PT_[2].sum()))
+            for k_ in ("contest", "contest_sec", "rail_pick", "rail_line", "rail", "near_miss", "win_part", "dmg_dealt", "item_MH", "item_RA", "item_YA"):
+                if k_ in E_.PAY_TERMS:
+                    j_ = list(E_.PAY_TERMS).index(k_)
+                    terms_[k_] = dict(sum=round(float(PT_[0, j_]), 4), size=round(float(PT_[2, j_]), 4), share=round(float(PT_[2, j_]) / tot_, 5))
+        nm_ = np.asarray(ag_.get("near_miss", np.zeros(6)), np.float64)
+        out_ = dict(played=dict(FGR["dials"], h2_wadd=float(H2_WADD_V[0]), gate=float(FGT_GATE_V[0])), lever=dict(by_state=by_, sizes=sizes_),
+                    play=play_, contest=con_, rail=rail_, pay_terms=terms_, projectiles=proj_,
+                    near_miss=dict(bursts_near_unhurt=int(nm_[0]), paid=int(nm_[1]), pay_sum=round(float(nm_[3]), 5)),
+                    nonfinite=int(np.asarray(FGR["cnt"])[46]), lesson=FG_ST[0], tracker_pass=(O22_ST[0] or {}).get("pass"))
+        ls_ = (FG_ST[0] or {}).get("sizes") or {}
+        out_["flags"] = [k_ for k_ in ("lever_abs", "lever_max", "l1", "l3") if float(ls_.get(k_, 0.0) or 0.0) > 40.0] + \
+            [k_ for k_ in ("items", "lever_abs", "lever_max") if float(sizes_.get(k_, 0.0) or 0.0) > 40.0]
+        ws_ = (FG_ST[0] or {}).get("win_scale") or {}
+        out_["win_scale_below_flat"] = [k_ for k_ in ("fight_ratio", "items_ratio") if ws_.get(k_) is not None and ws_[k_] < 1.0]
+        return out_
+
     def fg_pass_learn(FGR, b_aux_, b_done_, T_):
         """(2.2b) the tracker's pass odds on the fight network's rows (cut off's candidates at its readings, a share of his seats): the same labels
         and lesson as 2.2a's (o22_pass_learn), scored before"""
@@ -4723,6 +4925,8 @@ def main():
 
     def fg_record(FGR, update):
         """(2.2b) the update's "fight" block from its rollout (FGR) and its lesson (FG_ST)"""
+        if LEVER:                                                # (2.2c) the lever's record
+            return fg_record_lever(FGR, update)
         c_ = np.asarray(FGR["cnt"], np.float64)
         dr_ = float(a.dmg_reward) if a.dmg_reward > 0 else 0.005
         OP = fightnet_.OPTS
@@ -5675,9 +5879,16 @@ def main():
                             INSG_V[0] = min(0.0, float(lt_["INS_GATE"]))
                         else:
                             print("live: INS_GATE ignored (no token of kind 'instr')", flush=True)
+                    if "LEV_G" in lt_:                                                 # (2.2c, --lever) the lever's share, from the next rollout
+                        if LEVER:
+                            LEV_GV[0] = min(1.0, max(0.0, float(lt_["LEV_G"])))
+                        else:
+                            print("live: LEV_G ignored (the run has no --lever 1)", flush=True)
                     for n_f, h_f in (("FGT_G", FGT_GV), ("FGT_W", FGT_WV), ("PRACTICE_P", PRACT_V), ("H2_WADD", H2_WADD_V), ("FGT_GATE", FGT_GATE_V)):
                         if n_f in lt_:                                                 # (2.2b, --fight22) its dials, from the next rollout
-                            if FGT:
+                            if LEVER and n_f in ("FGT_G", "FGT_W", "PRACTICE_P"):     # (2.2c: no options, no nudge, no practice)
+                                print("live: {} ignored (--lever: no fight options)".format(n_f), flush=True)
+                            elif FGT:
                                 h_f[0] = min(LIVE_RANGE[n_f][1], max(LIVE_RANGE[n_f][0], float(lt_[n_f])))
                             else:
                                 print("live: {} ignored (the run has no --fight22 1)".format(n_f), flush=True)
@@ -5749,7 +5960,7 @@ def main():
                                   **({"ORD_GATE": ORD_GV[0]} if ORD_GV[0] is not None else {}),
                                   **({"INS_GATE": INSG_V[0]} if INSG_V[0] is not None else {}),
                                   **({"FGT_G": FGT_GV[0], "FGT_W": FGT_WV[0], "PRACTICE_P": PRACT_V[0], "H2_WADD": H2_WADD_V[0], "FGT_GATE": FGT_GATE_V[0],
-                                      **({"FGT_BIAS": FGT_BV[0]} if FGT_BV[0] is not None else {})} if FGT else {}),
+                                      **({"FGT_BIAS": FGT_BV[0]} if FGT_BV[0] is not None else {}), **({"LEV_G": LEV_GV[0]} if LEVER else {})} if FGT else {}),
                                   INTENT_SEEK_W=SEEK_W[0])
                     LIVE_REC = dict(applied=dict(ch_, **cht_), from_update=update, in_force=force_)
                     with open(os.path.join(out, "live_applied.json.tmp"), "w", encoding="utf-8") as f_:
@@ -5827,6 +6038,9 @@ def main():
                 if FGTK_M is not None:
                     pol.attn.gate[FGTK_M] = float(FGT_GATE_V[0])
                 pol.head2.wadd.fill_(float(H2_WADD_V[0]))
+                if FGT_BV[0] is not None and FGT_BV[0] != FGT_BIAS_APPLIED[0] and LEVER:
+                    print("2.2c: live FGT_BIAS ignored (--lever: no options, no bias)", flush=True)
+                    FGT_BIAS_APPLIED[0] = float(FGT_BV[0])
                 if FGT_BV[0] is not None and FGT_BV[0] != FGT_BIAS_APPLIED[0]:     # (the one number: written once a new value comes, then learnt)
                     FN.sbias.fill_(float(FGT_BV[0]))
                     FGT_BIAS_APPLIED[0] = float(FGT_BV[0])
@@ -5873,7 +6087,8 @@ def main():
             SNAP_SG[id(snaps[-1])] = float(SF_G[0])                      # (1.8: and its second group's)
             SNAP_NS[id(snaps[-1])] = NO_SW                               # (--no-switch: his own new snapshots are step-6 networks)
             if FGT:                                                      # (2.2b) and its fight network with the dials it played at
-                SNAP_FN[id(snaps[-1])] = ({k_: v_.detach().clone() for k_, v_ in FN.state_dict().items()}, float(FGT_GV[0]), float(FGT_WV[0]))
+                SNAP_FN[id(snaps[-1])] = ({k_: v_.detach().clone() for k_, v_ in FN.state_dict().items()}, float(LEV_GV[0] if LEVER else FGT_GV[0]),
+                                          float(FGT_WV[0]))
             snaps = snaps[-8:]
             save(os.path.join(out, "snapshots", "snap_{:04d}.pt".format(int(mins))), mins)
             LG_NAME[id(snaps[-1])] = a.run + "/snap_{:04d}.pt".format(int(mins))
@@ -6606,6 +6821,18 @@ def main():
             FC_ = torch.zeros(64, dtype=torch.float64, device=dev)        # (counters: see the record)
             FCW_ = torch.zeros(4, HAND_D, dtype=torch.float64, device=dev)   # (the weapon in hand out of fights, by the fight option he is on)
             FSZ_ = torch.zeros(8, dtype=torch.float64, device=dev)        # (sizes: the list's two parts, the weapon's two parts, frames)
+            b_lev = None
+            if LEVER:                                                    # (2.2c, --lever) THE LEVER'S PLAY: its one number at each keep reading (his
+                b_lev = torch.zeros(T, N, dtype=torch.float16, device=dev)   # network's on his seats; a league file's own on its seats, x its own share),
+                if FG_.get("lev") is None:                               # held between readings; what it added to "the enemy" a frame, as played
+                    FG_["lev"] = torch.zeros(N, device=dev)              # (his seats: the learner adds it again, to the bit)
+                    FG_["levadd"] = torch.zeros(N, device=dev)
+                    FG_["fsince"] = torch.full((N,), 1e9, device=dev)    # (readouts: frames since his last frag)
+                LV_G = float(LEV_GV[0]) if (UPD_DONE0 + upd) > int(a.lev_from) else 0.0   # (--lev-from: 0 on the rollouts of the run's first updates, by its own count)
+                LVC_ = torch.zeros(5, 6, dtype=torch.float64, device=dev)   # (readouts at his readings, by state: ahead, level, behind, after a frag, all,
+                #                                                           any: n, the lever summed, |lever| summed, heads for the enemy, its share summed)
+                LVF_ = torch.zeros(4, dtype=torch.float64, device=dev)   # (his living seat-frames; his frags; his damage dealt's pay; on "the enemy")
+                LVMAX_ = torch.zeros((), dtype=torch.float64, device=dev)   # (the largest |lever| at his readings)
         if PLAN is not None and not PLAN_OFF[0]:                                             # (2.1c, --plan) the slow plan in shadow: at each keep reading the head's
             try:
                 JP_ = T // BK                                                # state and his fast target odds (all seats; his rows marked), the rows
@@ -6883,7 +7110,44 @@ def main():
                         OVO_ = ov_ * (1.0 - MINE_P)[:, None]
                 if O22_PLAY:                                             # (2.2a) the head's second value of this frame (silent)
                     b_vwi[t] = net.head2.vw(H2S.s).float()
-                if FGT and t % BK == 0 and FG_["F"] is not None:         # (2.2b) A KEEP READING: the fight network on every seat (his network's; a
+                if LEVER and t % BK == 0 and FG_["F"] is not None:       # (2.2c) A KEEP READING OF THE LEVER: its one number on every seat (his
+                    j_f = t // BK                                        # network's; a league seat's by its own below), from the brain's state of
+                    Fd_ = {k_: torch.from_numpy(np.asarray(v_)).to(dev) for k_, v_ in FG_["F"].items()}   # that tick, the tracker, his inputs, his
+                    tin_f = tracker_.inp(TRK_L, BS_.s, x)                 # target scores before the pull, the head's state his outputs read, his
+                    htr_f = net.head2.trk.trunk(tin_f)                    # memory after this frame, his target and its seconds
+                    trr_f = tracker_.readable(net.head2.trk.l3(htr_f))
+                    kfp_ = HD_["kf"]
+                    xr_f = fightnet_.raw_lever(FL, BS_.s, trr_f, x, torch.log_softmax(TL0_, -1), s_keep_, h[:, :H], kfp_[:, 2].long(), kfp_[:, 0], torch)
+                    xn_f = fightnet_.norm_in(FL, xr_f, torch)
+                    L_f, V_f = fnet_(xn_f)
+                    FC_[46] += float((~torch.isfinite(L_f)).sum() + (~torch.isfinite(V_f)).sum())
+                    if not bool(torch.isfinite(L_f).all()):              # (a non-finite lever: counted and loud; 0 for those seats)
+                        print("MAJOR PROBLEM: the lever is not finite on {} seats".format(int((~torch.isfinite(L_f)).sum())), flush=True)
+                        L_f, V_f = torch.nan_to_num(L_f), torch.nan_to_num(V_f)
+                    FG_["lev"] = torch.where(MINE_F, L_f.float(), torch.zeros_like(FG_["lev"]))   # (a league seat's: below, by its own network)
+                    FG_["V"] = V_f.float()
+                    FG_["xo"] = (xr_f, None, None, trr_f)                 # (a league network's own inputs are made from these)
+                    FX_[j_f] = xn_f[MI_F].half().cpu()
+                    FV_[j_f] = V_f[MI_F].float()
+                    pe_f = MI_F[(torch.arange(NM_F, device=dev) % max(1, int(a.fight_pass_every))) == (j_f % max(1, int(a.fight_pass_every)))]
+                    if len(pe_f):                                        # (the tracker's pass odds' rows: they keep learning, as in 2.2b)
+                        FPS_["t"].append(torch.full((len(pe_f),), t, dtype=torch.int16))
+                        FPS_["i"].append(pe_f.int().cpu())
+                        FPS_["tin"].append(tin_f[pe_f].half().cpu())
+                        FPS_["G"].append(fightnet_.pass_in(FL, Fd_["Xc"][pe_f], torch).half().cpu())
+                        FPS_["pts"].append(Fd_["Pc"][pe_f].half().cpu())
+                        FPS_["ok"].append(Fd_["vc"][pe_f].cpu())
+                    lr_ = MINE_F & (FG_["st"][:, 5] > 0)                 # (readouts at his readings: the lever by his state, how often he heads for the enemy)
+                    if bool(lr_.any()) and O22_NOW is not None:
+                        eb_l = torch.from_numpy(o22_edge_bin(O22_NOW, FOE_)).to(dev)
+                        st_l = torch.stack([eb_l >= 3, eb_l == 2, eb_l <= 1, FG_["fsince"] <= 200, torch.ones_like(lr_)], 0) & lr_[None, :]
+                        en_l = (kfp_[:, 2].long() == int(E_.EN_INTENT)).double()
+                        ad_l = LV_G * L_f.double()
+                        for s_l in range(5):
+                            m_l = st_l[s_l]
+                            LVC_[s_l] += torch.stack([m_l.sum().double(), (L_f.double() * m_l).sum(), (L_f.double().abs() * m_l).sum(), (en_l * m_l).sum(),
+                                                      (ad_l * m_l).sum(), (ad_l.abs() * m_l).sum()])
+                if FGT and not LEVER and t % BK == 0 and FG_["F"] is not None:   # (2.2b) A KEEP READING: the fight network on every seat (his network's; a
                     j_f = t // BK                                        # league seat's by its own below, at its draw), from the simulators' options
                     Fd_ = {k_: torch.from_numpy(np.asarray(v_)).to(dev) for k_, v_ in FG_["F"].items()}   # after the tick's frame, the brain's state
                     tin_f = tracker_.inp(TRK_L, BS_.s, x)                 # of that tick, his inputs, his target scores before the pull, the head's
@@ -6914,7 +7178,21 @@ def main():
                         FPS_["G"].append(fightnet_.pass_in(FL, Fd_["Xc"][pe_f], torch).half().cpu())
                         FPS_["pts"].append(Fd_["Pc"][pe_f].half().cpu())
                         FPS_["ok"].append(Fd_["vc"][pe_f].cpu())
-                if FGT:                                                  # (2.2b) the weapon key: FGT_W x the fight network's weapon scores (held from
+                if LEVER:                                                # (2.2c) THE LEVER ON "THE ENEMY": LEV_G x its number (held from his last
+                    FG_["levadd"] = torch.where(MINE_F, fightnet_.lever_add(FG_["lev"], LV_G, torch), FG_["levadd"])   # reading), rounded to half
+                    lva_ = FG_["levadd"] * MINE_F.float()                # precision, on his seats' target logits after the pull, before anything
+                    logits = head2_.add_bias(logits, fightnet_.lever_vec(lva_, ACTION_DIMS[I_HEAD], torch), HD_I0)   # reads them; stored as played
+                    b_lev[t] = lva_.half()
+                    if t % BK == 0:                                      # (rule 13: the lever's size beside the item picker's target scores)
+                        sm_ = MINE_F & (FG_["st"][:, 5] > 0)
+                        if bool(sm_.any()):
+                            cz_ = lambda z_: (z_.float() - z_.float().mean(-1, keepdim=True)).norm(dim=-1)[sm_].sum().double()   # noqa: E731
+                            FSZ_ += torch.stack([cz_(logits[:, HD_I0:HD_I0 + ACTION_DIMS[I_HEAD]]), lva_[sm_].abs().sum().double(),
+                                                 torch.zeros((), dtype=torch.float64, device=dev), torch.zeros((), dtype=torch.float64, device=dev),
+                                                 sm_.sum().double(), FG_["lev"][sm_].abs().sum().double(), torch.zeros((), dtype=torch.float64, device=dev),
+                                                 FG_["lev"][sm_].sum().double()])
+                            LVMAX_ = torch.maximum(LVMAX_, FG_["lev"][sm_].abs().max().double())
+                if FGT and not LEVER:                                    # (2.2b) the weapon key: FGT_W x the fight network's weapon scores (held from
                     wa_f = GW_F[:, None] * FG_["W"]                      # its last reading) and a practice trip's dealt weapon, added as played, a
                     dw_f = FG_["prac"] & (FG_["pw"] >= 0)                # number every pass of the learner adds again
                     if bool(dw_f.any()):
@@ -6956,6 +7234,23 @@ def main():
                         lo = head2_.add_bias(lo, OVO_, HD_I0)
                     if HB_ON:                                           # (1.5a, C) the league seats' weapon habits on their weapon key
                         lo = wkey_add(lo, torch.from_numpy(habit_push(obs, hb_acc)).to(lo.device))
+                    if LEVER:                                           # (2.2c) a league seat's lever: its file's own fight network (none: 0) at its
+                        nm_l = ~MINE_F                                  # keep reading, on its own target scores (before its pull), head and memory,
+                        if FGO_ and t % BK == 0 and FG_.get("xo") is not None:   # x its file's own share; held between readings
+                            xr_o = FG_["xo"][0].clone()
+                            NT_ = ACTION_DIMS[I_HEAD]
+                            o0_ = sum(w_ for k_, w_ in FL["parts"][:3])
+                            xr_o[:, o0_:o0_ + NT_] = torch.log_softmax(lo[:, HD_I0:HD_I0 + NT_].float() - (PVO_ if PO_ON else 0.0), -1)
+                            o1_ = o0_ + NT_
+                            xr_o[:, o1_:o1_ + int(H2L["size"])] = s_keep_o_.float()
+                            o2_ = o1_ + int(H2L["size"])
+                            xr_o[:, o2_:o2_ + H] = h_opp[:, :H].float()
+                            Lo_, _ = FN_OPP(fightnet_.norm_in(FL, xr_o, torch))
+                            FG_["lev"] = torch.where(nm_l, torch.nan_to_num(Lo_.float()), FG_["lev"])
+                        if not FGO_:
+                            FG_["lev"] = torch.where(nm_l, torch.zeros_like(FG_["lev"]), FG_["lev"])
+                        FG_["levadd"] = torch.where(nm_l, fightnet_.lever_add(FG_["lev"], float(FN_OPP_D[0]) if FGO_ else 0.0, torch), FG_["levadd"])
+                        lo = head2_.add_bias(lo, fightnet_.lever_vec(FG_["levadd"] * nm_l.float(), ACTION_DIMS[I_HEAD], torch), HD_I0)
                     act_o = draw(onet, lo)[0] if ORDER else torch.stack([d.sample() for d in dists(lo)], -1)
                     act = torch.where(snap_players[:, None], act_o, act)
                 if HELD:                                                 # (2.1c) the held draw. A seat whose target ended (or is "nothing", once a
@@ -6981,7 +7276,9 @@ def main():
                     if OUT_PLAY and TRNEW_ is not None:                  # mid-trip changes when his scores cross; the pick at the draw set exactly
                         ah_ = torch.where(TRNEW_, OTR_["goal"], ah_)
                     FQ_F = None
-                    if FGT:                                              # (2.2b) THE ONE LIST AND PRACTICE
+                    if LEVER:                                            # (2.2c) his target logits as played (the lever in them): the lever's rows
+                        FG_["it"] = li_
+                    if FGT and not LEVER:                                # (2.2b) THE ONE LIST AND PRACTICE
                         if FGO_ and t % BK == 0 and FG_.get("xo") is not None:   # (a league seat by its own fight network: its own target scores
                             xr_o, rows_o, ps_o, trr_o = FG_["xo"]               # and head and memory in its inputs)
                             NT_ = ACTION_DIMS[I_HEAD]
@@ -7073,7 +7370,7 @@ def main():
                     lps[I_HEAD] = ds[I_HEAD].log_prob(act[:, I_HEAD])    # (as played: his seats' ratio reads it)
                     if H2:
                         b_lpi[t] = lps[I_HEAD]
-                        if FGT:                                          # (2.2b) on the one list: the list's log-probability of its pick (the item
+                        if FGT and not LEVER:                            # (2.2b) on the one list: the list's log-probability of its pick (the item
                             b_lpi[t] = torch.where(FG_["jl"], FG_["jlsm"].gather(1, FG_["jp"][:, None]).squeeze(1), b_lpi[t])   # picker's reference)
                     b_hfr[t], b_hon[t] = fr_, HD_["on"]
                     kcol_ = HD_["on"].long() * 3 + 4 * int(t % BK == 0)  # (d + 2 c + 4 r; not under the coin: no draw, no coin: the lock rule)
@@ -7339,7 +7636,9 @@ def main():
                 lgn_ = lgl_.float().cpu().numpy()
                 tp2_ = time.perf_counter()
                 RP_["legs_net"] += tp2_ - tp1_
-                fsn_ = FG_["S"].clamp(-5.0, 5.0).cpu().numpy() if (FGT and t % BK == 0) else None    # (2.2b) the four scores: the hands' inputs
+                fsn_ = FG_["S"].clamp(-5.0, 5.0).cpu().numpy() if (FGT and not LEVER and t % BK == 0) else None    # (2.2b) the four scores: the hands' inputs
+                if LEVER and t % BK == 0:                                # (2.2c) the hands are shown the lever (what it adds to "the enemy") in the
+                    fsn_ = torch.nn.functional.pad(FG_["levadd"].clamp(-5.0, 5.0)[:, None], (0, 3)).cpu().numpy()   # first score's column
                 for w_, p in enumerate(pipes):
                     p.send(("step", (an[w_off[w_]:w_off[w_ + 1]], lgn_[w_off[w_]:w_off[w_ + 1]])
                             + ((TOK_.answer_rows(w_off[w_], w_off[w_ + 1]),) if RF_READ else ((None,) if WOX_ else ()))
@@ -7372,6 +7671,8 @@ def main():
                 FG_["st"] = torch.from_numpy(np.concatenate([r[3]["fg"][0] for r in res])).to(dev)
                 pay4_ = torch.from_numpy(np.concatenate([r[3]["pay4"][0] for r in res])).to(dev)
                 FPAY_[t] = pay4_[MI_F][:, :3]
+                if LEVER:                                                # (2.2c, readouts) his damage dealt's pay
+                    LVF_[2] += float(pay4_[MI_F][:, 4].sum())
                 if "fgf" in res[0][3]:
                     FG_["F"] = fight22_.cat([r[3]["fgf"][0] for r in res])
                     FG_["has"] = torch.from_numpy(FG_["F"]["has"][:, :9]).to(dev)
@@ -7561,7 +7862,16 @@ def main():
                                 DR_FAIL[0] = True                        # (the rows would no longer line up with the outlook's: none this rollout)
                                 o22_fail()
                         OHFA_ = None
-                if FGT:                                                  # (2.2b) on the one list a change between fight options (the same target, the
+                if LEVER:                                                # (2.2c) THE LEVER'S ROWS: his every target decision (a new draw, or a change
+                    ev_f = b_hon[t] & (live > 0) & dec_h & MINE_F        # mid-trip): the pick, its log-probability as played, his target logits as played
+                    if bool(ev_f.any()):                                 # less the lever's add, the add and its share as played
+                        em_ = torch.nonzero(ev_f, as_tuple=True)[0]
+                        la_e = FG_["levadd"][em_]
+                        it_e = FG_["it"][em_].float().clone()
+                        it_e[:, int(E_.EN_INTENT)] = it_e[:, int(E_.EN_INTENT)] - la_e
+                        FEV_.append(dict(t=t, i=em_, pick=b_act[t, em_, I_HEAD].long(), lp=b_lpi[t][em_].float(), it=it_e,
+                                         la=la_e, g=torch.full((len(em_),), LV_G, device=dev), draw=b_hfr[t][em_]))
+                if FGT and not LEVER:                                    # (2.2b) on the one list a change between fight options (the same target, the
                     jc_f = FG_["jl"] & (FG_["jp"] != FG_["japp"]) & (live > 0)    # enemy) is a decision too; the list's decisions applied: the fight
                     dec_h = dec_h | jc_f                                 # network's rows (his seats)
                     ev_f = FG_["jl"] & (live > 0) & (dec_h | b_hfr[t]) & MINE_F & ~FG_["prac"]
@@ -7664,6 +7974,12 @@ def main():
                 aux = np.concatenate([r[12] for r in res])
                 if b_hw is not None:                                     # (2.1, --ins-pay-win) this step's change in win chance, at full precision
                     b_hw[t] = torch.from_numpy(np.ascontiguousarray(aux[:, HW_IX], dtype=np.float32)).to(dev) * HW_G
+                if LEVER:                                                # (2.2c, readouts) his frags: the frames since his last; frags and living frames
+                    fr_l = torch.from_numpy(np.ascontiguousarray(aux[:, list(E_.AUX_COLS).index("frag")] > 0.5)).to(dev)
+                    FG_["fsince"] = torch.where(fr_l, torch.zeros_like(FG_["fsince"]), FG_["fsince"] + 1.0)
+                    LVF_[0] += float((MINE_F & (FG_["st"][:, 5] > 0)).sum())
+                    LVF_[1] += float((MINE_F & fr_l).sum())
+                    LVF_[3] += float((MINE_F & (FG_["st"][:, 5] > 0) & (HD_["kf"][:, 2].long() == int(E_.EN_INTENT))).sum())
             h = h * (1.0 - d)[:, None]                                   # memory resets on death / round restart
             h_opp = h_opp * (1.0 - d)[:, None]
             if BS_ is not None:                                          # (--belief) ... and the belief's, by the same flag
@@ -7725,7 +8041,13 @@ def main():
                 lgT_, vT_, hT_ = net.step(xT_, h, sm=SM.peek() if SM is not None else None,
                                           xl=torch.from_numpy(legs_x).to(dev) if UNI_ON else None, bt=btT_,
                                           g2=H2S.adds(net.head2) if H2 else None)
-                if FGT and FG_["F"] is not None:                         # (2.2b) the fight network's two forecasts at the frame after (the bootstrap)
+                if LEVER and FG_["F"] is not None:                       # (2.2c) the lever's two forecasts at the frame after (the bootstrap)
+                    htr_f = net.head2.trk.trunk(tracker_.inp(TRK_L, BS_.s, xT_))
+                    xr_f = fightnet_.raw_lever(FL, BS_.s, tracker_.readable(net.head2.trk.l3(htr_f)), xT_,
+                                               torch.log_softmax(lgT_[:, HD_I0:HD_I0 + ACTION_DIMS[I_HEAD]].float(), -1), H2S.s, hT_[:, :H],
+                                               HD_["kf"][:, 2].long(), HD_["kf"][:, 0], torch)
+                    FV_[J_F] = fnet_(fightnet_.norm_in(FL, xr_f, torch))[1][MI_F].float()
+                elif FGT and FG_["F"] is not None:                       # (2.2b) the fight network's two forecasts at the frame after (the bootstrap)
                     Fd_ = {k_: torch.from_numpy(np.asarray(v_)).to(dev) for k_, v_ in FG_["F"].items()}
                     htr_f = net.head2.trk.trunk(tracker_.inp(TRK_L, BS_.s, xT_))
                     p3_f = torch.sigmoid(net.head2.trk.pass_logits(htr_f, fightnet_.pass_in(FL, Fd_["Xc"], torch))).float()
@@ -7780,12 +8102,19 @@ def main():
                     else:
                         ev_[k_] = torch.cat([e_[k_] for e_ in FEV_]).cpu()
                 ev_["seat"] = SI_F[torch.cat([e_["i"] for e_ in FEV_])].cpu()
-            FGR_ = dict(X=FX_, V=FV_.cpu(), valid=FVAL_.cpu(), pay=FPAY_.cpu(), done=FDN_.cpu(), ev=ev_, mine=MI_F.cpu(), nm=NM_F,
-                        lse=(torch.cat(FLSE_) if FLSE_ else None),
-                        pas={k_: (torch.cat(v_) if v_ else None) for k_, v_ in FPS_.items()}, cnt=FC_.cpu().numpy(), wout=FCW_.cpu().numpy(),
-                        sz=FSZ_.cpu().numpy(),
-                        dials=dict(FGT_G=float(FGT_GV[0]), FGT_W=float(FGT_WV[0]), PRACTICE_P=PR_F, league_fight=bool(FGO_), sbias=float(fnet_.sbias)),
-                        b_jl=b_jl, b_jx=b_jx, b_jp=b_jp, b_fw=b_fw, b_fpr=b_fpr)
+            if LEVER:                                                    # (2.2c) the lever's rows and record; no one list, no weapon add, no practice
+                FGR_ = dict(X=FX_, V=FV_.cpu(), pay=FPAY_.cpu(), done=FDN_.cpu(), ev=ev_, mine=MI_F.cpu(), nm=NM_F, lever=True,
+                            pas={k_: (torch.cat(v_) if v_ else None) for k_, v_ in FPS_.items()}, cnt=FC_.cpu().numpy(), sz=FSZ_.cpu().numpy(),
+                            lvc=LVC_.cpu().numpy(), lvf=LVF_.cpu().numpy(), lvmax=float(LVMAX_),
+                            dials=dict(LEV_G=LV_G, league_fight=bool(FGO_), league_lev_g=float(FN_OPP_D[0]) if FGO_ else 0.0),
+                            b_lev=b_lev)
+            else:
+                FGR_ = dict(X=FX_, V=FV_.cpu(), valid=FVAL_.cpu(), pay=FPAY_.cpu(), done=FDN_.cpu(), ev=ev_, mine=MI_F.cpu(), nm=NM_F,
+                            lse=(torch.cat(FLSE_) if FLSE_ else None),
+                            pas={k_: (torch.cat(v_) if v_ else None) for k_, v_ in FPS_.items()}, cnt=FC_.cpu().numpy(), wout=FCW_.cpu().numpy(),
+                            sz=FSZ_.cpu().numpy(),
+                            dials=dict(FGT_G=float(FGT_GV[0]), FGT_W=float(FGT_WV[0]), PRACTICE_P=PR_F, league_fight=bool(FGO_), sbias=float(fnet_.sbias)),
+                            b_jl=b_jl, b_jx=b_jx, b_jp=b_jp, b_fw=b_fw, b_fpr=b_fpr)
         if O22_PLAY:                                                     # (2.2a) the second value's bootstrap; the tracker's rows whose labels came in
             with torch.no_grad():
                 b_vwi[T] = net.head2.vw(H2S.s).float()
@@ -8183,8 +8512,10 @@ def main():
         B_X, B_C, B_P, B_XM, B_WL, B_LPWY = (R.get(k_) for k_ in ("b_x", "b_c", "b_p", "b_xm", "b_wl", "b_lpwy"))   # its candidates (host)
         CG_R = float(R.get("cg") or 0.0)
         FGR = R.get("fg") if FGT else None                               # (2.2b) the fight network's rollout: the one list as played, the weapon's add
-        B_JL = B_JX = B_JP = B_FW = None
-        if FGR is not None:
+        B_JL = B_JX = B_JP = B_FW = B_LEV = None
+        if FGR is not None and FGR.get("lever"):                     # (2.2c) the lever's add on "the enemy" as played [T, N]: every pass adds it again
+            B_LEV = FGR["b_lev"]
+        elif FGR is not None:
             B_JL, B_JX, B_JP, B_FW = FGR["b_jl"].float(), FGR["b_jx"], FGR["b_jp"], FGR["b_fw"]
         B_LT = b_live * (1.0 - B_OON) if CMB else (b_live * (1.0 - B_JL) if B_JL is not None else b_live)   # (1.7) the target's readings: not where a new
         #                                                                  kind took its place (2.2b: nor where the one list made it: the head's own term)
@@ -8522,6 +8853,8 @@ def main():
                     lg_ = head2_.add_bias(lg_, HO2_[0]["pull"], HD_I0)    # (after every other part, as in the rollout): every pass reads it
                 if HO2_[0].get("out") is not None:               # (2.1f, --outlook) the outlook's term as played, a number, after the pull (as
                     lg_ = head2_.add_bias(lg_, HO2_[0]["out"], HD_I0)     # in the rollout)
+                if HO2_[0].get("lev") is not None:               # (2.2c, --lever) the lever on "the enemy" as played, a number, after the pull
+                    lg_ = head2_.add_bias(lg_, HO2_[0]["lev"], HD_I0)     # (as in the rollout): every pass reads it
             return lg_
         UG_ = [None, None, None]                                         # (--legs-feat, --legs-guide) the last seq_pass's guide addition, the
         #                                                                  branch's logits and its "has a way" (for pi_t and the counters)
@@ -8599,6 +8932,7 @@ def main():
                 ho2_["pull"] = B_PULL[:, chunk].float() if B_PULL is not None else None    # (2.1d) the pull of these players a frame, as played
                 ho2_["fw"] = B_FW[:, chunk].float() if B_FW is not None else None          # (2.2b) the weapon key's add, as played
                 ho2_["out"] = B_OUT[:, chunk].float() if B_OUT is not None else None       # (2.1f) the outlook's term of these players, as played
+                ho2_["lev"] = (fightnet_.lever_vec(B_LEV[:, chunk].float(), ACTION_DIMS[I_HEAD], torch) if B_LEV is not None else None)   # (2.2c) the lever, as played
                 HO2_[0] = ho2_
             if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
                 hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk], lay=gru_layout(DN_H[:, hchunk(chunk)], dev) if NOSYNC else None)
@@ -9175,6 +9509,8 @@ def main():
                         lmx_ = lmx_ + ho2_["pull"]
                     if ho2_.get("out") is not None:                      # (2.1f) the outlook's term as played, a number, the same way
                         lmx_ = lmx_ + ho2_["out"]
+                    if ho2_.get("lev") is not None:                      # (2.2c) the lever as played, a number, the same way
+                        lmx_ = lmx_ + ho2_["lev"]
                     lpi_ = torch.log_softmax(lmx_, -1).gather(-1, A[..., I_HEAD:I_HEAD + 1]).squeeze(-1)
                     if B_JL is not None:                                 # (2.2b) on the one list: the list's (the four scores as played, numbers)
                         lpi_ = torch.where(B_JL[:, chunk] > 0, jlp_(lmx_, chunk), lpi_)

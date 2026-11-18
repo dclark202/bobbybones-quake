@@ -78,6 +78,8 @@ def settings(ps, pol=None):
             S_["WEAPON_OWN"] = str(ev_["WEAPON_OWN"])
         if ev_.get("COMBAT") not in (None, "", "0", 0):      # (1.7) and the combat order (a network without it plays as before with it on)
             S_["COMBAT"] = "1"
+        if ev_.get("AHEAD_IN") not in (None, "", "0", 0, "0.0"):   # (2.2c) and the brain's places ahead as the hands' inputs: without it the check's
+            S_["AHEAD_IN"] = "1"                             # simulator gives him zeros there (a network without the inputs plays as before)
         if ev_.get("SPACE_IN") not in (None, "", "0", 0, "0.0"):   # (2.0b) and the map's table as inputs, at the gate the save trained at:
             S_["SPACE_IN"] = "1"                             # without it the check's simulator gives him zeros there (a network without
             if ev_.get("SPACE_GATE") not in (None, ""):      # the inputs takes the first columns and plays as before)

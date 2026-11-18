@@ -6,12 +6,24 @@ they sum to the frame's pay) in the parts each learner counts:
   FIGHT   the fight network (with the win part): damage dealt and taken, the far rails, frags and deaths, the near misses, the high ground
   WIN     both, each times its own scale (--win-scale-items, --win-scale-fight): the paid win chance (WIN_ADD x the judge with the items)
   OTHER   the hands only: every shaping pay (knowing where he is, watching the right spot, pre-aim, speed, jumps, the way to an item, ...)
-The hands are paid the whole as ever. The groups are by the pay term's name; a term in none of the three named lists is OTHER."""
+The hands are paid the whole as ever. The groups are by the pay term's name; a term in none of the three named lists is OTHER.
+
+2.2c (docs/runs/2.2/2.2c/CARD.md "Kept from 2.2b's pay" and change 1b; FIGHT_SPLIT=22c in the workers' environment): the item picker counts the
+items, the win part, the contest pay ("contest", "contest_sec"), the rail's pickup and long line ("rail_pick", "rail_line") and the far rail
+("rail"); the fight network damage dealt less taken, frags and deaths (and the high ground's, 0) with the win part; the near miss goes to
+the hands only. Unset (or 22b): 2.2b's groups as they were."""
+import os
+
 import numpy as np
 
+SPLIT = (os.environ.get("FIGHT_SPLIT") or "22b").strip()
+assert SPLIT in ("22b", "22c"), "FIGHT_SPLIT: 22b or 22c"
 ITEMS = ("item_MH", "item_RA", "item_YA", "item_flat_other", "big_order", "item_points", "item_loss", "items_other", "item_decay",
          "stack_diff", "stack_keep")
 FIGHT = ("dmg_dealt", "dmg_taken", "rail", "frag", "death", "deaths_other", "near_miss", "high")
+if SPLIT == "22c":
+    ITEMS = ITEMS + ("contest", "contest_sec", "rail_pick", "rail_line", "rail")
+    FIGHT = ("dmg_dealt", "dmg_taken", "frag", "death", "deaths_other", "high")
 WIN = ("win_part", "win_pay")
 COLS = ("items", "fight", "win", "other", "dealt", "taken", "near")
 
