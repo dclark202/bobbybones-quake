@@ -9,6 +9,15 @@ The first start (RUNS #59) failed: the gauntlet in hand a third of the time from
 Opus 5.5 worker from the coordinator's brief (the owner's decisions); the card's "The restart (11-17 evening)" says it in plain words. On the
 owner's later word ("the run itself functions as the validation") no training run was made before the start: the checks below need none.
 
+**The second round (owner, 11-17: "the weapon choice is not informed by the item picker in any way").** His weapon choice is taught by the
+hands' own pay from update 0: `--head2-wpg 0` in the command (`make_files.py`; the one occurrence on the trainer's line) and `H2_WPG` 0 in the
+start's live file (`start_live.py`; the ramp never writes it), so the item picker's term on the weapon key is zero for the whole run; and the
+ramp writes `H2_WADD` 1 → 0 over clocks 0 to 7 (`[(0, 1.0), (7, 0.0)]`) so that 0 is played by update 10. This replaces "Open: the weapon
+key's lesson" and the 0-at-update-12-or-13 lag below. Checks: `check_settings` against the failed start's command: exactly three
+differences, `--h2-freeze` 1, `--h2-wsc-freeze` 1, `--head2-wpg` 0 (was 1); `start_values.py` in the dry run: PASS (H2_WPG 0 = --head2-wpg 0);
+`tests.py` freeze 9/9, unit 18/18, live 33/33, guard 11/11, each alone; `start.ps1 -DryRun -DryRunTag _restart2`: passed (settings checks, start values 53 names, live accept x 3, ident 0 of 1,075,200 actions
+differ, the league); its `live.json` has `H2_WPG` 0.0, `H2_WADD` 1.0.
+
 **What was built**
 
 | Part | Where | As built |

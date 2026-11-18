@@ -8,7 +8,9 @@ copy), every setting as it ran, with:
                    --h2-choice-warm 10 --lr-warm 60 --lr-warm-start 26519 (the optimizer starts cold: none was kept at update 90; the learning
                    rate climbs from a tenth to full over 60 minutes (about 9 updates) from 2.2b's own start, minute 26,519 of the lineage)
                    --h2-freeze 1 --h2-wsc-freeze 1 (THE RESTART, 11-17: the item picker frozen but for its forecast's last layer through
-                   update 10; its weapon scores never learn; the ramp fades H2_WADD 1 -> 0 over updates 0 to 10)
+                   update 10; its weapon scores never learn; the ramp fades H2_WADD so that 0 plays by update 10)
+                   --head2-wpg 0 (THE RESTART, owner 11-17: "the weapon choice is not informed by the item picker in any way": the weapon
+                   key's whole credit is the hands' own advantage from update 0; live H2_WPG 0 in start_live.py)
                    FIGHT=1 OUT_LIVE=1.5 (the fight options; back off by living through it, 1.7b's 1.5 s) NEAR_MISS=1 (NEAR_PAY live, 0 at the start)
                    JUDGE_PAY=1 JUDGE_ITEMS=<items_22b.json> (the paid win part: the judge with the items, everywhere; the owner's correction)
                    FIGHT_START_P=0.20 PRO_START_P=0.15 (change 7; whole games stay GAME_P 0.65)
@@ -66,7 +68,8 @@ c = c.replace(OUT_ARGS, " ")
 c = re.sub(r"--minutes \d+ --max-updates \d+ --gamma ", "--minutes {} --max-updates {} --gamma ".format(MIN, UPDATES), c)
 for a_, b_ in (("--env duel_env_ffa20e ", "--env duel_env_ffa22b "), ("--run duel_gru_2_2a ", "--run duel_gru_2_2b "),
                ("--held-g 0 ", "--held-g 1 "), ("--pull-g 0 ", "--pull-g 2 "), ("--intent-teach 9.13 ", "--intent-teach 0 "),
-               ("--dmg-reward 0.0055 ", "--dmg-reward 0.005 "), ("--head2-pay all ", "--head2-pay items_win ")):
+               ("--dmg-reward 0.0055 ", "--dmg-reward 0.005 "), ("--head2-pay all ", "--head2-pay items_win "),
+               ("--head2-wpg 1 ", "--head2-wpg 0 ")):   # (the restart, owner 11-17: the weapon key taught by the hands' own pay; the item picker no part of it)
     assert c.count(a_) == 1, a_
     c = c.replace(a_, b_)
 NEW_ARGS = ("--fight22 1 --fight22-lr 1e-4 --fgt-g 0 --fgt-w 0 --practice-p 0 --h2-wadd 1 --fgt-gate -30 --win-scale-items {:g} --win-scale-fight {:g} "

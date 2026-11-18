@@ -86,6 +86,10 @@ gauntlet. That start's folder is kept as `data/sim_runs/duel_gru_2_2b_failed_111
    and his weapon choice moving faster than 0.045 (three times its normal speed). Replayed over the failed start, they would have fired at
    update 5 (the speed) and update 9 (the gauntlet).
 
+**And (owner, 11-17: "the weapon choice is not informed by the item picker in any way"):** his weapon choice is taught by the hands' own pay
+from the start (the item picker's share of its lesson is 0 for the whole run), and the item picker's weapon push is written to 0 by update 7
+so that 0 actually plays by update 10.
+
 **The stage table, corrected:** in stage 1 (updates 0 to 60) the item picker's weapon push leaves over updates 0 to 10; stage 2 (60 to
 100) no longer has it (the fight options enter his list; "the enemy" and "the places" leave the item picker; the fight network's weapon
 nudge opens).

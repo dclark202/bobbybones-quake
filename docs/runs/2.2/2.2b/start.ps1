@@ -5,7 +5,8 @@
 # answering as 2.2a's update 90 on recorded play (ident.py: 0 actions differ). The league (league_22b.py): 2.2a's anchors, its own last 8 snapshots up
 # to update 90, and the control (2.2a's update 90) as anchor_22a90.pt, all brought to list 22b. The win scales from win_scale_22b.json (measured on
 # the start's games with the judge with the items: BUILD.md). The ramp (ramp_22b.py): PRACTICE_P 0 -> 0.12 and NEAR_PAY 0 -> 5 over updates 0 to 20,
-# the hands' token gate -30 -> 0 over 0 to 20, H2_WADD 1 -> 0 over 0 to 10 (THE RESTART, 11-17: the item picker frozen but for its forecast's
+# the hands' token gate -30 -> 0 over 0 to 20, H2_WADD written 1 -> 0 over clocks 0 to 7 so that 0 plays by update 10, --head2-wpg 0 and live H2_WPG 0
+# (the weapon key taught by the hands' own pay from the start) (THE RESTART, 11-17: the item picker frozen but for its forecast's
 # last layer through update 10, --h2-freeze; its weapon scores never learn, --h2-wsc-freeze; two MAJOR alarms every update: the gauntlet in hand
 # over 5%, the weapon KL over 0.045; the freeze's proof every update), the one number (FGT_BIAS) once at update 60, FGT_G and FGT_W 0 -> 1 over 60 to 100,
 # PRACTICE_P 0.05 from 60; the update-60 report in plain words; saves kept at 10, 60, 100, then every 20 and the end. Never held or stepped back.
@@ -59,7 +60,7 @@ if ($LASTEXITCODE -ne 0) { Log "make_files failed (the items' fit not accepted? 
 $CMD = Join-Path $HERE "train.cmd"
 & $PY -c "import re, sys; t = open(sys.argv[1]).read(); s = lambda n: float((re.findall(r'^set ' + n + r'=(\S*)\s*$', t, re.M) or ['0'])[-1] or 0); bad = {n: s(n) for n in ('SHOT_COST', 'RG_FAR_PRICE', 'BLIND_FIRE_W', 'BLIND_RL_DMG', 'COST_FIRE_W') if s(n) != 0}; bad.update({'BLIND_RL_DMG (unset: 6 by default)': 6} if not re.search(r'^set BLIND_RL_DMG=', t, re.M) else {}); print('no firing cost in the command: every one at zero' if not bad else 'A FIRING COST ABOVE ZERO: ' + str(bad)); sys.exit(1 if bad else 0)" $CMD | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "a firing cost above zero: not started"; exit 1 }
-$ALLOW = "--run,--minutes,--max-updates,--env,--outlook,--out-kinds,--out22,--map-sense,--map-sense-init,DESC_OX,--fight22,--fight22-lr,--fgt-g,--fgt-w,--practice-p,--h2-wadd,--fgt-gate,--win-scale-items,--win-scale-fight,--h2-choice-warm,--h2-freeze,--h2-wsc-freeze,--lr-warm,--lr-warm-start,--head2-pay,--held-g,--pull-g,--intent-teach,--dmg-reward,FIGHT,OUT_LIVE,NEAR_MISS,JUDGE_PAY,FIGHT_START_P,PRO_START_P,JUDGE_ITEMS,WIN_ADD,LEVEL_PULL,CONTACT_FREE,COST_FIRE_W,COST_JERK_W,STACK_DIFF,SPEED_PAY,RAIL_FAR_PAY,ITEM_FLAT,DODGE_G,AIM3_W,AIM3_SIZE_A,AIM3_SIZE_B,AIM3_LEAD,AIM3_RELOAD"
+$ALLOW = "--run,--minutes,--max-updates,--env,--outlook,--out-kinds,--out22,--map-sense,--map-sense-init,DESC_OX,--fight22,--fight22-lr,--fgt-g,--fgt-w,--practice-p,--h2-wadd,--fgt-gate,--win-scale-items,--win-scale-fight,--h2-choice-warm,--h2-freeze,--h2-wsc-freeze,--head2-wpg,--lr-warm,--lr-warm-start,--head2-pay,--held-g,--pull-g,--intent-teach,--dmg-reward,FIGHT,OUT_LIVE,NEAR_MISS,JUDGE_PAY,FIGHT_START_P,PRO_START_P,JUDGE_ITEMS,WIN_ADD,LEVEL_PULL,CONTACT_FREE,COST_FIRE_W,COST_JERK_W,STACK_DIFF,SPEED_PAY,RAIL_FAR_PAY,ITEM_FLAT,DODGE_G,AIM3_W,AIM3_SIZE_A,AIM3_SIZE_B,AIM3_LEAD,AIM3_RELOAD"
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") $CMD --ref (Join-Path $ROOT "docs\runs\2.2\2.2a\train.cmd") "--allow=$ALLOW" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against 2.2a's command): not started"; exit 1 }
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") $CMD --ck $From "--allow=DESC_OX" | ForEach-Object { Log $_ }
