@@ -1,6 +1,6 @@
 # 2.2b: a fight network beside the item picker
 
-**Status (2026-11-17): built, reviewed and started on the owner's go ("Have a subagent build it and validate it. Then start it when it's ready"). The build's record: [BUILD.md](BUILD.md).**
+**Status (2026-11-17): built, reviewed and started on the owner's go ("Have a subagent build it and validate it. Then start it when it's ready"). The build's record: [BUILD.md](BUILD.md). The first start failed (the gauntlet; RUNS #59); restarted with three changes: "The restart (11-17 evening)" below (RUNS #60).**
 
 ## The owner's page
 
@@ -64,6 +64,32 @@ at; in a fight the hands' own scores are far larger and decide.
 
 **It never touches the trigger.** That is 2.2c.
 
+## The restart (11-17 evening)
+
+**What failed.** The first start (RUNS #59, 17:56 to 19:56) was stopped by the owner after 18 updates. From update 8 he held the gauntlet
+more and more (under 1% of his time in games through update 7, then 14%, 25%, and a third of the time from update 12), and the check at
+update 10 lost 0-200 to the start. The agreed cause: for its first 10 updates the item picker's choice lesson was switched off while the
+rest of it kept learning to forecast its new pay. Nothing held what it put out: its memory drifted, its push on his weapon grew (its size
+3.1 → 5.5) and his weapon choice moved 4 to 23 times faster than normal (KL 0.06 to 0.35 against 0.015) until he walked around with the
+gauntlet. That start's folder is kept as `data/sim_runs/duel_gru_2_2b_failed_1117`; nothing from it is used.
+
+**The three changes (the owner's decisions; everything else of this card unchanged):**
+
+1. **The item picker is frozen for its first 10 updates**, except the last layer of its forecast (the one layer that reads its memory and
+   says what the next seconds are worth): that layer relearns the new pay; nothing else of it moves at all (its memory, its scores for the
+   items, its slow plan, its weapon scores, the tracker stored inside it). Its choice lesson stays off in that window. From update 11 it
+   learns as designed. The trainer proves it every update: the largest difference of every frozen weight from the start must be exactly 0.
+2. **The item picker's push on his weapon leaves at the start.** It fades 1 → 0 over updates 0 to 10 (in the first plan: 60 to 100) and
+   is 0 for the rest of the run; its weapon scores never learn in this run. The fight network's weapon nudge still comes in over 60 to 100
+   as planned: between update 10 and update 60 his weapon is the hands' choice alone.
+3. **Two alarms**, each a MAJOR line in `watch/watch.log` every update from update 1: the gauntlet in his hand more than 5% of the time,
+   and his weapon choice moving faster than 0.045 (three times its normal speed). Replayed over the failed start, they would have fired at
+   update 5 (the speed) and update 9 (the gauntlet).
+
+**The stage table, corrected:** in stage 1 (updates 0 to 60) the item picker's weapon push leaves over updates 0 to 10; stage 2 (60 to
+100) no longer has it (the fight options enter his list; "the enemy" and "the places" leave the item picker; the fight network's weapon
+nudge opens).
+
 ## The changes
 
 | # | Change | Detail |
@@ -78,7 +104,7 @@ at; in a fight the hands' own scores are far larger and decide.
 | 8 | **The pay is split** | The item picker: items and the change in his chance of winning. The fight network: damage, far rails, frags, deaths, and the change in his chance of winning. The hands: unchanged. For its first 10 updates the item picker only relearns its forecast under the new pay; its scores are not taught until then |
 | 8b | **The chance of winning is read by the judge that sees the items and stacks** | For every part paid by it (the hands, the item picker, the fight network): one judge everywhere. Refitted on 100 new games of the start and accepted by its test before a start; the ledger's check (negative frags, sign flips) is run with it as the pay. In 2.2a this judge only fed a side forecast while the pay kept the older one; that is ended here (owner, 11-16 and 11-17) |
 | 9 | **The chance of winning is scaled up for both** | For the item picker and for the fight network, the win-chance part is scaled to **at least the size of their flat pay** (items for one; damage and frags for the other), measured on the start's games, logged every update, flagged if it falls below. The fight network keeps two forecasts, one for damage and frags, one for the chance of winning, each brought to the same size before they are added. It is also what makes the two networks' scores comparable in one list: the chance of winning is their common currency |
-| 10 | **The fight options enter his list, slowly** | Updates 60 to 100: the share of his decisions at which the fight options are in the list goes 0 → 1. Over the same updates "the enemy" and "the places" are shut in both halves of the item picker and its weapon push fades to nothing, while the fight network's weapon nudge opens. **One number is set by hand here**: the four fight options' total share at update 60 starts at what "the enemy" and "the places" hold together at that moment (they are what leaves the list), so his play does not jump. How that total is split among the four comes from what the fight network has learnt by then |
+| 10 | **The fight options enter his list, slowly** | Updates 60 to 100: the share of his decisions at which the fight options are in the list goes 0 → 1. Over the same updates "the enemy" and "the places" are shut in both halves of the item picker, while the fight network's weapon nudge opens (the item picker's weapon push: gone by update 10 since the restart). **One number is set by hand here**: the four fight options' total share at update 60 starts at what "the enemy" and "the places" hold together at that moment (they are what leaves the list), so his play does not jump. How that total is split among the four comes from what the fight network has learnt by then |
 | 11 | **It opens whatever the numbers say; they are reported, not obeyed** | A ramp never holds on its own. At update 60 the report says in plain words whether the hands carry the fight options out and how much practice each has had. If not enough, it is flagged at once and you decide |
 | 12 | **Reports in plain words** | Every report opens with what is playing now and whether the run is on this card's plan |
 
@@ -113,8 +139,8 @@ at; in a fight the hands' own scores are far larger and decide.
 
 | Stage | Updates | What plays | What to look at |
 |---|---|---|---|
-| 1. Practice | 0 to 60 | His choices as now; practice up to 12 in 100 decisions. The fight network learns and picks half of the practice trips; its scores are not yet in his list | On practice trips: does he get there or meet the enemy; damage dealt against damage taken on each kind; does he fire when the enemy walks into a held angle; which weapon he ends up holding. Frags and damage a minute; projectiles fired a minute, in view and out, with hits and near misses. Three checks |
-| 2. The fight options enter his list | 60 to 100 | Their share 0 → 1; the enemy, the places and the weapon push leave the item picker | How often he heads for each fight option and when (ahead, behind, just after a frag, an item due); the weapon out of fights; the checks |
+| 1. Practice | 0 to 60 | His choices as now; practice up to 12 in 100 decisions. **(The restart) Updates 0 to 10: the item picker frozen but for its forecast's last layer; its weapon push 1 → 0**. The fight network learns and picks half of the practice trips; its scores are not yet in his list | On practice trips: does he get there or meet the enemy; damage dealt against damage taken on each kind; does he fire when the enemy walks into a held angle; which weapon he ends up holding. Frags and damage a minute; projectiles fired a minute, in view and out, with hits and near misses. Three checks |
+| 2. The fight options enter his list | 60 to 100 | Their share 0 → 1; the enemy and the places leave the item picker (its weapon push left over updates 0 to 10: the restart); the fight network's weapon nudge opens | How often he heads for each fight option and when (ahead, behind, just after a frag, an item due); the weapon out of fights; the checks |
 | 3. Hold | 100 to the end | The full structure; practice 5 in 100 | The checks; a play test |
 
 **The hands carry a fight option out** means, over ten updates: on at least half of the practice trips he reaches the spot or meets the

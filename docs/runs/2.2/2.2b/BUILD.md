@@ -3,6 +3,76 @@
 Written by the build (an Opus 5.5 worker, 2026-11-17) for the planning session. The card is [CARD.md](CARD.md); this file is the record of
 what was built, how it was tested, and where the build departs from the card. Branch `b22b` (from `b293e76`), not merged.
 
+## The restart (11-17 evening)
+
+The first start (RUNS #59) failed: the gauntlet in hand a third of the time from update 12, 0-200 at update 10. Built on branch `b22b2` by an
+Opus 5.5 worker from the coordinator's brief (the owner's decisions); the card's "The restart (11-17 evening)" says it in plain words. On the
+owner's later word ("the run itself functions as the validation") no training run was made before the start: the checks below need none.
+
+**What was built**
+
+| Part | Where | As built |
+|---|---|---|
+| The freeze | `sim/h2freeze.py` (new); `sim/train_duel_rnn.py` `--h2-freeze 1` | Through the run's first `--h2-choice-warm` (10) updates every parameter of the item picker (head2) except `v.weight`, `v.bias` (its forecast's last layer; `ins_vv.` too where a head has it) gets its gradient set to None after the backward pass and before the clip and the step (`Freeze.drop_grads`), so Adam neither steps it nor moves its moments; the decoupled decays on `head2.target`, `head2.wsc`, `head2.fsc`, `head2.op_v` are skipped while held; the slow plan's lesson (its own Adam) and the tracker's two lessons (`fg_pass_learn`, `o22_tracker_learn`, its own Adam) are skipped while held (their readouts still scored). 32 of head2's 34 parameter tensors held |
+| The run's own count | the trainer | The window and the choice lesson's warm-up (`--h2-choice-warm`) count the run's updates: this process's `update` + the lines `metrics.jsonl` had when it started (`UPD_DONE0`). Before, both counted this process's updates, so a resume would have started the window again |
+| The weapon scores frozen | `--h2-wsc-freeze 1` | `wsc.*`, `winp.*` held (as above) for the whole run; the hands' weapon rows keep their decay |
+| The proof | `Freeze.record`, `metrics.jsonl` block `h2_freeze` every update | The largest absolute difference of every held parameter from its value at the process's start, by name (`held_by_name`, `held_max`, `weapon_max`), the forecast's last layer's movement, the largest movement of the rest, and the item picker's goal scores (`target`), weapon scores (`wsc`) and plan (`plan_out`) on a fixed batch of 64 inputs against the start's (`outputs_vs_start`). A held parameter found moved is put back (`restored`) |
+| `H2_WADD` 1 → 0 over updates 0 to 10 | `ramp_22b.py` `SCHEDULE` | Then 0 to the end (was 60 to 100). The start's live file and `--h2-wadd 1` unchanged (1 at clock 0) |
+| The alarms and the proof's line | `alarms_22b.py` (new), called by `ramp_22b.py` for every metrics line from update 1 | MAJOR when `v14.in_hand.g` > 0.05; MAJOR when `weapon.kl` > 0.045; a plain line of the freeze's proof every update, MAJOR if a held parameter moved or the block is missing |
+| The command | `make_files.py` | `--h2-freeze 1 --h2-wsc-freeze 1` added; nothing else |
+| `start.ps1` | | the two flags allowed against 2.2a's command; `-DryRunTag` (a fresh dry-run folder); its header |
+
+**The checks (all run; none needs training)**
+
+| Check | Result |
+|---|---|
+| The start answers as 2.2a's update 90 (`ident.py`, inside `start.ps1 -DryRun -DryRunTag _restart`) | **0 of 1,075,200 actions differ**, 0 keep columns; the largest logit difference 0.000142, memory 7.78e-05 |
+| `start.ps1 -DryRun` (into `data/sim_runs/scratch_22b_dryrun_restart`) | **Passed**: both settings checks, the start values (53 names), live accept x 3, convert, layout, norm, ident, the league (9 anchors and the control, 8 snapshots) |
+| `check_settings.py` the new command against the failed start's | Exactly two differences, both ordered: `--h2-freeze` 1 (unset before), `--h2-wsc-freeze` 1 (unset before). The `H2_WADD` schedule is the ramp's, not the command's |
+| The freeze, one optimizer step (`tests.py freeze`, CPU, the start's own head2, Adam moments first primed by an unheld step) | Run update 1: every held parameter bit-identical (32 of 34, largest difference 0.0); the forecast's last layer moved (`v.weight` 1.0e-4, `v.bias` 1.0e-4); goal, weapon and plan scores on a fixed batch bit-identical (0.0, 0.0, 0.0). Run update 10: still 0.0. Run update 11: the body moved (largest 3.0e-4; the goal scores 0.0098), the weapon scores still 0.0. **Control**: a zero gradient (not None) with the same moments moves the held parameters (7.7e-5): the gradient must be None. A resume after the run's update 10 does not start the window again. A held parameter moved by hand is reported, put back bit for bit, and the ramp's line is MAJOR. **ALL PASSED** |
+| `tests.py unit`, `live`, `guard` | **ALL PASSED** each (the `H2_WADD` range 0 to 1 accepted at its ends, refused outside). Run as `tests.py all` in one process, five `unit` checks fail (near misses, fight starts): `live` sets the environment and imports the simulator first; run alone they pass. Not from this change (the simulator is untouched) |
+| The alarms on the failed start's `metrics.jsonl` (`alarms_22b.py`) | The speed alarm first at **update 5** (KL 0.0604; again 6, 7, 8, 9, 10), the gauntlet alarm first at **update 9** (13.9%; then every update to 18) |
+| `python tools/docs_check.py` | 226 Markdown files; **3 problems, all from before this change**: three links to `docs/runs/2.1/2.1a/TESTS.md`, a file not in `main` (from `docs/runs/2.1/TRAINER_PARTS.md` and twice `2.1a/CARD_from_18a.md`). None in the files touched here |
+
+**Asked and answered**
+
+- **Why a check ran at update 10:** `tools/run/watch.py` line 213, `want_games = n == 10 or (n > 10 and n - last_chk >= CHECK_EVERY)`: the
+  first check is at update 10 by design (its docstring: "the first at update 10, then one every CHECK_EVERY"); then every 20. Not a bug;
+  not changed. The restart's checks: 10, 30, 50, ...
+- **The check's line in `watch/watch.log`:** it was there in the failed start: `watch.py`'s `say()` writes to `watch.log` and its stdout
+  (line 352 of that `watch.log`: "check update 10 against the control ... record 0-200"), and the ramp wrote "MAJOR PROBLEM check update 10
+  ... 0-200 = 0.0% (under 40%)" (line 355). Nothing changed.
+- **`H2_WADD` as played lags the ramp's writes.** The ramp writes after update n's line; the trainer applies a live file before a rollout,
+  and with `--overlap 1` the next rollout is already under way: in the failed start the value written at clock n played at update n + 2
+  or n + 3 (`PRACTICE_P` 0.006, written at clock 1, played at update 4; the token gate's at update 3). So 1.0 plays at updates 1 to about
+  3, 0.9 ... and **0 first plays at about update 12 or 13**, not 10 (read `fight.played.h2_wadd`). The freeze's window is the trainer's own
+  count (updates 1 to 10 exactly). At updates 11 to about 12 the item picker learns while its push is still 0.1 to 0.2 (its weapon scores
+  frozen; only its memory moves them). Shifting the ramp's line three updates earlier would close that gap: not done (the brief says 0 to 10).
+
+**Decided by the worker**
+
+1. **The tracker inside the item picker is frozen too in the window** (its own Adam's two lessons skipped; its readouts still scored). It
+   is the belief's prediction stored in head2's module; the brief says "no optimizer movement on any other parameter of head2". Releasing
+   it is a one-line change (`Freeze.own_adam_frozen`).
+2. The windows count the run's updates, not the process's (above): the choice lesson's warm-up too.
+3. A held parameter found moved is put back and reported MAJOR (the proof is measured before the put-back).
+4. The alarms live in the ramp's per-update pass (`ramp_22b.py` + `alarms_22b.py`), which already writes every per-update FLAG and MAJOR
+   line into `watch/watch.log`; `tools/run/watch.py` is shared by every run and reads at saves.
+5. The failed start's log `data/sim_runs/duel_gru_2_2b.log` was renamed with its folder (`duel_gru_2_2b_failed_1117.log`): the ramp ends
+   its watch when that log's last line starts with "exit ", and the failed start's ended "exit 1".
+6. The weapon key's credit (`--head2-wpg 1`, live `H2_WPG` 1) is unchanged: see "Open".
+
+**Open, and what works against the run's aim**
+
+- **The weapon key's lesson.** With `H2_WPG` 1 the hands' weapon key gets no lesson of its own pay at all: its share is taken out of the
+  hands' term and given to a term on the item picker's clock with the item picker's advantage (items and the chance of winning, no damage),
+  and that term is switched off in the window. So in updates 1 to 10 his weapon key gets no policy-gradient lesson at all, only its entropy bonus (`--ent-heads` 0.5 on it) and the decay (as in the failed start), and from
+  update 11 to 60 it learns only from the item picker's pay while the item picker's own push is 0. Not changed (the brief: everything else
+  unchanged); the planning session may want `H2_WPG` 0 (the hands' own advantage) now that the item picker leaves the weapon.
+- The trainer's own path with the new code was not run (no training run before the start, by the owner's word): the mechanism is tested on
+  the real head2 on the CPU, the trainer's edits are compiled and its start path ran in the guard tests. The first updates' `h2_freeze`
+  blocks are the proof; a crash would show in the first update.
+
 ## Not done, or open (read first)
 
 **The fix round of 11-17 (the coordinator's review: A to D and the optimizer), done and re-validated: see "The fix round" below.**

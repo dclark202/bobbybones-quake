@@ -5,7 +5,9 @@
 # answering as 2.2a's update 90 on recorded play (ident.py: 0 actions differ). The league (league_22b.py): 2.2a's anchors, its own last 8 snapshots up
 # to update 90, and the control (2.2a's update 90) as anchor_22a90.pt, all brought to list 22b. The win scales from win_scale_22b.json (measured on
 # the start's games with the judge with the items: BUILD.md). The ramp (ramp_22b.py): PRACTICE_P 0 -> 0.12 and NEAR_PAY 0 -> 5 over updates 0 to 20,
-# the hands' token gate -30 -> 0 over 0 to 20, the one number (FGT_BIAS) once at update 60, FGT_G and FGT_W 0 -> 1 and H2_WADD 1 -> 0 over 60 to 100,
+# the hands' token gate -30 -> 0 over 0 to 20, H2_WADD 1 -> 0 over 0 to 10 (THE RESTART, 11-17: the item picker frozen but for its forecast's
+# last layer through update 10, --h2-freeze; its weapon scores never learn, --h2-wsc-freeze; two MAJOR alarms every update: the gauntlet in hand
+# over 5%, the weapon KL over 0.045; the freeze's proof every update), the one number (FGT_BIAS) once at update 60, FGT_G and FGT_W 0 -> 1 over 60 to 100,
 # PRACTICE_P 0.05 from 60; the update-60 report in plain words; saves kept at 10, 60, 100, then every 20 and the end. Never held or stepped back.
 # Refuses: no data\ here; a trainer running; a missing file; the items' fit not accepted (make_files.py, the judge's guard); a firing cost above zero;
 # a difference from 2.2a's command beyond the 47 names of BUILD.md; a difference from the start file's settings beyond DESC_OX; the command's start
@@ -18,14 +20,15 @@
 # (keep\opt_u100.pt) is copied in as opt.pt (the trainer carries its moments over to list 22b's widened first layer and the new token);
 # -Opt <file> carries another; -ColdOpt starts it cold (the card's first plan). --lr-warm applies either way.
 # -DryRun: every check and every file made, into data\sim_runs\scratch_22b_dryrun (log: start_dryrun.log); the trainer and its helpers not started.
-param([int]$Minutes = 0, [int]$Updates = 0, [string]$From = "", [string]$Samples = "", [string]$Opt = "", [switch]$ColdOpt, [switch]$DryRun)
+# -DryRunTag <t>: the dry run's folder scratch_22b_dryrun<t> (the restart's: _restart; a folder is never written over).
+param([int]$Minutes = 0, [int]$Updates = 0, [string]$From = "", [string]$Samples = "", [string]$Opt = "", [switch]$ColdOpt, [switch]$DryRun, [string]$DryRunTag = "")
 $ErrorActionPreference = "Stop"
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT = (Resolve-Path (Join-Path $HERE "..\..\..\..")).Path
 $PY = if ($env:BB_PY) { $env:BB_PY } else { Join-Path $env:USERPROFILE "anaconda3\python.exe" }
 $SR = Join-Path $ROOT "data\sim_runs"
 $R0 = Join-Path $SR "duel_gru_2_2a"
-$RUN = if ($DryRun) { "scratch_22b_dryrun" } else { "duel_gru_2_2b" }
+$RUN = if ($DryRun) { "scratch_22b_dryrun" + $DryRunTag } else { "duel_gru_2_2b" }
 $R1 = Join-Path $SR $RUN
 $LOG = Join-Path $HERE $(if ($DryRun) { "start_dryrun.log" } else { "start.log" })
 function Log($m) { $l = (Get-Date -Format "MM-dd HH:mm:ss ") + $m; Add-Content -Path $LOG -Value $l; $l }
@@ -56,7 +59,7 @@ if ($LASTEXITCODE -ne 0) { Log "make_files failed (the items' fit not accepted? 
 $CMD = Join-Path $HERE "train.cmd"
 & $PY -c "import re, sys; t = open(sys.argv[1]).read(); s = lambda n: float((re.findall(r'^set ' + n + r'=(\S*)\s*$', t, re.M) or ['0'])[-1] or 0); bad = {n: s(n) for n in ('SHOT_COST', 'RG_FAR_PRICE', 'BLIND_FIRE_W', 'BLIND_RL_DMG', 'COST_FIRE_W') if s(n) != 0}; bad.update({'BLIND_RL_DMG (unset: 6 by default)': 6} if not re.search(r'^set BLIND_RL_DMG=', t, re.M) else {}); print('no firing cost in the command: every one at zero' if not bad else 'A FIRING COST ABOVE ZERO: ' + str(bad)); sys.exit(1 if bad else 0)" $CMD | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "a firing cost above zero: not started"; exit 1 }
-$ALLOW = "--run,--minutes,--max-updates,--env,--outlook,--out-kinds,--out22,--map-sense,--map-sense-init,DESC_OX,--fight22,--fight22-lr,--fgt-g,--fgt-w,--practice-p,--h2-wadd,--fgt-gate,--win-scale-items,--win-scale-fight,--h2-choice-warm,--lr-warm,--lr-warm-start,--head2-pay,--held-g,--pull-g,--intent-teach,--dmg-reward,FIGHT,OUT_LIVE,NEAR_MISS,JUDGE_PAY,FIGHT_START_P,PRO_START_P,JUDGE_ITEMS,WIN_ADD,LEVEL_PULL,CONTACT_FREE,COST_FIRE_W,COST_JERK_W,STACK_DIFF,SPEED_PAY,RAIL_FAR_PAY,ITEM_FLAT,DODGE_G,AIM3_W,AIM3_SIZE_A,AIM3_SIZE_B,AIM3_LEAD,AIM3_RELOAD"
+$ALLOW = "--run,--minutes,--max-updates,--env,--outlook,--out-kinds,--out22,--map-sense,--map-sense-init,DESC_OX,--fight22,--fight22-lr,--fgt-g,--fgt-w,--practice-p,--h2-wadd,--fgt-gate,--win-scale-items,--win-scale-fight,--h2-choice-warm,--h2-freeze,--h2-wsc-freeze,--lr-warm,--lr-warm-start,--head2-pay,--held-g,--pull-g,--intent-teach,--dmg-reward,FIGHT,OUT_LIVE,NEAR_MISS,JUDGE_PAY,FIGHT_START_P,PRO_START_P,JUDGE_ITEMS,WIN_ADD,LEVEL_PULL,CONTACT_FREE,COST_FIRE_W,COST_JERK_W,STACK_DIFF,SPEED_PAY,RAIL_FAR_PAY,ITEM_FLAT,DODGE_G,AIM3_W,AIM3_SIZE_A,AIM3_SIZE_B,AIM3_LEAD,AIM3_RELOAD"
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") $CMD --ref (Join-Path $ROOT "docs\runs\2.2\2.2a\train.cmd") "--allow=$ALLOW" | ForEach-Object { Log $_ }
 if ($LASTEXITCODE -ne 0) { Log "SETTINGS CHECK FAILED (against 2.2a's command): not started"; exit 1 }
 & $PY (Join-Path $ROOT "tools\run\check_settings.py") $CMD --ck $From "--allow=DESC_OX" | ForEach-Object { Log $_ }
