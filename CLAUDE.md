@@ -64,6 +64,8 @@ bot is made of, why each rule exists and what was tried are in the documents bel
 16. **Git**: explicit `git add <files>`; never rebase; commits end with the Co-Authored-By line; push `main` at most once or twice a
     day; one working tree plus at most one worktree per active run, made without links into `data/`.
 17. **Nothing unattended opens a window** (`pythonw`, hidden launchers, `CREATE_NO_WINDOW`).
+18. **Every edit to this file is approved by the owner first, in its exact wording.** The proposed text is shown in the chat; nothing
+    is written until he says yes. No worker or monitoring session edits it.
 
 ## How we work
 
@@ -87,7 +89,8 @@ bot is made of, why each rule exists and what was tried are in the documents bel
 - **Never judge by how often he re-decides, or by a low hit rate.** What counts: games won and lost, that he fights (frags and
   damage a minute), no sitting on an item's place. There is no spawn camping in duel.
 - He prefers concise answers and doable batches. He should never have to say a thing twice: when he corrects something, it goes into
-  this file (the rule), `HISTORY.md` (the story) and the session's memory in the same turn.
+  `HISTORY.md` (the story) and the session's memory in the same turn, and the rule's wording for this file is proposed to him in the
+  same turn.
 
 ## The owner's goals
 
@@ -127,6 +130,9 @@ Every design, pay and review is read against these.
    research check, the odds. His go on the card; **ask him the length** (12 hours if he says the default).
 3. **The build** by an Opus worker, with `BUILD.md`: every test with its numbers, every setting and flag of the command with its value.
    A new part or pay is tried for two updates at full size before a start; small identity-checked changes start directly.
+   **A trial before a start is for the technical side only**: that a configuration change works and the run will run correctly
+   (smoke tests, one or two updates at full size). Behaviour is never validated by a trial: the run's own first updates are the
+   behaviour check, with the alarm in the run.
 4. **The start**: `docs\runs\<family>\<run>\start.ps1` (it runs the settings and live-file checks and refuses on any difference).
    Its row in `docs/RUNS.md` at once.
 5. **Monitoring from update 1** by the monitoring session: every FLAG and MAJOR line, a stall, each check; a line an hour; the 06:30
