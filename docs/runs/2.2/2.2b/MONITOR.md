@@ -28,10 +28,11 @@ he heads for the highest. The schedule:
 
 | Updates | What plays | The point |
 |---|---|---|
+| 0 to 10 (the restart) | The item picker is frozen except the last layer of its forecast (the trainer proves it every update: a plain line in `watch/watch.log`, MAJOR if a frozen weight moved); its push on his weapon fades 1 → 0 and stays 0 for the run; its weapon scores never learn | His weapon is the hands' alone from update 10 until the fight network's nudge opens at 60 |
 | 0 to 20 | His choices as before. Practice trips (he is sent on a fight option with a random weapon) rise to 12 in 100 decisions; half dealt at random, half picked by the new network. The small pay for a projectile that bursts near the enemy opens. The hands start to be told where he is headed | The hands begin to practise |
 | 20 to 60 | The same, held | Do the hands carry the fight options out |
 | **60** | **The ramp writes a plain-words line** in `watch/watch.log`: whether the hands carry each option out, how much practice each has had | **The run's first decision point. Report it at once and in full, as its meaning** |
-| 60 to 100 | The fight options enter his own list (their share 0 → 1). "The enemy" and "the places" leave the item picker; the weapon push changes owner. Practice 5 in 100 | Does he use them himself |
+| 60 to 100 | The fight options enter his own list (their share 0 → 1). "The enemy" and "the places" leave the item picker; the fight network's weapon nudge opens (the item picker's weapon push left by update 10: the restart). Practice 5 in 100 | Does he use them himself |
 | 100 on | The full structure | Checks; the owner's play test |
 
 Nothing in this run holds or steps back on its own: the stages open on the clock whatever the numbers say. **So a bad number is yours
@@ -42,6 +43,13 @@ to shout about**; nothing else will.
 about 19% each (if back off climbs well above that, say so: he is being sent running away too often). The one FLAG about the pay's
 size now fires when the win-chance part is **smaller** than a decider's flat pay; it should not fire. The start carried 2.2a's
 update-100 optimizer.
+
+**The restart (11-17 evening; the card's "The restart").** The first start failed (the gauntlet in hand a third of the time from update 12,
+0-200 at update 10); its folder is `duel_gru_2_2b_failed_1117`. The run you monitor keeps the name 2.2b and the folder
+`data/sim_runs/duel_gru_2_2b`. As built for the restart: the item picker frozen but for its forecast's last layer through update 10
+(`metrics.jsonl` block `h2_freeze`: `held_max` must be exactly 0 through update 10, and `weapon_max` exactly 0 for the whole run; the ramp's
+line "the item picker FROZEN ..." every update); its weapon push `H2_WADD` 1 → 0 over updates 0 to 10 as the ramp writes it (the value
+actually played lags the written one by about 2 to 3 updates, so 0 first plays at about update 12 or 13: read `fight.played.h2_wadd`).
 
 ## Never
 
@@ -58,7 +66,9 @@ sizes, near misses, projectiles fired, parts off, non-finite counts); `watch/wat
 
 ## What to report
 
-1. **At once**: any MAJOR line; each check (every 20 updates, 200 games against the start, 2.2a's update 90; every fourth against
+1. **At once**: any MAJOR line, above all the restart's two alarms: **the gauntlet in his hand over 5% of the time** (`v14.in_hand.g`
+   over 0.05) and **his weapon choice moving over three times its normal speed** (`weapon.kl` over 0.045), and a frozen part of the item
+   picker that moved; each check (every 20 updates, 200 games against the start, 2.2a's update 90; every fourth against
    2.1d's end): games won and lost, **one under 40% is a major problem, said with urgency**; a stall (no new line for 15 minutes); a
    part turned off, a non-finite count, a refused settings file; RAM free under 5 GB or commit over 95 GB; the card's held memory
    over 15 GB; any size over 40; the win-chance scale under 1 for either network.

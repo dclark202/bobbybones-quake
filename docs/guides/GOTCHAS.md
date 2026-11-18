@@ -25,6 +25,10 @@ run in silence are also in CLAUDE.md.
   collapse. When a check falls, look at the KL and the trainer's own pieces before the design.
 - `--lr-warm` counts from `--fade-start`, not from the run's start: on a line whose `--fade-start` is far in the past it does
   nothing and the first update runs at the full rate (found in 2.2b's build). Give `--lr-warm-start <the start's minute>`.
+- **Switching a part's lesson off while the rest of it trains leaves its outputs unheld** (2.2b's first start: the item picker's choice
+  lesson off for 10 updates, its memory moving under its forecast's loss; he ended up holding the gauntlet, 0-200 at update 10). Freeze
+  the whole part but the layer that learns (gradient None before the step: a zero gradient with Adam's moments still moves it), prove it
+  every update, and let any trial run past the update where a warm-up or window ends.
 - A start without its own optimizer: carry the nearest kept one (2.2b: 2.2a's update 100 for a start at update 90). Cold, even at
   a tenth of the rate, the weapon choice moved twenty times faster than usual in the second update.
 - Restart only right after a save (every 10 updates), keep a copy; pass `--fade-start <minute>` on every resume.

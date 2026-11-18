@@ -9,7 +9,10 @@ data/sim_runs/scratch_22b_*; nothing deleted.
     unit    the mixture's probability and the dealing as played (fix A: the kind drawn among four, dealt if valid); the one list's masks (the enemy and the places shut, an invalid option shut); the pay split's parts sum
             to the frame's pay (a simulator run with NEAR_MISS on); the near miss: zero-sum, graded, its cap; a fight start: one seat fresh
             (spawn health, the machine gun) at a spawn point, the other a moment's, a frag added; the win scale's arithmetic
-    QLBOT_ROOT=<checkout> CUDA_VISIBLE_DEVICES=-1 OPENBLAS_NUM_THREADS=1 python docs/runs/2.2/2.2b/tests.py <guard|live|unit|all>"""
+    freeze  (the restart, 11-17) sim/h2freeze.py on the start's own head2 (CPU): one held step leaves every held parameter bit-identical and
+            moves the forecast's last layer; after the window the body moves and the weapon scores do not; a zero gradient would move them
+    (run each group in its own process: `all` runs live before unit, and unit's near-miss and fight-start checks then fail)
+    QLBOT_ROOT=<checkout> CUDA_VISIBLE_DEVICES=-1 OPENBLAS_NUM_THREADS=1 python docs/runs/2.2/2.2b/tests.py <guard|live|unit|freeze|all>"""
 import hashlib
 import json
 import os
@@ -23,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
 sys.path.insert(0, os.path.join(ROOT, "tools", "run"))
+sys.path.insert(0, HERE)
 NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 FAILS = []
 
@@ -216,9 +220,103 @@ def unit():
     check("the win scale: max(1, flat / win)", k_i == 2.0 and k_f == 1.0)
 
 
+def freeze(start=None):
+    """(the restart, 11-17) the item picker held: on the start's own head2 (CPU), with Adam moments primed by an unheld step (stale
+    momentum, as a carried optimizer has), one held step (run update 1) leaves every held parameter bit-identical and moves the forecast's
+    last layer (v); the goal and weapon scores on a fixed batch are bit-identical; the trainer's decays as gated there; then run update 11:
+    the body moves, the weapon scores (wsc, winp) still do not. A control: a zero gradient (not None) with the same moments moves them."""
+    import torch
+    import head2 as head2_
+    import h2freeze as HZ
+    torch.manual_seed(0)
+    start = start or os.path.join(ROOT, "data", "sim_runs", "duel_gru_2_2b_failed_1117", "keep", "policy_start_22b.pt")
+    ck_ = torch.load(start, map_location="cpu", weights_only=False)
+    L_ = ck_["head2"]["layout"] if "layout" in ck_["head2"] else ck_["head2"]
+    m_ = head2_.make_module(L_)
+    m_.load_state_dict({k_[6:]: v_ for k_, v_ in ck_["model"].items() if k_.startswith("head2.")})
+    mainp_ = [p_ for n_, p_ in m_.named_parameters() if not n_.startswith(("winp.", "wsc.", "plan.", "trk."))]
+    opt_ = torch.optim.Adam(mainp_, lr=1e-4, eps=1e-5)
+    opt_.add_param_group({"params": list(m_.winp.parameters()) + list(m_.wsc.parameters()), "lr": 1e-4})
+    popt_, topt_ = torch.optim.Adam(m_.plan.parameters(), lr=1e-4), torch.optim.Adam(m_.trk.parameters(), lr=1e-4)
+    S_ = int(m_.gru.hidden_size)
+    Hh_ = int(m_.v.in_features) - S_
+    W_ = int(m_.inp.in_features) + int(m_.winp.in_features)
+    u_, s0_, h_ = torch.randn(32, W_) * 0.5, torch.randn(32, S_) * 0.3, torch.randn(32, Hh_) * 0.3
+    coef_ = {n_: torch.randn_like(p_) for n_, p_ in m_.named_parameters()}
+
+    def loss_():
+        s_ = m_.gru(head2_.pre(m_, u_), s0_)
+        l_ = head2_.value(m_, s_, h_).pow(2).mean() + m_.target(s_).pow(2).mean() + m_.wsc(s_).pow(2).mean() + m_.plan_out(s_).pow(2).mean()
+        return l_ + sum((p_ * coef_[n_]).sum() * 1e-3 for n_, p_ in m_.named_parameters())     # (every parameter has a gradient)
+
+    def step(fz, zero_not_none=False):
+        for o_ in (opt_, popt_, topt_):
+            o_.zero_grad(set_to_none=True)
+        loss_().backward()
+        if fz is not None:
+            if zero_not_none:
+                for n_, p_ in m_.named_parameters():
+                    if fz.frozen(n_):
+                        p_.grad = torch.zeros_like(p_)
+            else:
+                fz.drop_grads()
+        opt_.step()
+        with torch.no_grad():                                     # (the trainer's decays, gated as there)
+            if fz is None or not fz.frozen("target.weight"):
+                m_.target.weight *= 1.0 - 1e-4 * 0.01
+            if fz is None or not fz.frozen("wsc.weight"):
+                m_.wsc.weight *= 1.0 - 1e-4 * 0.01
+        for pre_, o_ in (("plan.", popt_), ("trk.", topt_)):      # (their own Adam: skipped while held)
+            if fz is None or not fz.own_adam_frozen(pre_):
+                o_.step()
+    step(None)                                                    # (moments primed: stale momentum)
+    sd0_ = {k_: v_.clone() for k_, v_ in m_.state_dict().items()}
+    fz_ = HZ.Freeze(m_, window=10, done0=0, freeze=True, wfreeze=True)
+    fz_.set_update(1)
+    step(fz_)
+    r_ = fz_.record(restore=False)
+    check("freeze: run update 1, every held parameter bit-identical ({} of {})".format(r_["held_n"], len(fz_.names)), r_["held_max"] == 0.0 and not r_["moved"],
+          "largest difference {} on {}".format(r_["held_max"], [n_ for n_, d_ in r_["held_by_name"].items() if d_]))
+    check("freeze: the forecast's last layer moved", all(d_ > 0 for d_ in r_["forecast_moved"].values()) and set(r_["forecast_moved"]) == {"v.weight", "v.bias"},
+          str(r_["forecast_moved"]))
+    check("freeze: goal, weapon and plan scores on a fixed batch bit-identical", all(v_ == 0.0 for v_ in r_["outputs_vs_start"].values()), str(r_["outputs_vs_start"]))
+    fz_.set_update(10)
+    step(fz_)
+    r10_ = fz_.record(restore=False)
+    check("freeze: run update 10 still held", r10_["on"] and r10_["held_max"] == 0.0, "held_max {}".format(r10_["held_max"]))
+    fz_.set_update(11)
+    step(fz_)
+    r11_ = fz_.record(restore=False)
+    body_ = {n_: d_ for n_, d_ in r11_["held_by_name"].items()}
+    check("freeze: run update 11, the window over: the body moved, the weapon scores still bit-identical",
+          (not r11_["on"]) and r11_["weapon_max"] == 0.0 and set(body_) == {"winp.weight", "winp.bias", "wsc.weight", "wsc.bias"} and r11_["free_max"] > 0,
+          "weapon {} (held {}), the rest's largest movement {}, the goal scores' {}".format(r11_["weapon_max"], sorted(body_), r11_["free_max"],
+                                                                                           r11_["outputs_vs_start"].get("target")))
+    m_.load_state_dict(sd0_)
+    fc_ = HZ.Freeze(m_, window=10, done0=0, freeze=True, wfreeze=True)
+    fc_.set_update(1)
+    step(fc_, zero_not_none=True)
+    rc_ = fc_.record(restore=False)
+    check("freeze control: a zero gradient (not None) with stale moments DOES move the held parameters", rc_["held_max"] > 0,
+          "largest difference {}".format(rc_["held_max"]))
+    fr_ = HZ.Freeze(m_, window=10, done0=10, freeze=True, wfreeze=False)
+    check("freeze: a resume after the run's update 10 does not start the window again", not fr_.set_update(1))
+    fp_ = HZ.Freeze(m_, window=10, done0=0, freeze=True, wfreeze=True)
+    fp_.set_update(3)
+    w0_ = m_.wsc.weight.detach().clone()
+    with torch.no_grad():
+        m_.wsc.weight.add_(0.5)
+    rp_ = fp_.record(restore=True)
+    check("freeze: a held parameter found moved is reported and put back", rp_["restored"] and "wsc.weight" in rp_["moved"] and torch.equal(m_.wsc.weight, w0_),
+          "held_max {} moved {}".format(rp_["held_max"], rp_["moved"]))
+    import alarms_22b as AL
+    ls_ = AL.lines(dict(h2_freeze=rp_), 3)
+    check("freeze: the ramp's line for it is MAJOR", any(l_.startswith("MAJOR PROBLEM update 3: A FROZEN PART") for l_ in ls_), ls_[-1][:140])
+
+
 def main():
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
-    for nm_, fn_ in (("guard", guard), ("live", live), ("unit", unit)):
+    for nm_, fn_ in (("guard", guard), ("live", live), ("unit", unit), ("freeze", freeze)):
         if which in (nm_, "all"):
             fn_()
     print("ALL PASSED" if not FAILS else "FAILED: {}".format(FAILS))

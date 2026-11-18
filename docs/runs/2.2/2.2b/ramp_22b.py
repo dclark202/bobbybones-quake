@@ -5,7 +5,11 @@ updates done = the LINES of metrics.jsonl (never the trainer's own "update": a -
   FGT_GATE     -30 (shut) at the start, -12 from the first update -> 0 at update 20: the hands' new token "fight22" (change 4)
   FGT_G        0 -> 1 over updates 60 to 100: the share of his new trips whose list has the four fight options (change 10)
   FGT_W        0 -> 1 over updates 60 to 100: the fight network's weapon nudge opens ...
-  H2_WADD      1 -> 0 over updates 60 to 100: ... while the item picker's weapon push fades
+  H2_WADD      1 -> 0 over updates 0 to 10, then 0 to the end (THE RESTART, 11-17: it was 60 to 100): the item picker's weapon push leaves
+               over the window in which the item picker is frozen (--h2-freeze); its weapon scores never learn (--h2-wsc-freeze)
+  THE RESTART's two alarms (alarms_22b.py), every update from update 1, each a MAJOR line: the gauntlet in hand (v14.in_hand.g) over 0.05;
+  the weapon choice's speed (weapon.kl) over 0.045 (three times its normal 0.015). And every update the freeze's proof (the trainer's
+  h2_freeze block) in one plain line, MAJOR if a held parameter moved.
   FGT_BIAS     THE ONE NUMBER, written ONCE when update 60 is logged (change 10): the mean of the fight block's "bias_to_set" over updates 51 to
                60 (the bias on the four scores at which their share of his decisions is what "the enemy" and the places hold then); decided once
                (watch/fgt_bias.json: a resume never decides twice); none to be had: not written, a MAJOR line
@@ -25,13 +29,16 @@ import json
 import os
 import shutil
 import threading
+import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import alarms_22b  # noqa: E402  (the restart's two alarms and the freeze's proof line)
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
 SCHEDULE = {"PRACTICE_P": [(0, 0.0), (20, 0.12), (60, 0.12), (60.001, 0.05)], "NEAR_PAY": [(0, 0.0), (20, 5.0)],
             "FGT_GATE": [(0, -30.0), (0.001, -12.0), (20, 0.0)], "FGT_G": [(60, 0.0), (100, 1.0)], "FGT_W": [(60, 0.0), (100, 1.0)],
-            "H2_WADD": [(60, 1.0), (100, 0.0)]}
+            "H2_WADD": [(0, 1.0), (10, 0.0)]}                    # (the restart, 11-17: over the freeze's window, then 0 for the run)
 UNSCHEDULED = ("PULL_G", "HELD_G", "NEAR_OUT")               # (never written by the ramp)
 BIAS_AT, BIAS_WIN = 60, 10
 REPORT_AT = 60
@@ -294,6 +301,8 @@ def main():
             assert n_ in cur, "{} is not in live.json (the ramp never writes it: start_live.py puts it there)".format(n_)
 
     def update_lines(m_, base, u_):
+        for l_ in alarms_22b.lines(m_, u_):                             # (the restart, 11-17) the two alarms and the freeze's proof, first
+            log(l_)
         pt_ = m_.get("pay_terms") or {}
         pm_, ss_ = pt_.get("per_player_min") or {}, pt_.get("size_share") or {}
         if pm_:
@@ -525,9 +534,10 @@ def main():
 
     threading.Thread(target=flags_guard, daemon=True).start()
     log("ramp_22b on for {} (scale {}): PRACTICE_P 0 -> 0.12 over updates 0 to 20, held to 60, then 0.05; NEAR_PAY 0 -> 5 over 0 to 20; the hands' "
-        "token -30, then -12 -> 0 over 0 to 20; FGT_G and FGT_W 0 -> 1 and H2_WADD 1 -> 0 over 60 to 100; FGT_BIAS once at 60 ({}); the report at "
+        "token -30, then -12 -> 0 over 0 to 20; H2_WADD 1 -> 0 over 0 to 10, then 0 (the restart: the item picker's weapon push leaves while it is "
+        "frozen); FGT_G and FGT_W 0 -> 1 over 60 to 100; FGT_BIAS once at 60 ({}); the report at "
         "60 ({}); saves kept at {} ... and the end; never written: {}; FREE: the clock never holds or steps back, a check under 40% is a MAJOR "
-        "PROBLEM{}".format(a.run, SCALE[0], "decided already: {}".format(BIAS_D[0].get("bias")) if BIAS_D[0] else "not yet",
+        "PROBLEM; every update: the gauntlet in hand over 5% and the weapon KL over 0.045 are MAJOR, the freeze's proof in a line{}".format(a.run, SCALE[0], "decided already: {}".format(BIAS_D[0].get("bias")) if BIAS_D[0] else "not yet",
                            "made already" if REP_D[0] else "not yet", marks_now(140), UNSCHEDULED, " (resumed)" if a.resume else ""))
     L0 = jl(MET)
     done_n = len(L0) if (a.resume and L0) else 0

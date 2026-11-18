@@ -1307,6 +1307,12 @@ def main():
     ap.add_argument("--practice-secs", type=float, default=4.0, help="(--fight22) a practice trip is held until he arrives, meets the enemy or this many seconds")
     ap.add_argument("--h2-choice-warm", type=int, default=10, help="(--fight22, change 8) the item picker's first updates: its forecast learns, its "
                     "choice lesson (target and weapon terms) is off")
+    ap.add_argument("--h2-freeze", type=int, default=0, help="(2.2b restart, 11-17) 1: through the run's first --h2-choice-warm updates (counted by "
+                    "metrics.jsonl's lines, so a resume does not start the window again) the whole item picker (head2) is frozen except its forecast's "
+                    "last layer (v, ins_vv): no gradient, no decay, no Adam movement on any other of its parameters (the tracker and the slow plan "
+                    "inside it included); their largest difference to the start is logged every update (h2_freeze) and put back if it is not 0")
+    ap.add_argument("--h2-wsc-freeze", type=int, default=0, help="(2.2b restart, 11-17) 1: the item picker's weapon scores (head2.wsc, head2.winp) "
+                    "learn nothing for the whole run: no gradient, no decay, no Adam movement; their largest difference to the start logged every update")
     ap.add_argument("--win-scale-items", type=float, default=1.0, help="(--fight22, change 9) the item picker's win-chance part x this (measured on the start's games)")
     ap.add_argument("--win-scale-fight", type=float, default=1.0, help="(--fight22, change 9) the fight network's win-chance part x this (measured on the start's games)")
     ap.add_argument("--fight-epochs", type=int, default=2, help="(--fight22) its lesson's passes over the rollout's rows")
@@ -2038,6 +2044,7 @@ def main():
 
     FIRE_O = sum(ACTION_DIMS[:5])                            # (1.7) the fire key's logits (the sixth output, 2 choices)
     import head2 as head2_                                   # (numpy at the top; the strategy head's own import below binds the same module)
+    import h2freeze as h2frz_                                # (2.2b restart, --h2-freeze, --h2-wsc-freeze) the item picker held still
     CMB_ROWS, CMB_F, CMB_NCTX = head2_.CMB_ROWS, head2_.CMB_F, head2_.CMB_NCTX     # (1.7) the order's numbers (the simulator's the same)
     CMB_PASS0 = getattr(E_, "CMB_PASS0", 0)
     if getattr(E_, "COMBAT", False):
@@ -4692,11 +4699,12 @@ def main():
             if bool(q_.any()):
                 acc_.add_h("all", h_, Pp_[..., h_][q_].numpy(), Y_[..., h_][q_].numpy())
         l_ = None
+        hz_ = H2FZ is not None and H2FZ.own_adam_frozen("trk.")         # (2.2b restart) the item picker held: scored, not taught
         with PLAN_LOCK, torch.enable_grad():
             for g_ in TRK_OPT.param_groups:
                 g_["lr"] = float(a.out22_lr)
             pm_ = torch.randperm(len(rt_), generator=TRK_GEN)
-            for i_ in range(0, len(rt_), 4096):
+            for i_ in (range(0, len(rt_), 4096) if not hz_ else ()):
                 j_ = pm_[i_:i_ + 4096]
                 mq_ = Mq_[j_].to(dev)
                 if float(mq_.sum()) == 0:
@@ -5038,11 +5046,12 @@ def main():
                     acc_.add_h(sp_, h_, P_[sel_][..., h_][q_].numpy(), Y_[sel_][..., h_][q_].numpy())   # (capped: PassAcc's cap)
         secs_r = round(time.time() - t_r, 3)
         l_ = None
+        hz_ = H2FZ is not None and H2FZ.own_adam_frozen("trk.")         # (2.2b restart) the item picker held: scored, not taught
         with PLAN_LOCK, torch.enable_grad():
             for g_ in TRK_OPT.param_groups:
                 g_["lr"] = float(a.out22_lr)
             pm_ = torch.randperm(len(rt_), generator=TRK_GEN)
-            for i_ in range(0, len(rt_), 4096):
+            for i_ in (range(0, len(rt_), 4096) if not hz_ else ()):
                 j_ = pm_[i_:i_ + 4096]
                 mq_ = Mq_[j_].to(dev)
                 if float(mq_.sum()) == 0:
@@ -5126,7 +5135,7 @@ def main():
         for g_ in [g_ for g_ in TRK_CTLT if lo_ is not None and g_ < lo_]:
             del TRK_CTLT[g_]
         loss_ = None
-        if Xs_:
+        if Xs_ and (H2FZ is None or not H2FZ.own_adam_frozen("trk.")):   # (2.2b restart) held: scored above, not taught
             with PLAN_LOCK:
                 loss_ = tracker_.learn(pol.head2.trk, TRK_OPT, torch.cat(Xs_), torch.cat(Ys_), torch.cat(Ms_), a.out22_lr, dev, TRK_GEN)
             for p_ in pol.head2.trk.parameters():
@@ -5254,6 +5263,15 @@ def main():
     ent_heads += [1.0] * (len(ACTION_DIMS) - len(ent_heads))
     t_start, total, update = time.time(), 0, 0
     dump = []
+    try:                                                                 # (2.2b restart) the run's updates done before this process: metrics.jsonl's
+        with open(os.path.join(out, "metrics.jsonl"), encoding="utf-8") as f_:    # lines (a --resume restarts `update` at 1; the run's own
+            UPD_DONE0 = sum(1 for x_ in f_ if x_.strip())                # windows count from the run's start)
+    except OSError:
+        UPD_DONE0 = 0
+    H2FZ = h2frz_.Freeze(pol.head2, window=a.h2_choice_warm, done0=UPD_DONE0, freeze=bool(a.h2_freeze), wfreeze=bool(a.h2_wsc_freeze),
+                         seed=4057) if (H2 and (a.h2_freeze or a.h2_wsc_freeze)) else None
+    if H2FZ is not None:
+        print(H2FZ.describe(), flush=True)
     log = open(os.path.join(out, "metrics.jsonl"), "a")
     print("recurrent self-play on {}: {} players, {} weights, device {}, {} min".format(
         a.map, N, sum(p.numel() for p in pol.parameters()), dev, a.minutes), flush=True)
@@ -7994,6 +8012,8 @@ def main():
     VW_IDS = VW_PS = None                                                # (v0.6.1, --value-warm) the value outputs' tensors
     while time.time() - t_start < a.minutes * 60 and not (a.max_updates > 0 and update - upd0_ >= a.max_updates):
         update += 1
+        if H2FZ is not None:                                             # (2.2b restart) the item picker held in this update's learning?
+            H2FZ.set_update(update)
         ovl_wait = 0.0
         if not OVL:
             RM = pre_rollout(update)
@@ -9221,7 +9241,8 @@ def main():
                         pgwt_ = torch.min(rw_ * aw_, rw_.clamp(1 - clip, 1 + clip) * aw_)
                         pgwt_ = torch.where(aw_ < 0, torch.max(pgwt_, 3.0 * aw_), pgwt_)     # (the second clip, as the target's)
                         pgw_ = -((ISWW[:, chunk] if DEC else 1.0) * pgwt_ * mw_).sum() / msw_
-                        loss = loss + cw_ * pgw_ * (0.0 if (FGT and update <= a.h2_choice_warm) else 1.0)   # (2.2b: its first updates: off)
+                        loss = loss + cw_ * pgw_ * (0.0 if (FGT and UPD_DONE0 + update <= a.h2_choice_warm) else 1.0)   # (2.2b: its first updates: off;
+                        #                                                  the restart: counted from the run's start, metrics.jsonl's lines)
                         if epoch == 0:
                             with torch.no_grad():
                                 WP_ACC[0] += msw_.double()
@@ -9285,7 +9306,7 @@ def main():
                             WP_ACC[11] += ((ds[HAND_HEAD].probs.argmax(-1) == A[..., HAND_HEAD]).float() * mk2_).sum().double()
                     vh_ = head2_.value(pol.head2, ho2_["s_held"], hs_all.detach())
                     vl2_ = (0.5 * (vh_ - RET_H[:, chunk]).pow(2) * wgt).sum() / wsum
-                    loss = loss + (0.0 if (FRZ or (FGT and update <= a.h2_choice_warm)) else (min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2])) if H2ADD else H2_PG_[0] * H2_PG_[2])) * pg2_ + a.head2_v * vl2_   # (2.1a, --freeze-choice: the policy term off; 2.2b: the item picker's first updates: its forecast alone)
+                    loss = loss + (0.0 if (FRZ or (FGT and UPD_DONE0 + update <= a.h2_choice_warm)) else (min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2])) if H2ADD else H2_PG_[0] * H2_PG_[2])) * pg2_ + a.head2_v * vl2_   # (2.1a, --freeze-choice: the policy term off; 2.2b: the item picker's first updates: its forecast alone)
                     if RET_W is not None:                                # (2.1, --ins-pay-win) the head's value of the win-chance pay: its own
                         vw_ = head2_.value_w(pol.head2, ho2_["s_held"], hs_all.detach())     # layer on the same state, the same weight
                         vlw_ = (0.5 * (vw_ - RET_W[:, chunk]).pow(2) * wgt).sum() / wsum
@@ -9775,7 +9796,9 @@ def main():
                     if FIRE and not float(pol.head2.fadd) > 0:           # (1.7) and the fire push at add 0
                         for p_ in pol.head2.fsc.parameters():
                             p_.grad = None
-                    h2_acc[7] += nn.utils.clip_grad_norm_(pol.head2.parameters(), 0.5).detach().double()
+                    if H2FZ is not None:                                 # (2.2b restart) the held parameters: no gradient (no step, no moment)
+                        H2FZ.drop_grads()
+                    h2_acc[7] +=nn.utils.clip_grad_norm_(pol.head2.parameters(), 0.5).detach().double()
                     h2_acc[8] += 1.0
                     H2GR_ = [p_.grad for p_ in pol.head2.parameters()]
                     for p_ in pol.head2.parameters():
@@ -9829,19 +9852,23 @@ def main():
                     with torch.no_grad():                                # own weights, one coefficient: the hands' 17 target rows and the head's
                         n2_ = int(H2L["n_target"])                       # target layer shrink by lr x wd a step. (An L2 in the loss went through
                         pol.pi.weight[HD_I0:HD_I0 + n2_] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]    # Adam's scaling: the rows' size
-                        pol.head2.target.weight *= 1.0 - group_lr("h2") * H2_L2_[0]                     # 22 -> 14 in one update, dry run 4;
+                        if H2FZ is None or not H2FZ.frozen("target.weight"):    # (2.2b restart: not while held)
+                            pol.head2.target.weight *= 1.0 - group_lr("h2") * H2_L2_[0]                 # 22 -> 14 in one update, dry run 4;
                         #                                                  1.7: the head's group's rate by name, 1.6a's last group was the weapon part's at the same rate)
                 if WPN and H2_L2_[0] > 0:                                # (1.5a, D) the same on the weapon key's two parts: the hands' rows and
                     with torch.no_grad():                                # the head's weapon scores (the owner's one coefficient for both, 11-03)
                         pol.pi.weight[HAND_O:HAND_O + HAND_D] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
-                        pol.head2.wsc.weight *= 1.0 - group_lr("wpn") * H2_L2_[0]
+                        if H2FZ is None or not H2FZ.frozen("wsc.weight"):       # (2.2b restart: the hands' rows keep their decay)
+                            pol.head2.wsc.weight *= 1.0 - group_lr("wpn") * H2_L2_[0]
                 if FIRE and H2_L2_[0] > 0 and FADD_V[0] > 0:             # (1.7, owner 11-05: a sum of two outputs is regularized) the same on the
                     with torch.no_grad():                                # fire key's two parts, the hands' rows and the head's push, once it is live
                         pol.pi.weight[FIRE_O:FIRE_O + 2] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
-                        pol.head2.fsc.weight *= 1.0 - group_lr("cmb") * H2_L2_[0]
+                        if H2FZ is None or not H2FZ.frozen("fsc.weight"):
+                            pol.head2.fsc.weight *= 1.0 - group_lr("cmb") * H2_L2_[0]
                 if CMB and H2_L2_[0] > 0 and PADD_V[0] > 0:              # (1.7) ... and on the pointer's scores added to the targets and the way
                     with torch.no_grad():                                # (its last layer), the way's rows, and the target rows where 1.3b's
-                        pol.head2.op_v.weight *= 1.0 - group_lr("cmb") * H2_L2_[0]          # decay above does not run
+                        if H2FZ is None or not H2FZ.frozen("op_v.weight"):
+                            pol.head2.op_v.weight *= 1.0 - group_lr("cmb") * H2_L2_[0]      # decay above does not run
                         if W_HEAD >= 0:
                             pol.pi.weight[HD_W0:HD_W0 + 3] *= 1.0 - opt.param_groups[0]["lr"] * H2_L2_[0]
                         if not H2ADD:
@@ -9871,7 +9898,8 @@ def main():
                     m_ = H_a == h_i
                     hz_p[int(PLAN_L["horizons"][h_i])] = slowplan_.readouts(PLAN, S_a[m_], P_a[m_], Y_a[m_], h_i)
                 with PLAN_LOCK, torch.enable_grad():
-                    slowplan_.learn(PLAN, PLAN_OPT, S_a, Y_a, H_a, epochs=2, mb=1024, gen=PLAN_GEN, clip=1.0, decay=H2_L2_[0] if PULL else 0.0)
+                    if H2FZ is None or not H2FZ.own_adam_frozen("plan."):     # (2.2b restart) held: its readouts and loss, no lesson
+                        slowplan_.learn(PLAN, PLAN_OPT, S_a, Y_a, H_a, epochs=2, mb=1024, gen=PLAN_GEN, clip=1.0, decay=H2_L2_[0] if PULL else 0.0)
                     loss_p = slowplan_.loss_of(PLAN, S_a, Y_a, H_a)
                 for p_ in PLAN.parameters():                             # (nothing of its lesson left for any other clip or step)
                     p_.grad = None
@@ -10489,6 +10517,11 @@ def main():
                                start=a.gate_from if a.gate_open > 0 else None)                                       # for (0 minutes: none)
         if LONG:
             rec["long"] = dict(share=round(long_c, 3), gap=round(long_gap, 4))
+        if H2FZ is not None:                                             # (2.2b restart) THE FREEZE'S PROOF: every held parameter's largest
+            try:                                                         # difference to the start (0 is the pass; one that moved is put back),
+                rec["h2_freeze"] = H2FZ.record()                         # the forecast's last layer, the outputs on a fixed batch
+            except Exception as e_hz:
+                rec["h2_freeze"] = dict(record_error=repr(e_hz)[:300])
         if H2:                                                           # (--head2) the strategy head: its gate, lessons, size of its outputs, step
             ha2_ = h2_acc.cpu().numpy()
             with torch.no_grad():
