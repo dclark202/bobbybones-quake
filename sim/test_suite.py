@@ -286,12 +286,17 @@ class Policy:
         self.fight_g = self.fight_w = 0.0                    # simulator's fight_feat(): act(fx=)), its four scores in his list at the save's FGT_G,
         self.fg_S = self.fg_W = self.fg_valid = self.fg_cand = self.fg_on = self.fg_gf = self.fg_q = None   # its weapon scores x FGT_W
         self.fg_last = None
-        fck_ = ck.get("fight22")
+        self.lever, self.lev_g, self.fg_lev = False, 0.0, None   # (2.2c, sim/fightnet.py VERSION_LEVER) the aggression lever: its one number at a keep
+        fck_ = ck.get("fight22")                             # reading, held, x the save's LEV_G on "the enemy" after the pull (as the trainer plays it)
         if fck_ is not None and self.h2 is not None:
             import fightnet as fightnet_g
             self.fgt = fightnet_g.NpFight(fck_, self.h2W, self.h2)
             dl_ = fck_.get("dials") or {}
             self.fight_g, self.fight_w = float(dl_.get("FGT_G", 0.0)), float(dl_.get("FGT_W", 0.0))
+            self.lever = bool(self.fgt.lever)
+            if self.lever:
+                self.fight_g = self.fight_w = 0.0
+                self.lev_g = float(dl_.get("LEV_G", 0.0))
             self.frng = np.random.default_rng(int(seed) + 2222)     # (its coins and numbers: a stream of their own)
             self.fg_shut = fightnet_g.shut_mask(int(self.h2["n_target"]))
         self.hrng = np.random.default_rng(int(seed) + 2121)  # ... its numbers and coins: a stream of their own
@@ -315,6 +320,7 @@ class Policy:
             self.cmb_g = float(np.asarray(self.h2W.get("cmb_g", 0.0)))
             self.h2_live = self.h2_live or self.cmb_g > 0    # (the order reads the head's state: it is stepped)
         self.fut = None                                      # (1.7) the brain's places ahead of these seats (kept at their ticks)
+        self.ahead_in = bool(self.names) and any(g_ == "b22c ahead" for g_, _ in self.names)   # (2.2c, AHEAD_IN) his list reads them: made at ticks too
         self.h2_tick = None
         self.brain_at = None                                 # (v0.4.1) the brain's and the token's state, at the end of a seat's array
         if self.btok is not None:
@@ -329,12 +335,26 @@ class Policy:
         return self.fgt is not None and self.k_r is not None and bool(np.any(self.k_r))
 
     def fight_scores(self):
-        """(2.2b) the four scores of every seat (held from its last reading; clipped as the simulator's inputs read them), or None"""
+        """(2.2b) the four scores of every seat (held from its last reading; clipped as the simulator's inputs read them), or None. (2.2c, the
+        lever) what the lever adds to "the enemy" in the first column, as the trainer sends it"""
+        if self.lever:
+            if self.fg_lev is None:
+                return None
+            import fightnet as fightnet_g
+            out_ = np.zeros((len(self.fg_lev), 4), np.float32)
+            out_[:, 0] = np.clip(fightnet_g.lever_add(self.fg_lev, self.lev_g), -5.0, 5.0)
+            return out_
         return None if self.fg_S is None else np.clip(self.fg_S, -5.0, 5.0).astype(np.float32)
 
     def set_fight(self, g=None, w=None):
-        """(2.2b, checks) play the fight network's list at this share (FGT_G) and its weapon scores at this factor (FGT_W)"""
+        """(2.2b, checks) play the fight network's list at this share (FGT_G) and its weapon scores at this factor (FGT_W). (2.2c) the lever:
+        g is its share (LEV_G); w must be None"""
         assert self.fgt is not None, "this network has no fight network"
+        if self.lever:
+            assert w is None, "the lever has no weapon scores"
+            if g is not None:
+                self.lev_g = float(g)
+            return
         if g is not None:
             self.fight_g = float(g)
         if w is not None:
@@ -425,7 +445,7 @@ class Policy:
             o1_, o2_ = br_.readouts(tk)
             tk_.answer(tk, o1_, o2_, np.asarray(pose, np.float32)[tk], np.asarray(zmap)[tk])
             self.h2_tick = (tk, br_.s[tk], o1_, o2_)        # (v0.4.3) what the strategy head reads at the tick
-            if self.h2 is not None and self.h2.get("cmb") and self.h2_ah is not None:   # (1.7) the readout ahead's places, kept in map
+            if self.h2 is not None and (self.h2.get("cmb") or self.ahead_in) and self.h2_ah is not None:   # (1.7; 2.2c) the readout ahead's places, kept in map
                 import head2 as head2_                       # coordinates at the tick (btoken.answer_fut's), for the combat order
                 if self.fut is None or len(self.fut) != len(tk):
                     self.fut = np.zeros((len(tk), 3, 3), np.float32)
@@ -810,7 +830,20 @@ class Policy:
                 if len(self.dims) > 12:
                     w0_ = int(np.sum(self.dims[:12]))
                     logits[:, w0_:w0_ + head2_.CMB_W] += np.float32(pa_) * ohs[:, o0_ + head2_.CMB_T:]
-        if self.fgt is not None:                             # (2.2b) THE FIGHT NETWORK at a keep reading, as the trainer's rollout: the options
+        if self.fgt is not None and self.lever:              # (2.2c) THE LEVER at a keep reading, as the trainer's rollout: the brain's state of its tick,
+            B_ = len(logits)                                 # his inputs, his target scores before the pull, the head's state his outputs read, his
+            if self.fg_lev is None or len(self.fg_lev) != B_:   # memory after this frame, his target and its seconds; held to the next reading
+                self.fg_lev = np.zeros(B_, np.float32)
+            if self.k_r is not None and len(self.k_r) == B_ and self.k_r.any() and h2s is not None:
+                assert kf is not None and bst is not None, "(2.2c) the lever reads at a keep reading: give act() kf"
+                r_ = np.nonzero(self.k_r)[0]
+                si_f = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
+                kfa_ = np.asarray(kf, np.float32)
+                o_f = self.fgt.reading_lever(np.asarray(bst[0].s, np.float32)[r_], xa[r_], logits[r_, si_f], h2s[r_, :int(self.h2["size"])],
+                                             hfast[r_, :self.H], kfa_[r_, 2], kfa_[r_, 0])
+                self.fg_lev[r_] = o_f["lev"]
+                self.fg_last = (r_, o_f)
+        if self.fgt is not None and not self.lever:          # (2.2b) THE FIGHT NETWORK at a keep reading, as the trainer's rollout: the options
             B_ = len(logits)                                 # the simulator made after the frame before, the brain's state of its tick, his inputs, his
             if self.fg_S is None or len(self.fg_S) != B_:    # target scores before the pull, the head's state his outputs read, his memory after this frame
                 self.fg_S, self.fg_W = np.zeros((B_, 4), np.float32), np.zeros((B_, 10), np.float32)
@@ -885,6 +918,11 @@ class Policy:
                     logits[:, si_] += self.dsc22.term(B_)
                 else:
                     logits[:, si_] += head2_.np_out_vec(self.outW, self.h2, h2s, self.out_g, self.out_pick)
+            if self.lever and self.fg_lev is not None and len(self.fg_lev) == B_:    # (2.2c) THE LEVER on "the enemy", after the pull and the
+                import fightnet as fightnet_g                                          # outlook's term, before the draw (as the trainer plays it)
+                logits = logits.copy()
+                logits[:, si_.start + fightnet_g.EN_INTENT] += fightnet_g.lever_add(self.fg_lev, self.lev_g)
+            self.last_target_logits = np.asarray(logits[:, si_], np.float32).copy()   # (2.2c, readouts) his target logits as drawn: the pull, the term, the lever in
             li_ = logits[:, si_]
             li_ = li_ - li_.max(1, keepdims=True)
             lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))

@@ -22,10 +22,18 @@ to +-10 and rounded to half precision at the one source, as every reader's input
   dest    where he is headed now: his target (one-hot), the fight option he is on (one-hot), the seconds he has been headed there
 
 Numpy at the top level (the checks and the plugins read it); torch inside the torch functions.
+
+2.2c (docs/runs/2.2/2.2c/CARD.md change 2; the owner, 11-18: "nothing makes him play a certain way"): THE AGGRESSION LEVER, layout VERSION_LEVER
+(2). The same network made smaller in its outputs and inputs: ONE number, the lever, added (x the live share LEV_G, rounded to half precision
+as played) to the item picker's own score of "the enemy" (EN_INTENT) among his targets, which stay in his list as they are (nothing shut,
+no options, no practice, no weapon scores); and its two forecasts of its own pay. Its inputs: brain, trk, obs, items, head, hands as above,
+and where he is headed (his target one-hot, the seconds he has been headed there); the options' numbers are out with the options. Its last
+layer starts at zero: the lever is 0 and he plays as without it, to the bit. A layout of VERSION (1) is 2.2b's and plays as before.
 """
 import numpy as np
 
 VERSION = 1
+VERSION_LEVER = 2
 SEED = 2220
 OPTS = ("him", "cut", "angle", "away")
 OPT_COLS = ("valid", "t_me", "t_en", "height", "range", "fwd", "left", "up", "sees_1", "sees_2", "sees_4", "seen_me", "door", "corridor",
@@ -61,6 +69,22 @@ def layout(brain, trk, obs_cols, obs_names, n_target, head, hands, cmb_feat, pas
                 norm=None)
 
 
+def is_lever(L):
+    """(2.2c) a layout of the aggression lever (VERSION_LEVER), not 2.2b's four options"""
+    return int((L or {}).get("version", 0)) == VERSION_LEVER
+
+
+def layout_lever(brain, trk, obs_cols, obs_names, n_target, head, hands, pass_norm, hid=HID):
+    """(2.2c) the lever's inputs' parts and widths: as layout()'s without the options' numbers, "where he is headed" without the fight option.
+    pass_norm: the tracker's pass scorer's norm (not the lever's input: the trainer's rows of the tracker's pass odds, which keep learning)"""
+    parts = [("brain", int(brain)), ("trk", int(trk)), ("obs", len(obs_cols)), ("items", int(n_target)), ("head", int(head)), ("hands", int(hands)),
+             ("dest", int(n_target) + 1)]
+    return dict(version=VERSION_LEVER, parts=[[k_, w_] for k_, w_ in parts], width=int(sum(w_ for _, w_ in parts)), obs_cols=[int(c_) for c_ in obs_cols],
+                obs_names=list(obs_names), n_target=int(n_target), hid=int(hid), n_out=3, en_intent=EN_INTENT,
+                pass_norm=dict(mean=[float(x_) for x_ in pass_norm["mean"]], sd=[float(x_) for x_ in pass_norm["sd"]],
+                               idx=[int(x_) for x_ in pass_norm["idx"]]), norm=None)
+
+
 def names(L):
     """every input's name, in order"""
     out = []
@@ -69,11 +93,49 @@ def names(L):
             out += ["obs " + str(n_) for n_ in L["obs_names"]]
         elif k_ == "opts":
             out += ["{} {}".format(o_, c_) for o_ in OPTS for c_ in list(OPT_COLS) + ["pass_1", "pass_2", "pass_4"]]
+        elif k_ == "dest" and is_lever(L):
+            out += ["dest target {}".format(j_) for j_ in range(L["n_target"])] + ["dest seconds"]
         elif k_ == "dest":
             out += ["dest target {}".format(j_) for j_ in range(L["n_target"])] + ["dest fight {}".format(o_) for o_ in OPTS] + ["dest seconds"]
         else:
             out += ["{} {}".format(k_, j_) for j_ in range(w_)]
     return out
+
+
+def raw_lever(L, brain, trk, xobs, items, head, hands, tgt, secs, xp=np):
+    """(2.2c) the lever's raw inputs [B, width]: as raw() without the options and the fight option he is on"""
+    if xp is np:
+        f32 = lambda z_: np.asarray(z_, np.float32)   # noqa: E731
+        oc_ = np.asarray(L["obs_cols"], np.int64)
+        dest_ = np.concatenate([np.eye(L["n_target"], dtype=np.float32)[np.clip(np.asarray(tgt, np.int64), 0, L["n_target"] - 1)],
+                                np.minimum(f32(secs) / 10.0, 2.0)[:, None]], 1)
+        return np.concatenate([f32(brain), f32(trk), f32(xobs)[:, oc_], f32(items), f32(head), f32(hands), dest_], 1)
+    import torch
+    d_ = brain.device
+    oc_ = torch.as_tensor(L["obs_cols"], dtype=torch.long, device=d_)
+    dest_ = torch.cat([torch.nn.functional.one_hot(tgt.long().clamp(0, L["n_target"] - 1), L["n_target"]).float(),
+                       (secs.float() / 10.0).clamp(max=2.0)[:, None]], 1)
+    return torch.cat([brain.float(), trk.float(), xobs.float()[:, oc_], items.float(), head.float(), hands.float(), dest_], 1)
+
+
+def lever_vec(add, n_target, xp=np):
+    """(2.2c) the lever's add on his target logits [B, n_target]: add [B] in the column of "the enemy", zeros elsewhere"""
+    if xp is np:
+        v_ = np.zeros((len(add), int(n_target)), np.float32)
+        v_[:, EN_INTENT] = np.asarray(add, np.float32)
+        return v_
+    import torch
+    v_ = torch.zeros(tuple(add.shape) + (int(n_target),), dtype=torch.float32, device=add.device)
+    v_[..., EN_INTENT] = add.float()
+    return v_
+
+
+def lever_add(lev, g, xp=np):
+    """(2.2c) what the lever adds to "the enemy"'s score as played: g x lev, rounded to half precision (stored so: the learner adds it again
+    to the bit)"""
+    if xp is np:
+        return (np.float32(g) * np.asarray(lev, np.float32)).astype(np.float16).astype(np.float32)
+    return (float(g) * lev.float()).half().float()
 
 
 def pass_in(L, X, xp=np):
@@ -169,6 +231,25 @@ def make_module(L):
     0; from a random stream of its own (the global one untouched)"""
     import torch
     import torch.nn as nn
+    if is_lever(L):
+        class LeverNet(nn.Module):
+            """(2.2c) l1 -> ReLU -> l2 -> ReLU -> l3 (the lever, 2 values); l3 at zero (the lever 0, values 0); from a random stream of its own"""
+
+            def __init__(self):
+                super().__init__()
+                with torch.random.fork_rng(devices=[]):
+                    torch.manual_seed(SEED)
+                    self.l1 = nn.Linear(int(L["width"]), int(L["hid"]))
+                    self.l2 = nn.Linear(int(L["hid"]), int(L["hid"]))
+                    self.l3 = nn.Linear(int(L["hid"]), 3)
+                with torch.no_grad():
+                    self.l3.weight.zero_()
+                    self.l3.bias.zero_()
+
+            def forward(self, x):
+                o_ = self.l3(torch.relu(self.l2(torch.relu(self.l1(x.float())))))
+                return o_[:, 0], o_[:, 1:3]
+        return LeverNet()
     assert int(L.get("version", 0)) == VERSION, "fightnet: layout version {} expected".format(VERSION)
 
     class FightNet(nn.Module):
@@ -194,7 +275,15 @@ def np_params(sd):
     """the weights of a state dict (torch tensors or arrays; the prefix "fight." or none) as numpy arrays"""
     g_ = lambda k_: np.asarray(sd[k_].detach().cpu().numpy() if hasattr(sd[k_], "detach") else sd[k_], np.float32)   # noqa: E731
     pre_ = "fight." if "fight.l1.weight" in sd else ""
-    return {k_: g_(pre_ + k_) for k_ in ("l1.weight", "l1.bias", "l2.weight", "l2.bias", "l3.weight", "l3.bias", "sbias")}
+    return {k_: g_(pre_ + k_) for k_ in ("l1.weight", "l1.bias", "l2.weight", "l2.bias", "l3.weight", "l3.bias", "sbias") if (pre_ + k_) in sd}
+
+
+def np_forward_lever(P, x):
+    """(2.2c) the lever's forward() in numpy -> (lever [B], values [B, 2])"""
+    h_ = np.maximum(np.asarray(x, np.float32) @ P["l1.weight"].T + P["l1.bias"], 0.0)
+    h_ = np.maximum(h_ @ P["l2.weight"].T + P["l2.bias"], 0.0)
+    o_ = h_ @ P["l3.weight"].T + P["l3.bias"]
+    return o_[:, 0].astype(np.float32), o_[:, 1:3].astype(np.float32)
 
 
 def np_forward(P, x):
@@ -349,7 +438,13 @@ def l2_decay(mod, w, lr):
 
 def sizes(mod):
     """the decayed layers' sizes (their norms): first and last"""
-    return dict(l1=round(float(mod.l1.weight.norm()), 4), l3=round(float(mod.l3.weight.norm()), 4), sbias=round(float(mod.sbias), 4))
+    out = dict(l1=round(float(mod.l1.weight.norm()), 4), l3=round(float(mod.l3.weight.norm()), 4))
+    if hasattr(mod, "sbias"):
+        out["sbias"] = round(float(mod.sbias), 4)
+    else:                                                    # (2.2c) the lever's own row of the last layer
+        out["l3_lever"] = round(float(mod.l3.weight[0].norm()), 4)
+        out["lever_bias"] = round(float(mod.l3.bias[0]), 4)
+    return out
 
 
 class NpFight:
@@ -363,7 +458,25 @@ class NpFight:
         self.TL = h2L["trk22"]
         self.trkW = tracker_.np_params(h2W)
         self.passW = tracker_.np_pass_params(h2W)
-        assert self.trkW is not None and self.passW is not None, "the fight network reads the tracker and its pass odds: the head has none"
+        self.lever = is_lever(self.L)
+        assert self.trkW is not None and (self.lever or self.passW is not None), "the fight network reads the tracker and its pass odds: the head has none"
+
+    def reading_lever(self, brain, xn, items, head, hands, tgt, secs):
+        """(2.2c) the lever at a keep reading, as the trainer plays it: brain [B, 256] the brain's state; xn [B, his list] his normalised inputs;
+        items [B, n_target] his target logits before the pull; head [B, S] the head's state the frame's outputs read; hands [B, H] his memory
+        after the frame; tgt, secs: his target and seconds on it (the simulator's, after the frame before) -> dict(lev [B], V [B, 2], x, trk)"""
+        import tracker as tracker_
+        h_ = tracker_.np_trunk(self.trkW, tracker_.np_inp(self.TL, brain, xn))
+        trk_ = tracker_.np_readable(h_ @ self.trkW[4].T + self.trkW[5])
+        z_ = np.asarray(items, np.float32)
+        z_ = z_ - z_.max(1, keepdims=True)
+        lsm_ = z_ - np.log(np.exp(z_).sum(1, keepdims=True))
+        xr_ = raw_lever(self.L, brain, trk_, xn, lsm_, head, hands, tgt, secs)
+        if self.L.get("norm") is None:                       # (a sample of the raw inputs before the norm is measured: the lever 0)
+            return dict(lev=np.zeros(len(xr_), np.float32), V=np.zeros((len(xr_), 2), np.float32), x=xr_, trk=trk_)
+        x_ = norm_in(self.L, xr_)
+        lev_, V_ = np_forward_lever(self.P, x_)
+        return dict(lev=lev_, V=V_, x=x_, trk=trk_)
 
     def reading(self, F, brain, xn, items, head, hands, tgt, fk, secs):
         """F: the simulator's fight_feat() of these seats (after the frame before); brain [B, 256] the brain's state; xn [B, his list] his

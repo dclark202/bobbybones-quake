@@ -634,6 +634,64 @@ NEAR_MISS = float(os.environ.get("NEAR_MISS") or 0.0) > 0
 NEAR_PAY = float(os.environ.get("NEAR_PAY") or 0.0)
 NEAR_OUT = float(os.environ.get("NEAR_OUT") or 300.0)
 assert 0.0 <= NEAR_PAY <= 10.0 and max(P_RADIUS.values()) < NEAR_OUT <= 600.0, "NEAR_PAY within 0 .. 10, NEAR_OUT above the largest splash radius, at most 600"
+# (2.2c, docs/runs/2.2/2.2c/CARD.md change 1; the owner, 11-18: "He doesn't pressure the items at all ... Do literally anything but let the
+# opponent just pick it up") CONTEST=1: THE CONTEST PAY. A contested item: the mega, a red or yellow armor, the rocket launcher, the railgun,
+# the lightning gun (the map's route goals of those kinds). Its "pay" for this pay: ITEM_FLAT's value (MH, RA, YA; a second yellow is YA) or
+# CONTEST_WPN (0.10) for a weapon, never more than what the item pays (or would pay) the player it moves from (the by-the-point table and the
+# weapons' order pay what the stack and weapons let them: a mega at 190 health pays little, so little can be moved off it).
+#   At an enemy's pickup the simulator looks back CB_BACK (4) seconds and grades the other player's pressure on it, 0 .. 1:
+#     rung 1  in the last CB_R1 (1) second, his best of: a clear line to the item (or the enemy in his view), his crosshair within 60 degrees
+#             of it (graded 1 dead on, 0 at 60, as the pre-aim pay), with a weapon in hand that does damage at that range by the game's own
+#             numbers (CB_REACH: the lightning gun 768, the shotgun 1500, the gauntlet never; projectiles always) -> x 0.25
+#     rung 2  each of his rockets, grenades or plasma balls that burst in the window and dealt the enemy nothing: 0.25 x f x (its splash /
+#             a rocket's, at most 1), f the near-miss rule's grade (1 inside the splash radius, straight to 0 at NEAR_OUT) of the burst against
+#             the item's place or the enemy (at the burst), the larger; summed, at most 0.5
+#     rung 3  the damage he dealt the enemy in the window, 100 points = 0.5, at most 0.5 (the damage is paid as damage as always)
+#     total at most 1, less the damage he took from the enemy in the window (100 points = 0.5), never below 0.
+#   The transfer from the picker to him: pay x (CONTEST_W x p - CEDE_W x (1 - p)): at no pressure he pays the picker CEDE_W of it (always: a
+#   free pickup costs him), at full pressure he is paid CONTEST_W of it. THE STEAL: when the enemy was headed for the item (his target) with
+#   under CB_STEAL_WAY (4) seconds of way while he pressured it (a rung 2 or 3 event in the window), and HE picks it up within CB_STEAL_T (10)
+#   seconds of that: CONTEST_W of the item's flat pay from the enemy to him, on top of the item's own pay. BY THE SECOND (the mega and the
+#   armors only): while the item is up and the enemy is nearer to it than he (seconds of way) and under CB_SEC_WAY (6) seconds from it, each
+#   second CONTEST_W / 5 of its pay (that enemy's) x the pressure moves from the enemy to him; the pressure: 2 x rung 2 now (his shells, full
+#   weight) + 0.25 x his crosshair on the item now with a weapon that reaches (a quarter weight), at most 1. ONE CAP A SPAWN: at most CB_CAP
+#   (0.8) of the item's flat pay moves to the others in all (the by-the-second pay, the pickup's, the steal), and the picker is never charged
+#   more than CB_CAP of what his pickup paid him (he keeps at least 20%). Zero-sum; whole games and normal rounds only (no runs, no rooms).
+#   The pay terms "contest" (the pickup's, the free pickup's, the steal) and "contest_sec" (by the second), with the switch only. Counters
+#   stats["contest"] (CB_COLS). Live CONTEST_W (0 .. 1) and CEDE_W (0 .. 0.5). Off: the simulator as before, to the bit.
+# RAIL_CHAIN=1 (change 1b; the owner, 11-18: "Pay him to pickup and own the rail. Pay him to have it out when the enemy is suspected far away
+# and in possible sightlines"): RAIL_PICK_PAY (0.15, live) when he takes a railgun while he holds none, once a life, zero-sum as every item's
+# pay (the term "rail_pick"); RAIL_LINE_PAY (0.10, live) at the pre-aim pay's own event (a fresh sighting) from beyond RAIL_LINE_D (768)
+# units: RAIL_LINE_PAY x (his pre-aim grade with the railgun in his hand, else 0, less the enemy's the same), zero-sum (the term "rail_line";
+# PREAIM_PAY beside it unchanged). The far-rail pay is RAIL_FAR_PAY's (its own switch, live).
+CONTEST = float(os.environ.get("CONTEST") or 0.0) > 0
+CONTEST_W = float(os.environ.get("CONTEST_W") or 0.8)
+CEDE_W = float(os.environ.get("CEDE_W") or 0.1)
+CONTEST_WPN = 0.10
+CB_BACK, CB_R1, CB_STEAL_WAY, CB_STEAL_T, CB_SEC_WAY, CB_CAP, CB_LOG = 4.0, 1.0, 4.0, 10.0, 6.0, 0.8, 8.0
+CB_LABS = ("MH", "RA", "YA", "YA2", "RL", "RG", "LG")
+CB_BIG = ("MH", "RA", "YA", "YA2")
+CB_K = 256                                                  # (each seat's ring of bursts: plasma at 20 a second for 8 s fits)
+CB_NEAR = 300.0                                             # (the readouts' "near an item": a burst within this of its place)
+CB_COLS = ("enemy big pickups (his counted seats' enemy)", "of them under pressure (p > 0)", "pressure summed", "rung 1 summed", "rung 2 summed",
+           "rung 3 summed", "taken off summed", "free pickups (p = 0)", "his distance from the item at a free pickup, summed",
+           "enemy weapon pickups (rl, rg, lg)", "of them under pressure", "steals", "the pickup pay to him", "the pickup pay from him",
+           "the by-the-second pay to him", "the by-the-second pay from him", "frames he was paid by the second", "the cap reached",
+           "bursts near an item that nobody then took within 8 s", "bursts near an item 4 to 8 s before the enemy took it (no pay)",
+           "his own big pickups", "his free-pickup distance under 1000", "1000 to 2000", "over 2000")
+CB_BCOLS = ("rl", "gl", "pg")                               # (stats["contest_burst"] [3 weapons, 2: in view / out of view, 3: near an item up,
+#                                                             about to come up (4 s), just taken (4 s)]: his bursts within CB_NEAR of an item)
+RAIL_CHAIN = float(os.environ.get("RAIL_CHAIN") or 0.0) > 0
+RAIL_PICK_PAY = float(os.environ.get("RAIL_PICK_PAY") or 0.15)
+RAIL_LINE_PAY = float(os.environ.get("RAIL_LINE_PAY") or 0.10)
+RAIL_LINE_D = 768.0
+assert 0.0 <= CONTEST_W <= 1.0 and 0.0 <= CEDE_W <= 0.5, "CONTEST_W within 0 .. 1, CEDE_W within 0 .. 0.5"
+assert 0.0 <= RAIL_PICK_PAY <= 1.0 and 0.0 <= RAIL_LINE_PAY <= 1.0, "RAIL_PICK_PAY and RAIL_LINE_PAY within 0 .. 1"
+# (2.2c, change 1's "what he needs to see"; CLAUDE.md "Inputs") AHEAD_IN=1: the last N_AH inputs (group "b22c ahead", the hands' only, read
+# by their encoder): where the brain expects the enemy in 1, 2 and 4 s (its readout ahead, sim/ahead.py "fut", kept in map coordinates at
+# the brain's tick and sent with its answer: brain_in's "fut"), each from his eye now: forward, left, up (thousands of units, in his facing's
+# yaw) and its distance (thousands); and that there is such an answer. From his own networks only. Zeros with it off or without an answer.
+AHEAD_IN = float(os.environ.get("AHEAD_IN") or 0.0) > 0
 # (2.2b; the owner's correction, 11-17) JUDGE_PAY=1 with WIN_JUDGE and JUDGE_ITEMS: the PAID win part (WIN_ADD x the blend's win part, the
 # hands' and every learner's) is the judge WITH the items (wh_raw), not the item-blind judge (wb_raw). Off: as before, to the bit
 JUDGE_PAY = float(os.environ.get("JUDGE_PAY") or 0.0) > 0
@@ -988,6 +1046,7 @@ LEGS_IN_CHECK = LEGS_IN and float(os.environ.get("LEGS_IN_CHECK") or 0.0) > 0
 PLAY_VARS = PLAY_VARS + ("LEGS_IN",)
 PLAY_VARS = PLAY_VARS + ("COMBAT",)                                 # (1.7) the combat order: a network trained with it plays with it
 PLAY_VARS = PLAY_VARS + ("FIGHT", "FG_IN_G", "OUT_LIVE")           # (2.2b) the fight options and the hands' inputs of them
+PLAY_VARS = PLAY_VARS + ("AHEAD_IN",)                               # (2.2c) the hands' inputs of the brain's places ahead
 assert not (COMBAT and FIGHT), "COMBAT (1.7's order) and FIGHT (2.2b's options) share the order's points: one or the other"
 CMB_PTS = COMBAT or FIGHT                                           # (the order's points drive his way and look)
 # v0.3.2 (the owner's play test of 2026-10-16: on his legs, 54% of his time, he has "blinders": they own his view's turn and
@@ -1802,6 +1861,10 @@ PAY_TERMS = ("jerk", "weapon_switch", "hop", "blind_fire", "move_round", "course
              "lg_quiet", "win_part", "item_decay", "edge", "cover")
 if NEAR_MISS:                                               # (2.2b) the near miss's own term, with the switch only (the list as before without it)
     PAY_TERMS = PAY_TERMS + ("near_miss",)
+if CONTEST:                                                 # (2.2c) the contest pay's terms, with the switch only
+    PAY_TERMS = PAY_TERMS + ("contest", "contest_sec")
+if RAIL_CHAIN:                                              # (2.2c) the rail chain's terms, with the switch only
+    PAY_TERMS = PAY_TERMS + ("rail_pick", "rail_line")
 PT_IX = {k_: i_ for i_, k_ in enumerate(PAY_TERMS)}
 WS_COLS = ("his shadow WIN_PAY in games, summed", "its size", "his flat frag pay in games, summed", "its size", "his frames in games",
            "his games' frags (+1) and deaths (-1) counted")
@@ -2355,6 +2418,7 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "FOLLOW_PAY",                                                                                          # (1.9a, the hands' pay for carrying an instruction out)
              "INTENT_SWITCH", "WEAPON_OWN",                                                                         # (2.1a:the switch cost and "a held weapon is choosable", read only in intend() and in the pay: live, so they go out with the fades and no restart is needed)
              "NEAR_PAY", "NEAR_OUT",                                                                                # (2.2b, NEAR_MISS: the near miss's pay in points of damage, its outer distance)
+             "CONTEST_W", "CEDE_W", "RAIL_PICK_PAY", "RAIL_LINE_PAY",                                               # (2.2c: the contest pay's share and the free pickup's charge; the rail chain's two)
              ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ", "DRILL_INS_VERBS", "FIN_RATE")                   # (B-265) the live names whose value is a string, not one number
 
@@ -2418,6 +2482,14 @@ def live_values(get):
         raise ValueError("NEAR_PAY must be within 0 .. 10 and NEAR_OUT above the largest splash radius ({}), at most 600".format(max(P_RADIUS.values())))
     if not 0.0 <= v["FOLLOW_PAY"] <= 0.2:
         raise ValueError("FOLLOW_PAY must be within 0 .. 0.2")
+    v["CONTEST_W"] = float(get("CONTEST_W") or 0.8)          # (2.2c, CONTEST) the share of the item's pay full pressure moves; unset: 0.8
+    v["CEDE_W"] = float(get("CEDE_W") or 0.1)                # ... the free pickup's charge; unset: 0.1
+    if not 0.0 <= v["CONTEST_W"] <= 1.0 or not 0.0 <= v["CEDE_W"] <= 0.5:
+        raise ValueError("CONTEST_W must be within 0 .. 1 and CEDE_W within 0 .. 0.5")
+    v["RAIL_PICK_PAY"] = float(get("RAIL_PICK_PAY") or 0.15)  # (2.2c, RAIL_CHAIN) the rail's pickup pay; unset: 0.15
+    v["RAIL_LINE_PAY"] = float(get("RAIL_LINE_PAY") or 0.10)  # ... the long line's; unset: 0.10
+    if not 0.0 <= v["RAIL_PICK_PAY"] <= 1.0 or not 0.0 <= v["RAIL_LINE_PAY"] <= 1.0:
+        raise ValueError("RAIL_PICK_PAY and RAIL_LINE_PAY must be within 0 .. 1")
     cf_ = get("CONTACT_FREE")                                # (b1.4a) the chance a contact is free of the lock, live; unset: 0
     v["CONTACT_FREE"] = float(cf_) if (cf_ or "").strip() else 0.0
     if not 0.0 <= v["CONTACT_FREE"] <= 1.0:
@@ -3394,7 +3466,8 @@ PLAY_VARS = PLAY_VARS + ("DODGE_IN", "DODGE_G")
 # (/ 10, at most 2); the fight network's four scores as the trainer or a plugin gives them (env.fg_score, clipped to +-5). Every column
 # times FG_IN_G (a PLAY_VAR, 1 by default). Zeros with FIGHT off. From his own senses and his own networks only.
 N_FG = 20
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS + N_DG + N_FG
+N_AH = 13                                                 # (2.2c, AHEAD_IN: see there) the brain's places ahead, group "b22c ahead"
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS + N_DG + N_FG + N_AH
 CELL_COLS = None                                          # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
@@ -5226,6 +5299,8 @@ class DuelEnv:
         self.flinch[i], self.focus[i] = 0.0, FOCUS_SECS
         self.life_t[i], self.first_wp[i] = 0.0, False
         self.big_got[i], self.self_debt[i] = False, 0.0
+        if RAIL_CHAIN and getattr(self, "rc_paid", None) is not None and i < len(self.rc_paid):
+            self.rc_paid[i] = False                          # (2.2c) a new life: the rail's pickup pay may come again
         if self.intent[i] > 0 and not self.intent_done[i]:
             self.stats["intent_trips"][3] += 1
         self.intent[i], self.intent_t[i], self.intent_new[i], self.intent_done[i] = 0, 0.0, True, False
@@ -7023,6 +7098,8 @@ class DuelEnv:
             X_[1] += float(pay_.sum())
             X_[2] += float(pay_[cnt[ii_]].sum())
             X_[3] += float(np.abs(pay_).sum())
+        if RAIL_CHAIN and RAIL_LINE_PAY > 0:                 # (2.2c) THE LONG LINE: beyond RAIL_LINE_D, the pre-aim grade with the rail in hand
+            self._rc_line(a_[f_], b_[f_], q, pos, cnt, reward)
         P_ = self.stats["preaim"]
         c2_ = cnt[ii_]
         w_ = self.weapon[ii_][c2_]
@@ -8825,8 +8902,29 @@ class DuelEnv:
                               self._ord(pos, eye, yaw, pit), self._yt(), self._sp(pos, c, si, known, visible, opp),
                               self._ins(pos, eye, yaw, pit, rot),
                               self._dodge(pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick if self.focus_on else None),
-                              self._fgo(pos, eye, yaw, pit)], 1)
+                              self._fgo(pos, eye, yaw, pit), self._ahi(eye, yaw)], 1)
         return obs.astype(np.float32)
+
+    def _ahi(self, eye, yaw):
+        """(2.2c, AHEAD_IN) the inputs of N_AH (see AHEAD_IN): for 1, 2 and 4 s the brain's place of the enemy from his eye (forward, left, up in
+        his yaw; its distance; thousands of units), then that there is an answer. Reads only; keeps nothing."""
+        n = self.n
+        out = np.zeros((n, N_AH), np.float32)
+        fut = getattr(self, "brain_fut", None)
+        if not AHEAD_IN or fut is None or len(fut) < n:
+            return out
+        ok = np.asarray(getattr(self, "brain_ok", np.zeros(n, bool)), bool)[:n].astype(np.float32)
+        r_ = np.radians(np.asarray(yaw, np.float64)[:n])
+        c_, s_ = np.cos(r_), np.sin(r_)
+        e_ = np.asarray(eye, np.float64)[:n]
+        for k_ in range(3):
+            d_ = np.asarray(fut[:n, k_], np.float64) - e_
+            out[:, 4 * k_] = (c_ * d_[:, 0] + s_ * d_[:, 1]) / 1000.0 * ok
+            out[:, 4 * k_ + 1] = (-s_ * d_[:, 0] + c_ * d_[:, 1]) / 1000.0 * ok
+            out[:, 4 * k_ + 2] = d_[:, 2] / 1000.0 * ok
+            out[:, 4 * k_ + 3] = np.hypot(d_[:, 0], d_[:, 1]) / 1000.0 * ok
+        out[:, 12] = ok
+        return out
 
     def _fgo(self, pos, eye, yaw, pit):
         """(2.2b, FIGHT) the inputs of N_FG (see there). Reads only; keeps nothing."""
@@ -11548,6 +11646,401 @@ class DuelEnv:
             C[2] += fe * cnt_
             C[3] += pay * cnt_
 
+    # ---------------------------------------------------------------- (2.2c) the contest pay (CONTEST) and the rail chain (RAIL_CHAIN)
+    def _cb_init(self):
+        """(CONTEST) the books, made at the first frame (and again if the seats change): the contested items (the map's route goals of
+        CB_LABS), each seat's rings (his bursts, the damage he dealt and took, his rung 1 a frame), the marks and the caps"""
+        n, M = self.n, self.M
+        its, gis, labs = [], [], []
+        if self.route is not None:
+            for gi_, (lab_, it_) in enumerate(zip(self.route_goal, self.route_item)):
+                if lab_ in CB_LABS:
+                    its.append(int(it_))
+                    gis.append(int(gi_))
+                    labs.append(lab_)
+        nC = max(1, len(its))
+        self.cb_it, self.cb_gi, self.cb_lab = np.asarray(its, np.int64), np.asarray(gis, np.int64), list(labs)
+        self.cb_ix = {int(it_): k_ for k_, it_ in enumerate(its)}
+        self.cb_big = np.array([l_ in CB_BIG for l_ in labs], bool)
+        self.cb_int = np.array([INTENTS.index(l_) if l_ in INTENTS else -1 for l_ in labs], np.int64)
+        self.cb_n, self.cb_f = n, 0
+        self.cb_L, self.cb_R1, self.cb_LOG = int(round(CB_BACK / DT)), int(round(CB_R1 / DT)), int(round(CB_LOG / DT))
+        self.cb_dd, self.cb_dt = np.zeros((n, self.cb_L)), np.zeros((n, self.cb_L))
+        self.cb_r1 = np.zeros((n, nC, self.cb_R1), np.float32)
+        self.cb_bt = np.full((n, CB_K), -10 ** 9, np.int64)
+        self.cb_bp = np.zeros((n, CB_K, 3), np.float64)
+        self.cb_bw = np.zeros((n, CB_K))                     # (0.25 x the splash's share of a rocket's; 0: it hurt the enemy, no rung 2)
+        self.cb_bf = np.zeros((n, CB_K))                     # (the near-miss grade against the enemy at the burst)
+        self.cb_bwp = np.zeros((n, CB_K), np.int64)
+        self.cb_bnear = np.full((n, CB_K), -1, np.int64)     # (readouts: the contested item within CB_NEAR of the burst, and if it was taken)
+        self.cb_bfol = np.zeros((n, CB_K), bool)
+        self.cb_bk = np.zeros(n, np.int64)
+        self.cb_way = np.full((n, nC), 99.0)
+        self.cb_qi = np.zeros((n, nC))
+        self.cb_r2 = np.zeros((n, nC))
+        self.cb_stl = np.full((n, nC), -10 ** 9, np.int64)
+        self.cb_mv = np.zeros((M, nC))
+        self.cb_chg = np.zeros((n, nC))
+        self.cb_rt = np.full(M, -1.0)
+        self.stats.setdefault("contest", np.zeros(len(CB_COLS)))
+        self.stats.setdefault("contest_burst", np.zeros((len(CB_BCOLS), 2, 3)))
+
+    def _cb_on(self):
+        return CONTEST and getattr(self, "cb_n", -1) == self.n and len(self.cb_it) > 0
+
+    def _cb_game(self):
+        """(CONTEST) [M] the matches the contest pay counts in: a game or a normal round of two (no run, no room, no test map)"""
+        g_ = self._others_arr().shape[1] + 1
+        n = self.n
+        ok = (self.kind[:self.M] == NORMAL) & (self.mode[:self.M] < 0)
+        bad = (self.run_k[:n] >= 0) | np.asarray(self.jrun[:n], bool) | np.asarray(self.items_room[:n], bool) | (self.script[:n] != 0)
+        ok &= ~bad.reshape(-1, g_).any(1)
+        if self.lab is not None or self.fixed_kind is not None:
+            ok[:] = False
+        return ok
+
+    def _cb_flat(self, k):
+        """(CONTEST) the contested item k's flat pay for this pay: ITEM_FLAT's (a second yellow as YA), or CONTEST_WPN for a weapon"""
+        lab_ = self.cb_lab[k]
+        if lab_ in ("RL", "RG", "LG"):
+            return float(CONTEST_WPN)
+        return float(ITEM_FLAT.get("YA" if lab_ == "YA2" else lab_, 0.0))
+
+    def _cb_value(self, o, it):
+        """(CONTEST) what item it (health or armor) would pay player o if he took it now, by the pickup's own rules (the table by the point,
+        ITEM_RATE, ITEM_FLAT)"""
+        kind, val, resp, cap, lab = self.item_def[it]
+        cur = float(self.hp[o] if kind == "hp" else self.armor[o])
+        gain = max(0.0, min(float(cap), cur + float(val)) - cur)
+        if gain <= 0.0:
+            return 0.0
+        pay_ = self.item_reward * gain / 100.0
+        if ITEM_PT_LO > 0:
+            lo_ = min(max(0.0, 100.0 - cur), gain)
+            fl_r = lo_ * ITEM_PT_LO + (gain - lo_) * ITEM_PT_HI
+            if ITEM_PT_MIX < 1.0:
+                fl_r = ITEM_PT_MIX * fl_r + (1.0 - ITEM_PT_MIX) * gain * (ITEM_RATE_HP if kind == "hp" else ITEM_RATE_AR)
+            return pay_ + fl_r
+        if ITEM_RATE_HP > 0 or ITEM_RATE_AR > 0:
+            return pay_ + gain * (ITEM_RATE_HP if kind == "hp" else ITEM_RATE_AR)
+        return pay_ + float(ITEM_FLAT.get(lab, 0.0)) if (ITEM_FLAT and lab in ITEM_FLAT) else pay_
+
+    def _cb_reach(self, w, d):
+        """(CONTEST) [m] a weapon in hand that does damage at distance d by the game's own numbers (MECHANICS: the lightning gun 768, the
+        shotgun 1500, the hitscan guns 8192, the projectiles always, the gauntlet never)"""
+        w = np.asarray(w, np.int64)
+        lim = np.where(w == LG, 768.0, np.where(w == SG, 1500.0, np.where((w == RL) | (w == GL) | (w == PG), 1e9, 8192.0)))
+        return (w != G) & (np.asarray(d, np.float64) <= lim)
+
+    def _cb_burst(self, i, wpn, ep, victims, s):
+        """(CONTEST) player i's rocket, grenade or plasma ball bursts at ep: kept in his ring (the enemy's near-miss grade at the burst, no
+        rung 2 when it hurt him); the readouts' count of bursts near an item"""
+        if not self._cb_on():
+            return
+        i = int(i)
+        hit_ = set(int(v_) for v_, d_, _, _, _ in victims if d_ > 0 and int(v_) != i)
+        R = float(P_RADIUS[wpn])
+        out_ = float(NEAR_OUT)
+        e_ = np.asarray(ep, np.float64)
+        fe, hurt = 0.0, False
+        for v in (int(x_) for x_ in self._others_arr()[i]):
+            if v in hit_:
+                hurt = True
+                continue
+            if self.hp[v] <= 0 or (RESPAWN_QL and self.rsp_wait[v] > 0):
+                continue
+            c = np.asarray(s[v, :3], np.float64)
+            hi_ = c + MAXS
+            if self.duck[v]:
+                hi_ = hi_.copy()
+                hi_[2] = c[2] + TOP_DUCK
+            d = float(np.linalg.norm(e_ - np.clip(e_, c + MINS, hi_)))
+            fe = max(fe, 1.0 if d <= R else max(0.0, (out_ - d) / (out_ - R)))
+        k = int(self.cb_bk[i] % CB_K)
+        self.cb_bk[i] += 1
+        self.cb_bt[i, k] = self.cb_f
+        self.cb_bp[i, k] = e_
+        self.cb_bw[i, k] = 0.0 if hurt else 0.25 * min(1.0, float(P_SPLASH[wpn]) / float(P_SPLASH[RL]))
+        self.cb_bf[i, k] = fe
+        self.cb_bwp[i, k] = int(wpn)
+        di_ = np.linalg.norm(self.item_pos[self.cb_it].astype(np.float64) - e_[None, :], axis=1)
+        j_ = int(np.argmin(di_))
+        near = j_ if di_[j_] <= CB_NEAR else -1
+        self.cb_bnear[i, k], self.cb_bfol[i, k] = near, False
+        if near >= 0 and self.script[i] == 0 and bool(self._counted(i)) and int(wpn) in (RL, GL, PG):
+            g_ = self._others_arr().shape[1] + 1
+            m, it = i // g_, int(self.cb_it[near])
+            resp_ = float(self.item_def[it][2])
+            st_ = 0 if self.item_up[m, it] else (1 if self.item_t[m, it] <= CB_BACK else (2 if self.item_t[m, it] >= resp_ - CB_BACK else -1))
+            if st_ >= 0:
+                self.stats["contest_burst"][(RL, GL, PG).index(int(wpn)), 0 if self.visible[i] else 1, st_] += 1
+
+    def _cb_begin(self):
+        """(CONTEST) a new frame: the books made or remade, the frame's number"""
+        if getattr(self, "cb_n", -1) != self.n:
+            self._cb_init()
+        self.cb_f += 1
+
+    def _cb_press(self, j, k):
+        """(CONTEST) player j's pressure on contested item k now (the window CB_BACK): -> (p, rung 1, rung 2, rung 3, taken off)"""
+        r1 = 0.25 * float(self.cb_r1[j, k].max())
+        r2 = float(self.cb_r2[j, k])
+        r3 = min(0.5, 0.5 * float(self.cb_dd[j].sum()) / 100.0)
+        tk = 0.5 * float(self.cb_dt[j].sum()) / 100.0
+        return max(0.0, min(1.0, r1 + r2 + r3) - tk), r1, r2, r3, tk
+
+    def _cb_ways(self, s):
+        """(CONTEST) [n, contested items] each seat's seconds of way to each contested item: the route's table at his node (the same
+        seconds the item seek and the routes' inputs read), and his distance to the node at 320 units a second"""
+        n = self.n
+        R_ = self.route
+        node = R_.locate(s[:n, :3])
+        off_ = np.linalg.norm(R_.nodes[node] - s[:n, :3], axis=1) / 320.0
+        return np.asarray(R_.T[self.cb_gi][:, node], np.float64).T + off_[:, None]
+
+    def _cb_frame(self, s, st, reward, r_long):
+        """(CONTEST) after this frame's damage, before its pickups: the rings (damage dealt and taken, rung 1), each seat's seconds of way to
+        each contested item, rung 2 now, the steal's marks, the caps of a new spawn or round, and THE PAY BY THE SECOND"""
+        if not self._cb_on():
+            return
+        n, M, F = self.n, self.M, self.cb_f
+        g_ = self._others_arr().shape[1] + 1
+        ar = np.arange(n)
+        opp = self._others_arr()[:, 0]
+        nC = len(self.cb_it)
+        C = self.stats["contest"]
+        # 1. the damage rings (dealt to an enemy, taken from an enemy: this frame's slot)
+        sl_ = F % self.cb_L
+        self.cb_dd[:, sl_] = 0.0
+        self.cb_dt[:, sl_] = 0.0
+        for (i_, v_), d_ in st["by"].items():
+            if int(i_) != int(v_) and d_ > 0:
+                self.cb_dd[int(i_), sl_] += float(d_)
+                self.cb_dt[int(v_), sl_] += float(d_)
+        # 2. a new round (its clock went back) or an item down: a new spawn's caps and marks
+        rt_ = np.asarray(self.round_t[:M], np.float64)
+        nr_ = rt_ < self.cb_rt
+        self.cb_rt = rt_.copy()
+        up_ = np.asarray(self.item_up[:M][:, self.cb_it], bool)
+        fresh_ = (~up_) | nr_[:, None]
+        if fresh_.any():
+            self.cb_mv[fresh_] = 0.0
+            fs_ = np.repeat(fresh_, g_, axis=0)
+            self.cb_chg[fs_] = 0.0
+            self.cb_stl[fs_] = -10 ** 9
+        # 3. the seconds of way of every seat to every contested item (the route's table: his node's seconds, and to the node at 320 a second)
+        alive = (self.hp[:n] > 0) & ~((self.rsp_wait[:n] > 0) if RESPAWN_QL else np.zeros(n, bool))
+        self.cb_way = np.where(alive[:, None], self._cb_ways(s), 99.0)
+        # 4. rung 1: the enemy in his view, or the item on a clear line, his crosshair within 60 degrees, a weapon that reaches
+        eye = self._eye(s)[:n].astype(np.float64)
+        yr, pr = np.radians(np.asarray(self.yaw[:n], np.float64)), np.radians(np.asarray(self.pitch[:n], np.float64))
+        fd_ = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1)
+        to_e = np.asarray(s[opp, :3], np.float64) + np.array([0, 0, 8.0]) - eye
+        de_ = np.linalg.norm(to_e, axis=1) + 1e-9
+        qe_ = np.clip(1.0 - np.degrees(np.arccos(np.clip((to_e * fd_).sum(1) / de_, -1.0, 1.0))) / 60.0, 0.0, 1.0)
+        qe_ = qe_ * np.asarray(self.visible, bool)[:n] * self._cb_reach(self.weapon[:n], de_) * alive
+        gm_ = np.repeat(self._cb_game(), g_)
+        upn_ = np.repeat(up_, g_, axis=0)
+        cand_ = upn_ & gm_[:, None] & alive[:, None] & (self.cb_way[opp] < CB_SEC_WAY)
+        qi_ = np.zeros((n, nC))
+        if cand_.any():
+            jj_, kk_ = np.nonzero(cand_)
+            ip_ = self.item_pos[self.cb_it[kk_]].astype(np.float64) + np.array([0, 0, 16.0])
+            to_i = ip_ - eye[jj_]
+            di_ = np.linalg.norm(to_i, axis=1) + 1e-9
+            q_ = np.clip(1.0 - np.degrees(np.arccos(np.clip((to_i * fd_[jj_]).sum(1) / di_, -1.0, 1.0))) / 60.0, 0.0, 1.0)
+            q_ = q_ * self._cb_reach(self.weapon[jj_], di_)
+            lk_ = q_ > 0
+            if lk_.any():
+                los_ = self._los(eye[jj_[lk_]].astype(np.float32), ip_[lk_].astype(np.float32))
+                q2_ = q_[lk_] * los_
+                q_ = q_.copy()
+                q_[lk_] = q2_
+            qi_[jj_, kk_] = q_
+        self.cb_qi = qi_
+        self.cb_r1[:, :, F % self.cb_R1] = np.maximum(qi_, qe_[:, None]).astype(np.float32)
+        # 5. rung 2 now: his bursts of the window that hurt nobody, graded against the item's place or the enemy, summed, at most 0.5
+        self.cb_r2 = np.zeros((n, nC))
+        ok_b = (F - self.cb_bt < self.cb_L) & (self.cb_bw > 0)
+        if ok_b.any():
+            bj_, bk_ = np.nonzero(ok_b)
+            ep_ = self.cb_bp[bj_, bk_]
+            di_ = np.linalg.norm(ep_[:, None, :] - self.item_pos[self.cb_it].astype(np.float64)[None, :, :], axis=2)
+            Rw_ = np.asarray([float(P_RADIUS.get(int(w_), 120.0)) for w_ in self.cb_bwp[bj_, bk_]])[:, None]
+            out_ = float(NEAR_OUT)
+            fi_ = np.where(di_ <= Rw_, 1.0, np.maximum(0.0, (out_ - di_) / (out_ - Rw_)))
+            v_ = self.cb_bw[bj_, bk_][:, None] * np.maximum(fi_, self.cb_bf[bj_, bk_][:, None])
+            np.add.at(self.cb_r2, bj_, v_)
+            self.cb_r2 = np.minimum(self.cb_r2, 0.5)
+        dd4_ = self.cb_dd.sum(1)
+        # 6. the steal's marks: the enemy headed for the item (his target) with under CB_STEAL_WAY seconds of way, while he pressured it
+        hd_ = (np.asarray(self.intent[:n], np.int64)[opp][:, None] == self.cb_int[None, :]) & (self.cb_way[opp] < CB_STEAL_WAY) & upn_ \
+            & alive[opp][:, None] & gm_[:, None]
+        pr_ = (self.cb_r2 > 0) | (dd4_ > 0)[:, None]
+        self.cb_stl = np.where(hd_ & pr_, F, self.cb_stl)
+        # 7. THE PAY BY THE SECOND (the mega and the armors): the enemy nearer and within CB_SEC_WAY, his pressure now
+        sc_ = cand_ & self.cb_big[None, :] & (self.cb_way[opp] < self.cb_way) & alive[opp][:, None]
+        if sc_.any():
+            gm_m = self._cb_game()
+            for j, k in zip(*np.nonzero(sc_)):
+                j, k = int(j), int(k)
+                o, m = int(opp[j]), j // g_
+                if not gm_m[m]:
+                    continue
+                pres = min(1.0, 2.0 * float(self.cb_r2[j, k]) + 0.25 * float(qi_[j, k]))
+                if pres <= 0.0:
+                    continue
+                flat_ = self._cb_flat(k)
+                base_ = min(flat_, self._cb_value(o, int(self.cb_it[k])))
+                amt = float(CONTEST_W) / 5.0 * base_ * pres * DT
+                amt = min(amt, max(0.0, CB_CAP * flat_ - self.cb_mv[m, k]), max(0.0, CB_CAP * base_ - self.cb_chg[o, k]))
+                if amt <= 0.0:
+                    if self.script[j] == 0 and bool(self._counted(j)):
+                        C[17] += 1
+                    continue
+                self.cb_mv[m, k] += amt
+                self.cb_chg[o, k] += amt
+                reward[j] += amt
+                reward[o] -= amt
+                r_long[j] += amt
+                r_long[o] -= amt
+                self._pt("contest_sec", j, amt)
+                self._pt("contest_sec", o, -amt)
+                if self.script[j] == 0 and bool(self._counted(j)):
+                    C[14] += amt
+                    C[16] += 1
+                if self.script[o] == 0 and bool(self._counted(o)):
+                    C[15] += amt
+        # 8. (readouts) his bursts near an item that leave the 8 s window with nobody having taken it
+        ag_ = (F - self.cb_bt == self.cb_LOG) & (self.cb_bnear >= 0) & ~self.cb_bfol
+        if ag_.any():
+            aj_ = np.nonzero(ag_)[0]
+            cn_ = (self.script[aj_] == 0) & self._counted(aj_)
+            C[18] += float(cn_.sum())
+
+    def _cb_pick(self, i, it, pay, reward, r_long, s):
+        """(CONTEST) player i took contested item it, paid `pay` by it: each other player's pressure on it moves pay x (CONTEST_W x p -
+        CEDE_W x (1 - p)) from i to him (at no pressure: from him to i), capped; then i's steal, if he made one"""
+        k = self.cb_ix.get(int(it))
+        if k is None or not self._cb_on():
+            return
+        i = int(i)
+        g_ = self._others_arr().shape[1] + 1
+        m = i // g_
+        if not self._cb_game()[m]:
+            return
+        C = self.stats["contest"]
+        F = self.cb_f
+        flat_ = self._cb_flat(k)
+        base_ = min(flat_, max(0.0, float(pay)))
+        big_ = bool(self.cb_big[k])
+        for j in (int(x_) for x_ in self._others_arr()[i]):
+            p, r1, r2, r3, tk = self._cb_press(j, k)
+            T = base_ * (float(CONTEST_W) * p - float(CEDE_W) * (1.0 - p))
+            if T > 0:
+                T = min(T, max(0.0, CB_CAP * flat_ - self.cb_mv[m, k]), max(0.0, CB_CAP * base_ - self.cb_chg[i, k]))
+                self.cb_mv[m, k] += T
+                self.cb_chg[i, k] += T
+                if T < base_ * float(CONTEST_W) * p - 1e-12 and self.script[j] == 0 and bool(self._counted(j)):
+                    C[17] += 1
+            reward[i] -= T
+            reward[j] += T
+            r_long[i] -= T
+            r_long[j] += T
+            self._pt("contest", i, -T)
+            self._pt("contest", j, T)
+            cj_ = self.script[j] == 0 and bool(self._counted(j))
+            if cj_:
+                if big_:
+                    C[0] += 1
+                    C[1] += float(p > 0)
+                    C[2] += p
+                    C[3] += r1
+                    C[4] += r2
+                    C[5] += r3
+                    C[6] += tk
+                    if p <= 0:
+                        C[7] += 1
+                        dj_ = float(np.linalg.norm(np.asarray(s[j, :3], np.float64) - self.item_pos[it].astype(np.float64)))
+                        C[8] += dj_
+                        C[21 + (0 if dj_ < 1000 else 1 if dj_ < 2000 else 2)] += 1
+                else:
+                    C[9] += 1
+                    C[10] += float(p > 0)
+                C[12 if T > 0 else 13] += abs(T)
+            ci_ = self.script[i] == 0 and bool(self._counted(i))
+            if ci_:
+                C[13 if T > 0 else 12] += abs(T)
+            fo_ = (self.cb_bnear[j] == k) & (F - self.cb_bt[j] < self.cb_LOG)      # (readouts: his bursts near it, taken; those 4 to 8 s before)
+            if cj_:
+                C[19] += float((fo_ & ~self.cb_bfol[j] & (F - self.cb_bt[j] >= self.cb_L)).sum())
+            self.cb_bfol[j] |= fo_
+        for o in (int(x_) for x_ in self._others_arr()[i]):    # THE STEAL: he took the item the enemy was headed for, having pressured it
+            if F - int(self.cb_stl[i, k]) <= int(round(CB_STEAL_T / DT)):
+                S = min(float(CONTEST_W) * flat_, max(0.0, CB_CAP * flat_ - self.cb_mv[m, k]))
+                if S > 0:
+                    self.cb_mv[m, k] += S
+                    reward[i] += S
+                    reward[o] -= S
+                    r_long[i] += S
+                    r_long[o] -= S
+                    self._pt("contest", i, S)
+                    self._pt("contest", o, -S)
+                    if self.script[i] == 0 and bool(self._counted(i)):
+                        C[11] += 1
+                        C[12] += S
+                    if self.script[o] == 0 and bool(self._counted(o)):
+                        C[13] += S
+                self.cb_stl[i, k] = -10 ** 9
+        if big_ and self.script[i] == 0 and bool(self._counted(i)):
+            C[20] += 1
+
+    def _rc_line(self, ia, ib, q, pos, cnt, reward):
+        """(RAIL_CHAIN, from _preaim) the fresh sightings of matches (ia [k], ib [k] their two seats), q [2k] each one's pre-aim grade (ia's then
+        ib's), pos his places: beyond RAIL_LINE_D, RAIL_LINE_PAY x (ia's grade with the rail in his hand, else 0, less ib's the same) to ia,
+        charged to ib (zero-sum); the term "rail_line"; the counters stats["rail_chain"] (cnt: his counted seats)"""
+        ia, ib = np.asarray(ia, np.int64), np.asarray(ib, np.int64)
+        k_ = len(ia)
+        if not k_:
+            return np.zeros(0)
+        ii_ = np.concatenate([ia, ib])
+        far_ = np.linalg.norm(np.asarray(pos, np.float64)[ia] - np.asarray(pos, np.float64)[ib], axis=1) > RAIL_LINE_D
+        rg_ = (np.asarray(self.weapon[ii_]) == RG).astype(np.float64)
+        qr_ = np.asarray(q, np.float64) * rg_
+        d_ = RAIL_LINE_PAY * (qr_[:k_] - qr_[k_:]) * far_
+        reward[ia] += d_.astype(reward.dtype)
+        reward[ib] -= d_.astype(reward.dtype)
+        self._pt("rail_line", ia, d_)
+        self._pt("rail_line", ib, -d_)
+        R_ = self.stats.setdefault("rail_chain", np.zeros(6))
+        c2_ = np.asarray(cnt, bool)[ii_]
+        far2_ = np.concatenate([far_, far_])
+        R_[1] += float((far2_ & c2_).sum())                  # (his fresh sightings beyond RAIL_LINE_D)
+        R_[2] += float((far2_ & c2_ & (rg_ > 0)).sum())      # (... with the rail in his hand)
+        pl_ = np.concatenate([d_, -d_])
+        R_[3] += float(pl_[c2_].sum())                       # (the long line's pay to his seats, net)
+        R_[4] += float(np.abs(pl_[c2_]).sum())               # (... its size)
+        return d_
+
+    def _rc_pick(self, i, reward, r_long):
+        """(RAIL_CHAIN) player i took a railgun while he held none: RAIL_PICK_PAY, once a life, zero-sum (the others lose as much)"""
+        if getattr(self, "rc_paid", None) is None or len(self.rc_paid) != self.n:
+            self.rc_paid = np.zeros(self.n, bool)
+        i = int(i)
+        if self.rc_paid[i] or RAIL_PICK_PAY <= 0:
+            return
+        self.rc_paid[i] = True
+        p_ = float(RAIL_PICK_PAY)
+        reward[i] += p_
+        r_long[i] += p_
+        self._pt("rail_pick", i, p_)
+        R = self.stats.setdefault("rail_chain", np.zeros(6))
+        R[0] += float(self.script[i] == 0 and bool(self._counted(i)))
+        for o_ in self._mates(i):
+            reward[o_] -= p_
+            r_long[o_] -= p_
+            self._pt("rail_pick", o_, -p_)
+
     def _explode(self, i, wpn, ep, direct_on, hit_dir, s, st, back=None):
         """projectile of player i (weapon wpn) explodes at ep; direct_on = player hit directly or None;
         back = the way it flew (RL_QL: the blast point is cut to whole units toward where it came from)"""
@@ -11584,6 +12077,8 @@ class DuelEnv:
                 victims.append((v, P_SPLASH[wpn] * f_, P_SPLASH[wpn] * f_, kdir, False))
         if NEAR_MISS:                                     # (2.2b) a burst that deals the enemy nothing, near him: the near miss's pay
             self._near_miss(i, wpn, ep, victims, s)
+        if CONTEST:                                       # (2.2c) the burst into his ring (the contest pay's rung 2)
+            self._cb_burst(i, wpn, ep, victims, s)
         for v, dmg, kpts, kdir, is_direct in victims:
             if RESPAWN_QL and self.rsp_wait[v] > 0:         # (RESPAWN_QL) a body waiting to respawn: the blast does nothing to it
                 continue
@@ -11648,6 +12143,8 @@ class DuelEnv:
                 victims.append((v, float(int(P_SPLASH[wpn] * f_)), float(kp), kdir, False))
         if NEAR_MISS:                                     # (2.2b) the same for a rocket of RL_QL
             self._near_miss(i, wpn, ep, victims, s)
+        if CONTEST:                                       # (2.2c) the same for a rocket of RL_QL
+            self._cb_burst(i, wpn, ep, victims, s)
         for v, dmg, kpts, kdir, is_direct in victims:
             if RESPAWN_QL and self.rsp_wait[v] > 0:         # (RESPAWN_QL) a body waiting to respawn: the blast does nothing to it
                 continue
@@ -14893,6 +15390,8 @@ class DuelEnv:
                 self.nm_pay, self.nm_bud = np.zeros(n, np.float64), np.ones(n, np.float64)
             self.nm_pay[:] = 0.0
             self.nm_bud = np.minimum(1.0, self.nm_bud + DT)
+        if CONTEST:                                          # (2.2c) the contest pay's books: this frame
+            self._cb_begin()
         if a.ndim == 2 and a.shape[1] == len(ACTION_DIMS) + 1:
             self.keep_in = a[:, -1].astype(np.int64)
             a = a[:, :-1]
@@ -15589,6 +16088,8 @@ class DuelEnv:
         if NEAR_MISS:                                        # (2.2b) the near misses of this frame: paid to the shooter, charged to the enemy (never in dealt)
             reward += self.nm_pay[:len(reward)].astype(reward.dtype)
             self._pt("near_miss", ar, self.nm_pay[:len(ar)])
+        if CONTEST:                                          # (2.2c) the contest pay's rings and marks; the pay by the second
+            self._cb_frame(s, st, reward, r_long)
         if high_ is not None:                                # (HIGH_PAY) a hit from above is worth more to both, one from below less
             reward += self.dmg_reward * (high_[0] - self.dmg_taken_w * high_[1])
         self._ps("high", reward)
@@ -15785,6 +16286,10 @@ class DuelEnv:
                             for o_ in self._mates(i):
                                 self._pt(nm_, o_, -fl_)
                         self._pt("big_order" if kind == "wp" and (BIG_PICK_SEQ or BIG_PICK > 0) else "item_points", i, float(pay_) - fl_)
+                    if CONTEST and not own_:                 # (2.2c) the contest pay at this pickup (and his steal), off what it paid him
+                        self._cb_pick(i, it, pay_, reward, r_long, s)
+                    if RAIL_CHAIN and kind == "wp" and int(val) == RG and not had_wp and not own_ and self.run_k[i] < 0:
+                        self._rc_pick(i, reward, r_long)     # (2.2c) the rail taken while he held none: once a life
                     reward[i] += pay_
                     r_long[i] += pay_
                     want_ = lab if lab in ("MH", "RA") else WEAPONS[int(val)].upper() if kind == "wp" else ""

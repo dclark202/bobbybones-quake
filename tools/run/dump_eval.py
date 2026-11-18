@@ -319,7 +319,7 @@ def play(job):
             env.fg_score = fs_
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
-            if getattr(E, "COMBAT", False):                                     # (1.7) the brain's places ahead: the combat order's
+            if getattr(E, "COMBAT", False) or getattr(E, "AHEAD_IN", False):    # (1.7; 2.2c AHEAD_IN: the hands' inputs) the brain's places ahead: the combat order's
                 ans_["fut"] = np.zeros((n, 3, 3), np.float32)
             for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
                 an_ = p_.brain_answer(hs_) if hasattr(p_, "brain_answer") else None
@@ -521,6 +521,8 @@ def main():
     envvars = dict(x.split("=", 1) for x in a.set)
     if any(getattr(p_, "rf_read", False) and p_.rfg > 0 for p_ in (pol, opp_pol) if p_ is not None) and "BRAIN_READ" not in envvars:
         envvars["BRAIN_READ"] = "1"                              # (v0.4.2a) a network trained with the readers on the brain plays so
+    if any(getattr(p_, "ahead_in", False) for p_ in (pol, opp_pol) if p_ is not None) and "AHEAD_IN" not in envvars:
+        envvars["AHEAD_IN"] = "1"                                # (2.2c) a network that reads the brain's places ahead: the simulator makes them
     delays = (pol.react_ms if a.react_ms is None else a.react_ms, pol.acquire_ms if a.acquire_ms is None else a.acquire_ms,
               None if opp_pol is None else (opp_pol.react_ms if a.opp_react_ms is None else a.opp_react_ms),
               None if opp_pol is None else (opp_pol.acquire_ms if a.opp_acquire_ms is None else a.opp_acquire_ms))
