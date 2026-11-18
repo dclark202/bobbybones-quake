@@ -71,6 +71,8 @@ bot is made of, why each rule exists and what was tried are in the documents bel
   briefs. Everything mechanical goes to an Opus 5.5 worker (`.claude/agents/opus-worker.md`) with a full brief: code, builds, tests,
   measurements, reading many files, git, bookkeeping. **Run monitoring is a separate Opus 5.5 session** with a written brief
   (`MONITOR.md`). The Fable session still answers for the result: it checks the numbers a decision rests on before telling him.
+- **Before proposing a design, read [docs/design/PRINCIPLES.md](docs/design/PRINCIPLES.md)** (what has worked, with its case) beside
+  `HISTORY.md` (what has not), and say which principle the proposal follows or breaks.
 - **In a design chat: be critical, recommend, and do not edit** until he says it is decided. Do not go along with an idea of his
   because it is his; say what is wrong with it and what you would do.
 - **Advice on a run has one form, and its homework is done unasked.** First read the run's records, every earlier attempt at the
