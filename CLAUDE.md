@@ -52,7 +52,8 @@ bot is made of, why each rule exists and what was tried are in the documents bel
 10. **The pro demos are for measuring, never for setting his behaviour.** Allowed: facts of the game and of human limits. Never a
     target, pay, lesson or pass mark: any outcome of a player's choices (a hit rate, a weapon share, a firing rate, where they stand).
 11. **A new part learns silently, then is blended in.** No lesson that copies an old rule or an old network. Once a hand-built rule is
-    out it never comes back (the lock above all). **The hands practise a new play before whatever chooses it is judged on it.**
+    out it never comes back (the lock above all). **Nothing is dealt to him**: no practice trips, dealt plays, dealt weapons, forced destinations or shut options, at any share, not
+    even as a fallback. A new behaviour is brought out only by making it pay and giving him the inputs for it; his own network chooses.
 12. **Nothing holds him to an action.** His own network always drives. A new decider adds its scores beside the others'; it never
     switches him into a mode. Fighting on the way to an item is the normal case.
 13. **A choice made from two learned outputs is always regularized**: both parts get the decay from the moment they share a sum or a
@@ -125,7 +126,8 @@ Every design, pay and review is read against these.
 ## A run, start to end
 
 1. **Names**: `N.Nx` (a family with a goal of its own; `a`, `b`, `c` its attempts). Folders `docs/runs/2.2/2.2b/` and
-   `data/sim_runs/duel_gru_2_2b`. **One new idea per round**, shut at the start, opened slowly, every dial live-settable.
+   `data/sim_runs/duel_gru_2_2b`. **Changes that work together open together, at a size meant to change his behaviour.** Each is off = identical at
+   the start and has its own live dial.
 2. **The card** (`CARD.md`): the owner's page first ("Started from" its first row), the changes, the stages, the red team, the
    research check, the odds. His go on the card; **ask him the length** (12 hours if he says the default).
 3. **The build** by an Opus worker, with `BUILD.md`: every test with its numbers, every setting and flag of the command with its value.
