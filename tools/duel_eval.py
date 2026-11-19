@@ -572,6 +572,10 @@ def main():
                     "in hand (sim/test_suite.py WeaponPush: in view by distance, out of view their travelling hand); 0: none")
     ap.add_argument("--opp-wpush", type=float, default=0.0, help="... on the opponent network's")
     ap.add_argument("--wpush-form", default="share", help="(1.7c experiments) share, ratio, dial or replace (sim/test_suite.py WeaponPush; dial and replace: sim/weapon_dial.py, the servers' !weapons; replace: the table chooses his weapon, --wpush 1 switches it on)")
+    ap.add_argument("--lev-g", type=float, default=None, help="(2.2c lever checks) play his aggression lever at this share (sim/test_suite.py "
+                    "Policy.set_fight: what the lever adds to 'the enemy', and what the hands are shown of it, is this x its number; default: his "
+                    "checkpoint's LEV_G; 0: the lever at zero). Only for a network with the lever")
+    ap.add_argument("--opp-lev-g", type=float, default=None, help="... the opponent network's")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
@@ -587,6 +591,10 @@ def main():
         pol.set_head2_wadd(a.head2_wadd)
     if a.head2_mix is not None:
         pol.set_head2_mix(a.head2_mix)
+    if a.lev_g is not None:                                  # (2.2c lever checks) his lever at this share
+        assert getattr(pol, "lever", False), "--lev-g: his network has no lever"
+        pol.set_fight(g=a.lev_g)
+        print("lever: his share {:g} (what it adds to 'the enemy' and shows the hands: share x its number)".format(pol.lev_g), flush=True)
     if getattr(pol, "h2", None) is not None:
         print("strategy head: gate {:g}, mix {:g} ({})".format(float(pol.h2W["gate"]), float(pol.h2W.get("mix", 0.0)),
               "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
@@ -617,6 +625,10 @@ def main():
             opp_pol.set_head2_gate(a.opp_head2_gate)
         if a.opp_head2_mix is not None:
             opp_pol.set_head2_mix(a.opp_head2_mix)
+        if a.opp_lev_g is not None:                          # (2.2c lever checks) the opponent's lever at this share
+            assert getattr(opp_pol, "lever", False), "--opp-lev-g: the opponent network has no lever"
+            opp_pol.set_fight(g=a.opp_lev_g)
+            print("lever: the opponent's share {:g}".format(opp_pol.lev_g), flush=True)
         oo = opp_pol.names if getattr(opp_pol, "names", None) else fit_list(names(a.opp_inputs), len(opp_pol.mean))
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
@@ -752,7 +764,8 @@ def main():
                         v_["in_hand_in_view"]["rg"], v_["in_hand_in_view"]["lg"]) for nm, v_ in bs.items()), flush=True)
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
-            json.dump(dict(run=a.run, policy=path, opp=a.opp, env=a.env, set=envvars, delays_ms=dl_out, maps=out), f, indent=1)
+            json.dump(dict(run=a.run, policy=path, opp=a.opp, env=a.env, set=envvars, delays_ms=dl_out, maps=out,
+                           **({"lev_g": dict(he=a.lev_g, opponent=a.opp_lev_g)} if (a.lev_g is not None or a.opp_lev_g is not None) else {})), f, indent=1)
 
 
 if __name__ == "__main__":
