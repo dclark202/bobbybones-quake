@@ -33,6 +33,14 @@ CHECK_EVERY = int(os.environ.get("CHECK_EVERY") or 20)   # (v0.6.1: the ramp ste
 CHECK_GAMES = int(os.environ.get("CHECK_GAMES") or 16)   # games a map, seats swapped (owner, 2026-11-02: 20 from the run after b1.2d, with CHECK_EVERY 20)
 CHECK_BATCH = int(os.environ.get("CHECK_BATCH") or 5)    # (b1.2d) maps played at once in a check (two processes each): 4 on 8 efficiency cores
 MAPS = ["bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "battleforged", "campgrounds", "hektik", "toxicity", "cure"]
+# (2.2d) checks at named updates, in a queue (none skipped; one check at a time, in order). Unset: the rule above, unchanged.
+#   CHECK_AT="10,30,50,60,70"  a check against CTRL_PREV at the first save at or past each of these updates (no "every fourth" against the reference)
+#   CHECK_REF_AT="60"          ... and at these, a second check against CTRL_REF, queued after the first
+#   CHECK_END="1"              when the trainer's log ends with its "exit" line: the end save (policy.pt after the trainer exited, copied to
+#                              keep/policy_end_check_<n>.pt) checked against CTRL_PREV, unless its update was checked already
+CHECK_AT = sorted(int(x_) for x_ in (os.environ.get("CHECK_AT") or "").split(",") if x_.strip())
+CHECK_REF_AT = sorted(int(x_) for x_ in (os.environ.get("CHECK_REF_AT") or "").split(",") if x_.strip())
+CHECK_END = os.environ.get("CHECK_END") == "1"
 WD = os.path.join(SR, RUN, "watch")
 os.makedirs(WD, exist_ok=True)
 LOCK = threading.Lock()
@@ -199,18 +207,73 @@ def main():
     last_chk, n_chk = -100, 0
     refused_at = None
     busy = lambda: any(t_.is_alive() for t_ in gth)          # noqa: E731
+    QUEUE, done_at, ended, RUNNING = [], set(), [False], [False]   # (2.2d, CHECK_AT) the checks waiting, in order; the updates checked
+    if CHECK_AT:
+        busy = lambda: RUNNING[0]                            # noqa: E731  (the panel's "a check plays": the queue's check, not its thread)
+        say("checks at updates", CHECK_AT, "against", PREV_LABEL, "| also against", REF_LABEL, "at", CHECK_REF_AT,
+            "| the end save" if CHECK_END else "", "| in a queue, one at a time, none skipped")
+
+        def q_worker():
+            while True:
+                if QUEUE:
+                    k_, n_, c_, l_ = QUEUE.pop(0)
+                    RUNNING[0] = True
+                    try:
+                        check_games(k_, n_, c_, l_)
+                    except Exception as e_:                  # noqa: BLE001
+                        say("MAJOR PROBLEM: the check of update", n_, "against", l_, "failed:", repr(e_)[:300])
+                    RUNNING[0] = False
+                elif ended[0]:
+                    return
+                else:
+                    time.sleep(10)
+        qt_ = threading.Thread(target=q_worker)
+        qt_.start()
+        gth.append(qt_)
     while True:
         time.sleep(20)
         L = lines()
         if len(L) != n:
             n, last, stalled = len(L), time.time(), False
+        if CHECK_AT and CHECK_END and not ended[0]:          # (2.2d) the trainer's end: its last save checked
+            try:
+                tl_ = open(os.path.join(SR, RUN + ".log"), encoding="utf-8", errors="replace").read()[-400:].strip().splitlines()
+            except OSError:
+                tl_ = []
+            if tl_ and tl_[-1].startswith("exit "):
+                time.sleep(60)
+                n = len(lines())
+                if n not in done_at:
+                    k = os.path.join(keep, "policy_end_check_{}.pt".format(n))
+                    shutil.copy(pol, k)
+                    done_at.add(n)
+                    QUEUE.append((k, n, CTRL_PREV, PREV_LABEL))
+                    say("the trainer ended ({}) at update {}: the end save queued for a check against {} ({} checks waiting)".format(
+                        tl_[-1], n, PREV_LABEL, len(QUEUE)))
+                else:
+                    say("the trainer ended ({}) at update {}: that update was checked already".format(tl_[-1], n))
+                ended[0] = True
         if os.path.getmtime(pol) > mt + 60:
             time.sleep(20)
             mt = os.path.getmtime(pol)
             k = os.path.join(keep, "policy_{}.pt".format(n))
             shutil.copy(pol, k)
             say("update", n, collapse_line(L[-10:]))
-            want_games = n == 10 or (n > 10 and n - last_chk >= CHECK_EVERY)
+            if CHECK_AT:                                     # (2.2d) the named updates, queued
+                us_ = [u_ for u_ in CHECK_AT if n >= u_ and u_ not in done_at]   # (the marks this save reaches: checked once, by this save)
+                if us_ and n not in done_at:
+                    ref_ = any(u_ in CHECK_REF_AT for u_ in us_)
+                    QUEUE.append((k, n, CTRL_PREV, PREV_LABEL))
+                    if ref_:
+                        QUEUE.append((k, n, CTRL_REF, REF_LABEL))
+                    say("save", n, "(the marks {}) queued for a check against".format(us_), PREV_LABEL, ("and " + REF_LABEL) if ref_ else "",
+                        "({} checks waiting)".format(len(QUEUE)))
+                done_at.update(us_)
+                if us_:
+                    done_at.add(n)
+                want_games = False
+            else:
+                want_games = n == 10 or (n > 10 and n - last_chk >= CHECK_EVERY)
             if want_games and busy():
                 say("save", n, "games not started: a check still runs (the next save takes its turn)")
             elif want_games:
@@ -238,6 +301,9 @@ def main():
             stalled = True
         if time.time() - last > 45 * 60:
             break
+    ended[0] = True                                          # (2.2d, CHECK_AT) the queue's thread ends once the checks waiting are played
+    if CHECK_AT and QUEUE:
+        say("the watch's loop ends with {} checks waiting: they are played before it exits".format(len(QUEUE)))
     for t in gth + pth:
         t.join()
     say("watch done")

@@ -687,6 +687,28 @@ RAIL_LINE_PAY = float(os.environ.get("RAIL_LINE_PAY") or 0.10)
 RAIL_LINE_D = 768.0
 assert 0.0 <= CONTEST_W <= 1.0 and 0.0 <= CEDE_W <= 0.5, "CONTEST_W within 0 .. 1, CEDE_W within 0 .. 0.5"
 assert 0.0 <= RAIL_PICK_PAY <= 1.0 and 0.0 <= RAIL_LINE_PAY <= 1.0, "RAIL_PICK_PAY and RAIL_LINE_PAY within 0 .. 1"
+# (2.2d, docs/runs/2.2/2.2d/CARD.md "What is added": logging only; none of it reaches his play or his pay)
+# CONTEST_LOG=1 (with CONTEST=1): THE CONTEST PAY'S COUNTERS ONLY. Every transfer of the contest pay is exactly 0.0 (at the pickup, the free
+#   pickup's charge, the steal, by the second): nothing is added to the frame's pay, to r_long or to the terms "contest" and "contest_sec"
+#   (they stay 0.0), whatever CONTEST_W and CEDE_W are. The counters (stats["contest"], stats["contest_burst"]) count as with the pay: the
+#   steals (C[11]: he took the item within 10 s of a mark) and the frames by the second (C[16]: the enemy nearer, his pressure above 0) are
+#   counted on the event itself, not on a pay above 0; the pay columns (C[12] to C[15]) and "the cap reached" (C[17]) stay 0.
+# RAIL_WOULD=1: stats["rail_would"] [4 distance bands (< 500, 500 to 768, 768 to 1200, > 1200), 2 (he did not / did own the rail at the
+#   window's start), 3 (windows, a rail's possible damage, the damage he dealt)]: from a frame the enemy is in his sight (self.visible, his
+#   sight as he chose the frame's action), a window of RW_SECS (1.5 s, the rail's reload) for his seat, windows not overlapping: one possible
+#   rail hit of W_DMG[RG] (80) if at any frame of it his crosshair (his view now, from his eye) crosses the enemy's body with a clear line to
+#   it (the rail's own test: the world traced along it to 8192 units, then the player's box), against the damage he dealt the enemy in it
+#   (every weapon, the points booked). The band by the two players' places at the window's start. Policy seats, not runs (as the rail's
+#   counters). A measurement only: it assumes he would aim the same with the rail in hand.
+# FREE_SEE=1 (with CONTEST=1): stats["free_see"] [6: with a clear line (count, his distance summed), without (count, distance summed), he was
+#   dead or out of play (count), 0]: at each of the enemy's big pickups (mega, armors) with no pressure of his (p = 0, the contest counters'
+#   "free pickups"), a point trace from his eye to the item's place + 16 units up, at the pickup.
+CONTEST_LOG = float(os.environ.get("CONTEST_LOG") or 0.0) > 0
+RAIL_WOULD = float(os.environ.get("RAIL_WOULD") or 0.0) > 0
+FREE_SEE = float(os.environ.get("FREE_SEE") or 0.0) > 0
+RW_SECS = 1.5
+RW_BANDS = (500.0, 768.0, 1200.0)
+assert not (CONTEST_LOG or FREE_SEE) or CONTEST, "CONTEST_LOG and FREE_SEE count the contest pay's events: they need CONTEST=1"
 # (2.2c, change 1's "what he needs to see"; CLAUDE.md "Inputs") AHEAD_IN=1: the last N_AH inputs (group "b22c ahead", the hands' only, read
 # by their encoder): where the brain expects the enemy in 1, 2 and 4 s (its readout ahead, sim/ahead.py "fut", kept in map coordinates at
 # the brain's tick and sent with its answer: brain_in's "fut"), each from his eye now: forward, left, up (thousands of units, in his facing's
@@ -11890,6 +11912,10 @@ class DuelEnv:
                 pres = min(1.0, 2.0 * float(self.cb_r2[j, k]) + 0.25 * float(qi_[j, k]))
                 if pres <= 0.0:
                     continue
+                if CONTEST_LOG:                              # (2.2d) the counters only: the frame counted, nothing paid
+                    if self.script[j] == 0 and bool(self._counted(j)):
+                        C[16] += 1
+                    continue
                 flat_ = self._cb_flat(k)
                 base_ = min(flat_, self._cb_value(o, int(self.cb_it[k])))
                 amt = float(CONTEST_W) / 5.0 * base_ * pres * DT
@@ -11936,19 +11962,20 @@ class DuelEnv:
         big_ = bool(self.cb_big[k])
         for j in (int(x_) for x_ in self._others_arr()[i]):
             p, r1, r2, r3, tk = self._cb_press(j, k)
-            T = base_ * (float(CONTEST_W) * p - float(CEDE_W) * (1.0 - p))
+            T = 0.0 if CONTEST_LOG else base_ * (float(CONTEST_W) * p - float(CEDE_W) * (1.0 - p))   # (2.2d CONTEST_LOG: nothing moves)
             if T > 0:
                 T = min(T, max(0.0, CB_CAP * flat_ - self.cb_mv[m, k]), max(0.0, CB_CAP * base_ - self.cb_chg[i, k]))
                 self.cb_mv[m, k] += T
                 self.cb_chg[i, k] += T
                 if T < base_ * float(CONTEST_W) * p - 1e-12 and self.script[j] == 0 and bool(self._counted(j)):
                     C[17] += 1
-            reward[i] -= T
-            reward[j] += T
-            r_long[i] -= T
-            r_long[j] += T
-            self._pt("contest", i, -T)
-            self._pt("contest", j, T)
+            if not CONTEST_LOG:                              # (2.2d CONTEST_LOG: no write to the pay at all)
+                reward[i] -= T
+                reward[j] += T
+                r_long[i] -= T
+                r_long[j] += T
+                self._pt("contest", i, -T)
+                self._pt("contest", j, T)
             cj_ = self.script[j] == 0 and bool(self._counted(j))
             if cj_:
                 if big_:
@@ -11964,6 +11991,8 @@ class DuelEnv:
                         dj_ = float(np.linalg.norm(np.asarray(s[j, :3], np.float64) - self.item_pos[it].astype(np.float64)))
                         C[8] += dj_
                         C[21 + (0 if dj_ < 1000 else 1 if dj_ < 2000 else 2)] += 1
+                        if FREE_SEE:                         # (2.2d) did he have a clear line from his eye to the item's place then
+                            self._free_see(j, it, dj_, s)
                 else:
                     C[9] += 1
                     C[10] += float(p > 0)
@@ -11978,7 +12007,10 @@ class DuelEnv:
         for o in (int(x_) for x_ in self._others_arr()[i]):    # THE STEAL: he took the item the enemy was headed for, having pressured it
             if F - int(self.cb_stl[i, k]) <= int(round(CB_STEAL_T / DT)):
                 S = min(float(CONTEST_W) * flat_, max(0.0, CB_CAP * flat_ - self.cb_mv[m, k]))
-                if S > 0:
+                if CONTEST_LOG:                              # (2.2d) the counters only: the steal counted, nothing paid
+                    if self.script[i] == 0 and bool(self._counted(i)):
+                        C[11] += 1
+                elif S > 0:
                     self.cb_mv[m, k] += S
                     reward[i] += S
                     reward[o] -= S
@@ -12040,6 +12072,77 @@ class DuelEnv:
             reward[o_] -= p_
             r_long[o_] -= p_
             self._pt("rail_pick", o_, -p_)
+
+    # ---------------------------------------------------------------- (2.2d) two log lines (RAIL_WOULD, FREE_SEE): read only, never paid
+    def _free_see(self, j, it, dj, s):
+        """(FREE_SEE, from _cb_pick at a free big pickup of the enemy) player j's clear line from his eye to item it's place + 16 units up now;
+        dj his distance from the item: stats["free_see"] (with a line: count, distance summed; without: the same; dead or out of play)"""
+        F_ = self.stats.setdefault("free_see", np.zeros(6))
+        j = int(j)
+        if self.hp[j] <= 0 or (RESPAWN_QL and self.rsp_wait[j] > 0):
+            F_[4] += 1
+            return
+        eye = self._eye(s)[j:j + 1].astype(np.float32)
+        ip = (self.item_pos[it].astype(np.float64) + np.array([0, 0, 16.0])).astype(np.float32)[None, :]
+        ok = bool(self._los(eye, ip)[0])
+        F_[0 if ok else 2] += 1
+        F_[1 if ok else 3] += float(dj)
+
+    def _rw_frame(self, s, st):
+        """(RAIL_WOULD, after this frame's damage) each counted seat's window of RW_SECS: opened at a frame the enemy is in his sight (none open);
+        a possible rail hit when his crosshair crosses the enemy's body with a clear line at any frame of it; the damage he dealt the enemy in
+        it; booked into stats["rail_would"] [band, owned the rail, (windows, possible, dealt)] when it ends. Reads the state; draws nothing"""
+        n = self.n
+        L_ = int(round(RW_SECS / DT))
+        if getattr(self, "rw_t0", None) is None or len(self.rw_t0) != n:
+            self.rw_t0 = np.full(n, -1, np.int64)           # (the frame its window began; -1: none open)
+            self.rw_f = 0
+            self.rw_band = np.zeros(n, np.int64)
+            self.rw_own = np.zeros(n, np.int64)
+            self.rw_hit = np.zeros(n, bool)
+            self.rw_dmg = np.zeros(n, np.float64)
+        RW = self.stats.setdefault("rail_would", np.zeros((len(RW_BANDS) + 1, 2, 3)))
+        self.rw_f += 1
+        F = self.rw_f
+        ar = np.arange(n)
+        opp = self._others_arr()[:, 0]
+        out_ = (self.rsp_wait[:n] > 0) if RESPAWN_QL else np.zeros(n, bool)
+        alive = (self.hp[:n] > 0) & ~out_
+        cnt = (self.script[:n] == 0) & (self.run_k[:n] < 0) & np.asarray(self._counted(ar), bool)
+        vis = np.asarray(self.visible, bool)[:n] if getattr(self, "visible", None) is not None and len(self.visible) >= n else np.zeros(n, bool)
+        new_ = (self.rw_t0 < 0) & cnt & vis & alive & alive[opp]
+        if new_.any():
+            d_ = np.linalg.norm(np.asarray(s[opp[new_], :3], np.float64) - np.asarray(s[ar[new_], :3], np.float64), axis=1)
+            self.rw_t0[new_] = F
+            self.rw_band[new_] = np.digitize(d_, RW_BANDS)
+            self.rw_own[new_] = np.asarray(self.has[ar[new_], RG], bool).astype(np.int64)
+            self.rw_hit[new_] = False
+            self.rw_dmg[new_] = 0.0
+        op_ = self.rw_t0 >= 0
+        for (i_, v_), d_ in st["by"].items():               # (the damage he dealt the enemy this frame, every weapon)
+            if int(i_) != int(v_) and d_ > 0 and 0 <= int(i_) < n and op_[int(i_)]:
+                self.rw_dmg[int(i_)] += float(d_)
+        tst_ = np.nonzero(op_ & ~self.rw_hit & alive & alive[opp])[0]
+        if len(tst_):                                        # (his crosshair: the rail's own test, the box first, then the world along it)
+            eye = self._eye(s)[:n].astype(np.float32)
+            yr, pr = np.radians(np.asarray(self.yaw[tst_], np.float64)), np.radians(np.asarray(self.pitch[tst_], np.float64))
+            fd_ = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
+            rng_ = float(W_RANGE[RG])
+            c_ = np.asarray(s[opp[tst_], :3], np.float32)
+            tp_ = np.where(self.duck[opp[tst_]], TOP_DUCK, TOP)
+            hb_ = self._seg_box(eye[tst_], eye[tst_] + fd_ * rng_, c_, tp_)
+            if hb_.any():
+                k_ = tst_[hb_]
+                fr_ = self.w.rays_each(eye[k_], fd_[hb_][:, None, :], rng_, mask=self.sight)[:, 0]
+                end_ = eye[k_] + fd_[hb_] * rng_ * fr_[:, None]
+                self.rw_hit[k_] = self._seg_box(eye[k_], end_, c_[hb_], tp_[hb_])
+        dn_ = np.nonzero(op_ & (F - self.rw_t0 >= L_ - 1))[0]
+        for i_ in dn_:                                       # (a window ends after its RW_SECS: booked, the seat free for the next)
+            b_, o_ = int(self.rw_band[i_]), int(self.rw_own[i_])
+            RW[b_, o_, 0] += 1
+            RW[b_, o_, 1] += float(W_DMG[RG]) * float(self.rw_hit[i_])
+            RW[b_, o_, 2] += float(self.rw_dmg[i_])
+            self.rw_t0[i_] = -1
 
     def _explode(self, i, wpn, ep, direct_on, hit_dir, s, st, back=None):
         """projectile of player i (weapon wpn) explodes at ep; direct_on = player hit directly or None;
@@ -16090,6 +16193,8 @@ class DuelEnv:
             self._pt("near_miss", ar, self.nm_pay[:len(ar)])
         if CONTEST:                                          # (2.2c) the contest pay's rings and marks; the pay by the second
             self._cb_frame(s, st, reward, r_long)
+        if RAIL_WOULD:                                       # (2.2d) what a rail would have dealt against what he dealt (a log line only)
+            self._rw_frame(s, st)
         if high_ is not None:                                # (HIGH_PAY) a hit from above is worth more to both, one from below less
             reward += self.dmg_reward * (high_[0] - self.dmg_taken_w * high_[1])
         self._ps("high", reward)

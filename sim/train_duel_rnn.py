@@ -4864,10 +4864,25 @@ def main():
                     j_ = list(E_.PAY_TERMS).index(k_)
                     terms_[k_] = dict(sum=round(float(PT_[0, j_]), 4), size=round(float(PT_[2, j_]), 4), share=round(float(PT_[2, j_]) / tot_, 5))
         nm_ = np.asarray(ag_.get("near_miss", np.zeros(6)), np.float64)
+        rw_ = None                                                       # (2.2d, RAIL_WOULD) what a rail would have dealt against what he dealt
+        if "rail_would" in ag_:
+            RW_ = np.asarray(ag_["rail_would"], np.float64).reshape(4, 2, 3)
+            rw_ = {b_: {o_: dict(windows=int(RW_[j_, k_, 0]), rail_possible=round(float(RW_[j_, k_, 1]), 1), dealt=round(float(RW_[j_, k_, 2]), 1))
+                        for k_, o_ in enumerate(("no_rail", "rail_owned"))}
+                   for j_, b_ in enumerate(("under_500", "d500_768", "d768_1200", "over_1200"))}
+        fs_ = None                                                       # (2.2d, FREE_SEE) his line to the item at the enemy's free big pickups
+        if "free_see" in ag_:
+            FS_ = np.asarray(ag_["free_see"], np.float64)
+            fs_ = dict(with_line=int(FS_[0]), with_line_distance=round(float(FS_[1] / max(1.0, FS_[0])), 1), without_line=int(FS_[2]),
+                       without_line_distance=round(float(FS_[3] / max(1.0, FS_[2])), 1), dead=int(FS_[4]))
         out_ = dict(played=dict(FGR["dials"], h2_wadd=float(H2_WADD_V[0]), gate=float(FGT_GATE_V[0])), lever=dict(by_state=by_, sizes=sizes_),
                     play=play_, contest=con_, rail=rail_, pay_terms=terms_, projectiles=proj_,
                     near_miss=dict(bursts_near_unhurt=int(nm_[0]), paid=int(nm_[1]), pay_sum=round(float(nm_[3]), 5)),
                     nonfinite=int(np.asarray(FGR["cnt"])[46]), lesson=FG_ST[0], tracker_pass=(O22_ST[0] or {}).get("pass"))
+        if rw_ is not None:
+            out_["rail_would"] = rw_
+        if fs_ is not None:
+            out_["free_see"] = fs_
         ls_ = (FG_ST[0] or {}).get("sizes") or {}
         out_["flags"] = [k_ for k_ in ("lever_abs", "lever_max", "l1", "l3") if float(ls_.get(k_, 0.0) or 0.0) > 40.0] + \
             [k_ for k_ in ("items", "lever_abs", "lever_max") if float(sizes_.get(k_, 0.0) or 0.0) > 40.0]
