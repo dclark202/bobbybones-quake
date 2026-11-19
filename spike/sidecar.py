@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 sidecar.py -- the spike "brain": drives one bot slot in a Quake3e + OSP
-server through the botctl Unix socket and runs the T1-T9 spike scenarios.
+server through the botctl Unix socket and runs the T1-T10 spike scenarios.
 
 Usage:
   python3 sidecar.py --port 28133 --scenario t2 --botname SpikeBot [--team red]
@@ -42,6 +42,11 @@ Scenarios (each prints a PASS/FAIL line and exits 0/1):
       CLOSE the connection (never continue with dropped replies), drop its
       managed clients, stay responsive (rcon), and accept a fresh
       connection + ADD (LIST empty).
+  t10 close-during-reply / SIGPIPE (review round 3): send a SNAP request
+      and close the connection ~10 ms later, while the reply is in flight.
+      Without MSG_NOSIGNAL/SO_NOSIGPIPE the engine's send() raises SIGPIPE
+      and the WHOLE server dies (exit 141). PASS = after 10 such tries the
+      engine still answers rcon status and keeps the socket listening.
 
 Stdlib only. Talks to the engine socket <fs_homepath>/botctl-<port>.sock
 (see botctl.sockpath_for_port; the spike runs use ~/.q3a_spike).
@@ -1197,9 +1202,51 @@ def t9(bc: Botctl, args) -> int:
                   f"player_gone={gone} readd_after_reconnect={readd}")
 
 
+def t10(bc: Botctl, args) -> int:
+    """T10 (review round 3, 2026-11-19): close-during-reply = SIGPIPE
+    repro. The engine serves one UDS connection at a time, so the close
+    must land on THIS connection: send a SNAP request (the handler then
+    waits up to a frame in Botctl_WaitSnapshot), close ~10 ms later — the
+    close lands while the request is in flight. Before the fix the
+    reply's send() raised SIGPIPE (nothing ignored it) and the default
+    action terminated the whole server (exit 141) before -1/EPIPE was
+    visible. After the fix (MSG_NOSIGNAL on Linux / SO_NOSIGPIPE on
+    BSD/macOS) the send fails with EPIPE, takes the normal
+    connection-lost path, and the engine must stay up: rcon status
+    answers and a fresh connection works, on every try."""
+    name = "T10 close-during-reply (SIGPIPE)"
+    if not rcon(args, "status", timeout=5.0).strip():
+        return result(name, False, "rcon status already failing before the test")
+    path = bc.sockpath
+    for i in range(10):
+        _send_frame(bc.sock, OP_SNAP, b"")     # reply is now in flight
+        time.sleep(0.01)                       # close lands while it waits
+        try:
+            bc.close()
+        except Exception:
+            pass
+        if not rcon(args, "status", timeout=5.0).strip():
+            return result(name, False,
+                          f"server dead after try {i + 1} (rcon silent — SIGPIPE kill?)")
+        try:
+            bc = Botctl(path)
+            bc.ping()
+        except Exception as e:
+            return result(name, False,
+                          f"engine stopped listening after try {i + 1}: {e}")
+        time.sleep(0.5)                        # Botctl_Frame drop path between tries
+    try:
+        bc.close()
+    except Exception:
+        pass
+    return result(name, True,
+                  "10/10 close-during-reply tries survived: rcon answered, "
+                  "engine kept listening (EPIPE path, no SIGPIPE kill)")
+
+
 SCENARIOS = {
     "t1": t1, "t2": t2, "t3": t3, "t4": t4, "t5": t5, "t5b": t5b,
-    "t5c": t5c, "t6": t6, "t7": t7, "t8": t8, "t9": t9,
+    "t5c": t5c, "t6": t6, "t7": t7, "t8": t8, "t9": t9, "t10": t10,
 }
 
 

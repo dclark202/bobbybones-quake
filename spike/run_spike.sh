@@ -30,7 +30,7 @@
 #    alive for minutes. => stdin goes through a FIFO now, both PIDs are
 #    owned explicitly, cleanup = TERM with 10 s grace + KILL fallback.
 #
-# Usage:  run_spike.sh <scenario t1..t9> [seconds]
+# Usage:  run_spike.sh <scenario t1..t10> [seconds]
 #
 # Logs:   ~/tmp/spike/server_<scen>_<ts>.log
 #         ~/tmp/spike/sidecar_<scen>_<ts>.log
@@ -247,6 +247,19 @@ if [ "$SCEN" = "t8" ] || [ "$SCEN" = "t9" ]; then
     echo "RESULT ${SCEN}-log: PASS engine dropped the orphaned managed clients" | tee -a "$SCLOG"
   else
     echo "RESULT ${SCEN}-log: FAIL no 'bot control connection lost' line in server log" | tee -a "$SCLOG"
+    RC=1
+  fi
+fi
+if [ "$SCEN" = "t10" ]; then
+  # the close-during-reply must take the connection-lost path (HandleConnection
+  # epilogue), and the server must have survived all 10 tries (no SIGPIPE
+  # kill): the sidecar already proved rcon answers after each try; the log
+  # must show the disconnect handling and must NOT show a shutdown.
+  if grep -q 'botctl: sidecar disconnected' "$LOG" 2>/dev/null \
+     && ! grep -q 'Server Shutdown' "$LOG" 2>/dev/null; then
+    echo "RESULT t10-log: PASS engine took the connection-lost path, server survived (no SIGPIPE kill)" | tee -a "$SCLOG"
+  else
+    echo "RESULT t10-log: FAIL expected 'botctl: sidecar disconnected' (and no 'Server Shutdown') in server log" | tee -a "$SCLOG"
     RC=1
   fi
 fi
