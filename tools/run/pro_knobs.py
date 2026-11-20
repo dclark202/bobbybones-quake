@@ -57,8 +57,10 @@ def shifted(u, tau):
     return off, PA.wrap(brg - L[:, 14]), bpt - L[:, 15], brg, bpt, d
 
 
-def one(u, uid, tau0=2):
-    """a player-game: its delay, its rail shots and a sample of its lightning frames (rows), its tracking lag"""
+def one(u, uid, tau0=2, lg_every=4, frames=False):
+    """a player-game: its delay, its rail shots and a sample of its lightning frames (rows), its tracking lag.
+    (tools/run/aim_room.py) lg_every: every that many lightning cells (4: as before); frames: also return each row's frame j (the
+    view's frame) and k (the shot's or the cell's frame). Defaults: as before"""
     w, shot, vis, seg, n = u["w"], u["shot"], u["vis"], u["seg"], u["n"]
     prev = np.zeros(n, bool)
     prev[1:] = vis[:-1] & u["same"][1:]
@@ -93,7 +95,7 @@ def one(u, uid, tau0=2):
             last = sg[k]
         else:
             rev[k] = min(rev[k - 1] + 1, 400)
-    rows = []
+    rows, fj, fk = [], [], []
     for W in (RG,):
         k = np.nonzero(shot & (w == W) & prev)[0]
         if len(k):
@@ -113,12 +115,16 @@ def one(u, uid, tau0=2):
             rows.append(np.stack([np.full(len(k), uid), np.full(len(k), W), d[j], off[j], ey[j], ep[j], cross[j], np.nan_to_num(vsp[j], nan=-1),
                                   np.nan_to_num(u["trav"][j], nan=-1), u["run"][j], rev[j], h, np.full(len(k), tau),
                                   -ey[j] * np.sign(cx[j])], 1))                # (last: the view ahead (+) or behind (-) the way he moves)
+            fj.append(j)
+            fk.append(k)
     if len(lgf):
-        k = lgf[::4]
+        k = lgf[::lg_every]
         j = k                                                # (the lightning: the view of the cell's own frame)
         rows.append(np.stack([np.full(len(k), uid), np.full(len(k), LG), d[j], off[j], ey[j], ep[j], cross[j], np.nan_to_num(vsp[j], nan=-1),
                               np.nan_to_num(u["trav"][j], nan=-1), u["run"][j], rev[j], u["dh"][k] > 0, np.full(len(k), tau),
                               -ey[j] * np.sign(cx[j])], 1))
+        fj.append(j)
+        fk.append(k)
     lag = np.nan
     fr = np.zeros(n, bool)
     fr[lgf] = True                                           # tracking: the view's yaw rate against the bearing's, the best lag
@@ -137,7 +143,10 @@ def one(u, uid, tau0=2):
                 if c_ > best:
                     best, bl = c_, lg_
         lag = (bl - tau) * 25.0 if best > 0.15 else np.nan    # (less the demo's own delay)
-    return (np.concatenate(rows) if rows else np.zeros((0, 14))), tau, lag
+    R_ = np.concatenate(rows) if rows else np.zeros((0, 14))
+    if frames:
+        return R_, tau, lag, (np.concatenate(fj) if fj else np.zeros(0, int)), (np.concatenate(fk) if fk else np.zeros(0, int))
+    return R_, tau, lag
 
 
 def collect(a):
