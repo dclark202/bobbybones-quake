@@ -96,6 +96,15 @@ def aim_variants():
     b_rm, b_am, b_v = out["better"]
     for nm, rm, vd in (("better75", 75, "100"), ("better50", 50, "75")):
         out[nm] = (rm, b_am, dict(b_v, VEL_DELAY_MS=vd))
+    # (aim4 candidates, coordinator 2026-11-19: one config for every weapon) the sight error in proportion to how big he looks, no
+    # constant part (AIM3_SIZE_A 0, B 0.49: today's at about 300 units), with shorter delays, a larger slip cap, no view inertia
+    eye = {"AIM3_SIZE_A": "0", "AIM3_SIZE_B": "0.49"}
+    cap = {"AIM2_CAP_SLIP": "4.0"}
+    out["a4_eye"] = (125, 225, dict(eye))
+    out["a4_eye100"] = (100, 225, dict(eye, VEL_DELAY_MS="175"))
+    out["a4_eye100_cap"] = (100, 225, dict(eye, VEL_DELAY_MS="175", **cap))
+    out["a4_full"] = (100, 225, dict(eye, VEL_DELAY_MS="175", AIM2_SMOOTH_K="0", **cap))
+    out["a4_eye75_cap"] = (75, 225, dict(eye, VEL_DELAY_MS="100", **cap))
     return out
 
 
