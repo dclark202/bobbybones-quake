@@ -2159,6 +2159,53 @@ RAIL_START_COLS = ("rail starts begun", "asked for with no mid moment saved: a w
                    "seconds to that first shot, summed", "placements that took another pair (a line or the room not clear)",
                    "the start distance, summed", "rail starts ended in the second half of the matches (the first seat is his)",
                    "of those: he won", "level", "he lost")
+#   RDRILL=1, RDRILL_P=<share>   (2.2e, the owner's rail drill of 2026-11-19; docs/runs/2.2/2.2e/CARD.md "The rail drill": "him in a long
+#                 room, spawned at different distances to the enemy 500--1500 units. Enemy moves fastly and randomly with jumps. He has only
+#                 the rail no mg or gauntlet can move but has no other incentive in this space other than to just shoot at the enemy. he gets
+#                 paid for shots that land", "fine use the duel maps") a round kind of its own (RDR), not a game: a share RDRILL_P of the
+#                 playing time (live: live.json; 0 = not one draw more), drawn at a round's end before the whole games' draw (a drill or
+#                 not, then the other kinds by their shares as before; a match's first round after the simulator is made: a drill with the
+#                 chance RDRILL_P, begun at a drawn point of its stretch, as STAGGER_START's games: the share holds from a process's
+#                 first frame), on this map's long sight lines (sim/rdrill_spots.json, the aim
+#                 room's line finder, tools/run/aim_room.py spots, on a grid of 500 to 1,500 units by 100: a clear line between his spot
+#                 and the target's home at that distance +-4 %, the same floor height +-40, a lane across the line through the target's
+#                 home at least 160 units each way (96 at 1,500), walkable and in his sight).
+#                 A stretch: RDR_LEN (30) seconds in RDR_PLACES (3) placements of RDR_PLACE (10) seconds. At each placement a distance is
+#                 drawn evenly from RDR_LO to RDR_HI (500 to 1,500), the map's line band nearest to it taken (a map without a band near:
+#                 its nearest; stats["rdrill"] counts the bands used), one of that band's lines drawn evenly; he stands at the line's
+#                 near end, the target at its home, his view a random 0 to RDR_YAW (45) degrees off the target's bearing either side
+#                 (pitch level), the target facing him; both 100 health and 100 armor; nothing of the other is seen (the notice delay
+#                 runs as in a game). He is the even seat (the network's: in the league half of the matches the first seat is his),
+#                 the target the odd seat (script 5: never a network's frame).
+#                 Him: the railgun only (no machine gun, no gauntlet, no other weapon), in hand, its ammunition full every frame; no
+#                 item of any kind is picked up in a drill. Free to move and jump. A death (lava, a fall) is a new placement at once.
+#                 The target (script 5, the aim room's strafe and dodger): unarmed, never fires; runs at full speed along its lane,
+#                 reversing at a random time RDR_PATS[k] after the last reversal (0.3-1.2 s in half the stretches, 0.15-0.5 s in the
+#                 other half, drawn a stretch) or at the lane's end; holds the jump key in RDR_JUMP (20 %) of the stretches between two
+#                 reversals; faces him; pulled back onto its lane if pushed off it. Its health and armor are 100 again every frame.
+#                 THE PAY in a drill, his seat: ONLY the hands' damage pay of a landed rail (the term dmg_dealt: DMG_REWARD x the
+#                 points booked) and the far-rail pay (the term rail: RAIL_FAR_PAY by the band, as in a game); every other term of the
+#                 frame (frags, deaths, items, the win chance, damage taken, falls, shaping, ...) is set to exactly 0 and the frame's
+#                 pay is the sum of the two (needs PAY_SPLIT=1). The target's pay is 0. r_long, the win pay and the win shadow: 0.
+#                 A training switch (a curriculum), never a PLAY_VAR: the checks and the servers never play a drill.
+#                 Counters: stats["rdrill"] (RDR_COLS), stats["rdr_band"] (placements by line band, RDR_BANDS), stats["rdr_shot"]
+#                 [RDR_SB bands of the true distance at the shot x (shots, hits, shots with the crosshair off the body on the frame
+#                 before)], stats["rdr_pt"] [2, PAY_TERMS] (his drill frames: each term's sum and size, after the drill's pay).
+#                 The trainer is told a seat's frame is a drill by info's "rdr" (per seat); off (RDRILL unset): nothing of it runs.
+RDRILL = float(os.environ.get("RDRILL") or 0.0) > 0
+RDRILL_P = float(os.environ.get("RDRILL_P") or 0.0)
+RDRILL_ALL = float(os.environ.get("RDRILL_ALL") or 0.0) > 0   # (a TEST only, never in a run: every round a drill, from a process's first frame)
+RDR = 6                                                   # (RDRILL) the round kind (after NORMAL .. COURSE)
+RDR_LEN, RDR_PLACE, RDR_PLACES = 30.0, 10.0, 3
+RDR_LO, RDR_HI, RDR_YAW, RDR_JUMP = 500.0, 1500.0, 45.0, 0.2
+RDR_PATS = ((0.3, 1.2), (0.15, 0.5))                       # (the aim room's strafe and dodger: seconds between two reversals)
+RDR_SPOTS = os.environ.get("RDRILL_SPOTS") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "rdrill_spots.json")
+RDR_BANDS = tuple(range(500, 1501, 100))
+RDR_SB = (0.0, 500.0, 750.0, 1000.0, 1250.0)               # (the shots' bands of the true distance: under 500, 500-750, 750-1000, 1000-1250, 1250+)
+RDR_COLS = ("drills begun", "drills ended", "placements", "of them after a death of his", "his frames in drills", "the target's frames",
+            "the placements' distance, summed", "his deaths in drills", "rail shots (all bands)", "rail hits", "the target's reversals",
+            "his frames with the railgun in hand", "items touched (not taken)", "weapons other than the rail taken away (a placement's spawn loadout included)")
+assert not RDRILL or (0.0 <= RDRILL_P < 1.0 and PAY_SPLIT and GAME_ON), "RDRILL: RDRILL_P a share of the playing time, under 1; it needs PAY_SPLIT=1 and whole games"
 #   PRO_START_P=<share>   (v0.3.7, the owner's go of 2026-10-19: "this is what I thought they were. Can we do that instead?")
 #                 pro starts: rounds that begin at a moment of a pros' duel on this map (sim/pro_moments/<map>.npz of
 #                 tools/pro_moments.py: every few seconds of the demos' live games, both players in play, the items' states
@@ -2283,7 +2330,9 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "rail_m", "rail_t0", "rail_shot", "rail_pairs",    # (RAIL_START_P)
                  "pro_mm", "pro_t0", "pro_s0",                     # (PRO_START_P)
                  "pa_closed", "pa_since", "pa_pos", "pa_life", "stag_first",    # (the pre-aim counters, STAGGER_START)
-                 "force_instr", "ins_drill", "ins_drill_t", "ins_drill_arm", "ins_drill_w", "force_quiet", "ins_spn", "ins_spfire")   # (2.1: a force and a drill are the seat's, not the moment's)
+                 "force_instr", "ins_drill", "ins_drill_t", "ins_drill_arm", "ins_drill_w", "force_quiet", "ins_spn", "ins_spfire",   # (2.1: a force and a drill are the seat's, not the moment's)
+                 "rdr_m", "rdr_pat", "rdr_k", "rdr_dir", "rdr_tmr", "rdr_jump", "rdr_home", "rdr_u", "rdr_v", "rdr_lane", "rdr_d", "rdr_on",   # (RDRILL: a drill's
+                 "rdr_prev", "rdr_ammo", "rdr_m0", "rdr_first")                                                                                       # state is the match's, never a moment's)
 MOMENT_HIST = ("opp_hist", "v02_q", "drift_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
@@ -2441,7 +2490,8 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "INTENT_SWITCH", "WEAPON_OWN",                                                                         # (2.1a:the switch cost and "a held weapon is choosable", read only in intend() and in the pay: live, so they go out with the fades and no restart is needed)
              "NEAR_PAY", "NEAR_OUT",                                                                                # (2.2b, NEAR_MISS: the near miss's pay in points of damage, its outer distance)
              "CONTEST_W", "CEDE_W", "RAIL_PICK_PAY", "RAIL_LINE_PAY",                                               # (2.2c: the contest pay's share and the free pickup's charge; the rail chain's two)
-             ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
+             "RDRILL_P",                                                                                            # (2.2e, RDRILL: the rail drill's share of the playing time, read at each round's draw)
+             ) + WIN_LIVE + AIM2_LIVE                                                                              # (v0.5.1, the cross-fade to the win pay; AIM2)
 LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ", "DRILL_INS_VERBS", "FIN_RATE")                   # (B-265) the live names whose value is a string, not one number
 
 
@@ -2512,6 +2562,11 @@ def live_values(get):
     v["RAIL_LINE_PAY"] = float(get("RAIL_LINE_PAY") or 0.10)  # ... the long line's; unset: 0.10
     if not 0.0 <= v["RAIL_PICK_PAY"] <= 1.0 or not 0.0 <= v["RAIL_LINE_PAY"] <= 1.0:
         raise ValueError("RAIL_PICK_PAY and RAIL_LINE_PAY must be within 0 .. 1")
+    v["RDRILL_P"] = float(get("RDRILL_P") or 0.0)            # (2.2e, RDRILL) the rail drill's share of the playing time; unset: 0
+    if not 0.0 <= v["RDRILL_P"] <= 0.5:
+        raise ValueError("RDRILL_P must be within 0 .. 0.5")
+    if v["RDRILL_P"] > 0 and not RDRILL:
+        raise ValueError("RDRILL_P above 0: the run did not start with RDRILL=1")
     cf_ = get("CONTACT_FREE")                                # (b1.4a) the chance a contact is free of the lock, live; unset: 0
     v["CONTACT_FREE"] = float(cf_) if (cf_ or "").strip() else 0.0
     if not 0.0 <= v["CONTACT_FREE"] <= 1.0:
@@ -5273,7 +5328,9 @@ class DuelEnv:
             self._moment_init(seed)
         if RAIL_START_P > 0:                                 # (RAIL_START_P) the pros' long rail places of this map
             self._rail_start_init(bsp)
-        if PRO_START_P > 0:                                  # (PRO_START_P) the moments of the pros' duels on this map
+        if RDRILL:                                           # (RDRILL) the rail drill's lines of this map, its state, its books
+            self._rdr_init(bsp, seed)
+        if PRO_START_P > 0:                                 # (PRO_START_P) the moments of the pros' duels on this map
             self._pro_start_init(bsp)
         if OPENINGS:                                         # (OPENINGS) the pros' openings by spawn point
             self._open_init(bsp)
@@ -5281,6 +5338,13 @@ class DuelEnv:
             self._spawn(i, avoid=None if i % 2 == 0 else self.w.state()[i - 1, :3])
         self.state = self.w.state()
         self.visible = np.zeros(n, bool)
+        if RDRILL and RDRILL_ALL and len(self.rdr_bands) and self._game_ok():   # (RDRILL_ALL, a test only: every match in a drill from its first frame)
+            for m in range(self.M):
+                self.rdr_first[m] = False
+                self._rdr_start(m)
+            q_ = np.concatenate([self._seats(m) for m in range(self.M)])
+            self.rdr_on[q_[0::2]] = True
+            self.state = self.w.state()
         if HEAD_EVENTS:                                      # (HEAD_EVENTS) the head's events and the win label
             self._head_init()
 
@@ -6987,6 +7051,8 @@ class DuelEnv:
         R = self.stats["rail"]
         opp = self._others_arr()[:, 0]
         cnt = (self.script[:n] == 0) & (self.run_k[:n] < 0) & self._counted(ar)
+        if RDRILL:                                           # (RDRILL) the rail's counters are the games': a drill's frames are counted apart (stats["rdr_shot"])
+            cnt = cnt & ~np.repeat(self.rdr_m, n // self.M)[:n]
         d_en = np.linalg.norm(s[opp, :3] - s[:n, :3], axis=1)
         band = np.where(d_en < RAIL_FAR_LO, 0, np.where(d_en <= RAIL_FAR_HI, 1, 2))
         alive = self.hp[:n] > 0
@@ -12378,6 +12444,8 @@ class DuelEnv:
             out[:, 1] = np.where(near, -np.sign(np.where(np.abs(l_) > 40, l_, 0)).astype(np.int64) + 1, out[:, 1])
             out[:, 2] = np.where(t1, self.lab_jump[idx // 2] & ~near, out[:, 2])   # no jumping while walking back in
             out[:, 3] = np.where(t1, int(np.abs(TURN).argmin()), out[:, 3])
+        if RDRILL:                                           # (RDRILL) the drill's target (script 5): its own keys
+            self._rdr_keys(idx, out)
         return out
 
     def _match_of(self, i):
@@ -13913,6 +13981,280 @@ class DuelEnv:
         RS[0] += 1
         RS[14] += float(self._counted(qa).sum())
         RS[18] += float(np.linalg.norm(ends[0][0] - ends[1][0]))
+
+    # ---------------------------------------------------------------- the rail drill (RDRILL, 2.2e)
+    def _rdr_init(self, bsp, seed):
+        """(RDRILL) this map's lines by band (sim/rdrill_spots.json: {map: {distance: [[Sx,Sy,Sz, Tx,Ty,Tz, ux,uy, lane-, lane+], ...]}}),
+        the drill's state a match and a seat, its own random stream (the simulator's other draws untouched), the books"""
+        M, n = self.M, self.n
+        mp_ = os.path.splitext(os.path.basename(bsp))[0].lower()
+        with open(RDR_SPOTS, encoding="utf-8") as fh_:
+            sp_ = json.load(fh_).get(mp_, {})
+        self.rdr_lines = {int(d_): np.asarray(L_, np.float64) for d_, L_ in sp_.items() if L_ and RDR_LO - 1 <= int(d_) <= RDR_HI + 1}
+        self.rdr_bands = np.array(sorted(self.rdr_lines), np.float64)
+        self.rdr_rng = np.random.default_rng(int(seed) * 7919 + 8803)
+        self.rdr_m = np.zeros(M, bool)                       # match m is in a drill
+        self.rdr_m0 = np.zeros(M, bool)                      # ... on the frame a step plays (set at the step's start)
+        self.rdr_first = np.ones(M, bool)                    # ... its first round since the simulator was made is still to be drawn
+        self.rdr_k = np.zeros(M, np.int64)                   # ... its placements made (1 .. RDR_PLACES)
+        self.rdr_pat = np.zeros(M, np.int64)                 # ... the target's pattern this stretch (0 strafe 0.3-1.2 s, 1 dodger 0.15-0.5 s)
+        self.rdr_dir = np.ones(M, np.float64)                # ... the target's way along its lane (+1, -1)
+        self.rdr_tmr = np.zeros(M, np.float64)               # ... seconds to its next reversal
+        self.rdr_jump = np.zeros(M, bool)                    # ... it holds the jump key this stretch
+        self.rdr_home = np.zeros((M, 3), np.float64)         # ... the line's target end, the lane's direction, the line's own direction
+        self.rdr_u = np.zeros((M, 2), np.float64)            #     (from the target's home toward his spot), the lane each way, the band
+        self.rdr_v = np.zeros((M, 2), np.float64)
+        self.rdr_lane = np.zeros((M, 2), np.float64)
+        self.rdr_d = np.zeros(M, np.float64)
+        self.rdr_on = np.zeros(n, bool)                      # seat i is his in a drill this frame (what the trainer is told)
+        self.rdr_prev = np.zeros(n, bool)                    # his crosshair on the target's body at the end of the frame before
+        self.stats["rdrill"] = np.zeros(len(RDR_COLS))
+        self.stats["rdr_band"] = np.zeros(len(RDR_BANDS))
+        self.stats["rdr_shot"] = np.zeros((len(RDR_SB), 3))
+        self.stats["rdr_pt"] = np.zeros((2, len(PAY_TERMS)))
+
+    def _rdr_other_len(self):
+        """(RDRILL) the mean length of the rounds the draw makes when it is not a drill (as _item_run_start works it out)"""
+        r0_, rg_, rl_, _ = self._game_rates()
+        rm_ = float(self.kind_p[0]) * MID_START_P / MID_MEAN if MOMENTS else 0.0
+        rs_ = float(self.kind_p[0]) * SPAWN_START_P / SPAWN_START_LEN if MOMENTS else 0.0
+        if MOMENTS and self.rail_pairs is not None:
+            rs_ += float(self.kind_p[0]) * RAIL_START_P / RAIL_MEAN
+        if PRO_START_P > 0 and self._pro_ok():
+            rs_ += float(self.kind_p[0]) * (PRO_START_P + FIGHT_START_P) / self._pro_mean_now()
+        return 1.0 / max(1e-9, r0_ + rg_ + rl_ + rm_ + rs_ + float(self.kind_p[1]) / 15.0 + float(self.kind_p[2]) / 15.0)
+
+    def _rdr_draw(self, m):
+        """(RDRILL) is match m's new round a drill? By its share of the playing time: a drill of RDR_LEN seconds against the other
+        rounds' mean length. A match's first round after the simulator is made (every match's at a process's first frame): a drill
+        with the chance RDRILL_P itself, begun at a drawn point of its stretch (as STAGGER_START's games), so that the share holds from
+        the first frame and the drills do not all end together. Its own stream; none drawn at RDRILL_P 0 or on a map without lines.
+        -> 0 no drill, 1 a drill from its start, 2 a drill begun at a drawn point"""
+        first_ = bool(self.rdr_first[m])
+        self.rdr_first[m] = False
+        if RDRILL_ALL and len(self.rdr_bands) and self._game_ok():   # (a test only: every round a drill, whatever the share)
+            return 1
+        if RDRILL_P <= 0 or not len(self.rdr_bands) or not self._game_ok():
+            return 0
+        if first_:
+            return 2 if self.rdr_rng.random() < RDRILL_P else 0
+        lo_ = self._rdr_other_len()
+        p_ = RDRILL_P * lo_ / (RDRILL_P * lo_ + (1.0 - RDRILL_P) * RDR_LEN)
+        return 1 if self.rdr_rng.random() < p_ else 0
+
+    def _rdr_start(self, m, stagger=False):
+        """(RDRILL) match m begins a drill: kind RDR, not a game; him the even seat, the target the odd seat (script 5); the first
+        placement (stagger: the stretch begun at a drawn point, the placement of that point's 10 s); the stretch's pattern"""
+        q = self._seats(m)
+        a_, b_ = int(q[0]), int(q[1])
+        self.kind[m], self.mode[m] = RDR, -1
+        self.script[a_], self.script[b_] = 0, 5
+        self.goal[a_] = self.goal[b_] = -1
+        self.load_sets[a_] = self.load_sets[b_] = None
+        self.frags_r[a_] = self.frags_r[b_] = 0
+        self.snd_t[a_] = self.snd_t[b_] = 99.0
+        self._spawn(a_, avoid=None)
+        self._spawn(b_, avoid=self.w.state()[a_, :3])
+        self.item_up[m] = True
+        self.item_t[m] = 0.0
+        self.contest_t[m] = -1.0
+        self.rdr_m[m] = True
+        self.rdr_k[m] = 0
+        if stagger:                                          # (the first round of a match: a drawn point of the stretch, in whole frames)
+            f_ = int(self.rdr_rng.integers(0, int(round(RDR_LEN / DT))))
+            self.round_t[m] = np.float32(f_ * DT)
+            self.rdr_k[m] = int(f_ * DT // RDR_PLACE)
+        self.rdr_pat[m] = int(self.rdr_rng.random() < 0.5)
+        self.stats["rdrill"][0] += 1
+        self._rdr_place(m, death=False)
+
+    def _rdr_place(self, m, death):
+        """(RDRILL) a placement: a distance drawn evenly RDR_LO .. RDR_HI, the map's band nearest to it, one of its lines; he at the
+        line's near end looking 0 .. RDR_YAW degrees off the target, the target at its home facing him; 100 and 100; nothing seen"""
+        rng, R = self.rdr_rng, self.stats["rdrill"]
+        q = self._seats(m)
+        h, g = int(q[0]), int(q[1])
+        d_ = float(rng.uniform(RDR_LO, RDR_HI))
+        b_ = int(self.rdr_bands[int(np.abs(self.rdr_bands - d_).argmin())])
+        L_ = self.rdr_lines[b_]
+        L = L_[int(rng.integers(len(L_)))]
+        S, T = L[0:3], L[3:6]
+        self.rdr_home[m], self.rdr_u[m], self.rdr_lane[m] = T, L[6:8], L[8:10]
+        self.rdr_v[m] = (S - T)[:2] / max(1e-3, float(np.hypot(*(S - T)[:2])))
+        self.rdr_d[m] = float(np.linalg.norm(S - T))
+        by_ = math.degrees(math.atan2(float(T[1] - S[1]), float(T[0] - S[0])))
+        yh_ = by_ + float(rng.uniform(0.0, RDR_YAW)) * (1.0 if rng.random() < 0.5 else -1.0)
+        for i, p_, yw_ in ((h, S, yh_), (g, T, by_ + 180.0)):
+            self.w.reset(i, (float(p_[0]), float(p_[1]), float(p_[2]) + 1.0), (0.0, 0.0, 0.0), float(yw_))
+            self._fresh(i, float(yw_))
+            self.hp[i], self.armor[i] = 100.0, 100.0
+            self.cool[i], self.fire_cd[i] = 0.0, 0.0
+            self.fire_q[i] = False
+            self.zoom[i], self.duck[i] = False, False
+            self.ra[i] = False
+            self.vis_run[i], self.acquired[i], self.visible[i] = 0, False, False
+            self.rsp_wait[i] = 0
+        qa = np.array([h, g])
+        for h_ in self.opp_hist:                             # (what was on its way to his eyes was of the places before)
+            h_[1][qa] = False
+        for q_ in getattr(self, "v02_q", ()):
+            q_[0][qa] = False
+            q_[1][qa] = False
+        self.rdr_dir[m] = 1.0 if rng.random() < 0.5 else -1.0
+        self.rdr_tmr[m] = float(rng.uniform(*RDR_PATS[int(self.rdr_pat[m])]))
+        self.rdr_jump[m] = bool(rng.random() < RDR_JUMP)
+        self.rdr_k[m] += 1
+        self.rdr_prev[qa] = False
+        self._rdr_loadout(np.array([m]))
+        self.state = self.w.state()
+        self._replaced = True
+        R[2] += 1
+        R[3] += float(death)
+        R[6] += self.rdr_d[m]
+        self.stats["rdr_band"][RDR_BANDS.index(b_)] += 1
+
+    def _rdr_loadout(self, ms):
+        """(RDRILL) matches ms: him the railgun only, in hand, its ammunition full; the target the machine gun and gauntlet (never
+        fired), 100 health and 100 armor"""
+        q_ = np.concatenate([self._seats(int(m)) for m in ms])
+        h_, g_ = q_[0::2], q_[1::2]
+        other_ = self.has[h_].copy()
+        other_[:, RG] = False
+        if other_.any():
+            self.stats["rdrill"][13] += float(other_.sum())
+        self.has[h_] = False
+        self.has[h_, RG] = True
+        self.weapon[h_] = RG
+        self.ammo[h_, RG] = AMMO_MAX[RG]
+        self.has[g_] = False
+        self.has[g_, MG] = True
+        self.has[g_, G] = True
+        self.weapon[g_] = MG
+        self.hp[g_], self.armor[g_] = 100.0, 100.0
+
+    def _rdr_keys(self, idx, out):
+        """(RDRILL) the target's keys (script 5; the aim room's strafe and dodger): along its lane at full speed, reversing at its
+        clock or the lane's end, jumping in a share of the stretches, facing him, pulled back onto its lane if off it"""
+        s = self.state
+        g_ = idx[self.script[idx] == 5]
+        if not len(g_):
+            return
+        R = self.stats["rdrill"]
+        m_ = g_ // (self._others_arr().shape[1] + 1)
+        h_ = self._others_arr()[g_, 0]
+        rng = self.rdr_rng
+        self.rdr_tmr[m_] -= DT
+        for j_, m in enumerate(m_):
+            if self.rdr_tmr[m] <= 0:                         # (a new stretch: the pattern's draw)
+                self.rdr_dir[m] = -self.rdr_dir[m]
+                self.rdr_tmr[m] = float(rng.uniform(*RDR_PATS[int(self.rdr_pat[m])]))
+                self.rdr_jump[m] = bool(rng.random() < RDR_JUMP)
+                R[10] += 1
+        P, Q = s[g_, :3].astype(np.float64), s[h_, :3].astype(np.float64)
+        off = P[:, :2] - self.rdr_home[m_, :2]
+        x = (off * self.rdr_u[m_]).sum(1)
+        for j_, m in enumerate(m_):                          # (the lane's end: back the other way)
+            if (x[j_] > self.rdr_lane[m, 1] and self.rdr_dir[m] > 0) or (x[j_] < -self.rdr_lane[m, 0] and self.rdr_dir[m] < 0):
+                self.rdr_dir[m] = -self.rdr_dir[m]
+                self.rdr_tmr[m] = float(rng.uniform(*RDR_PATS[int(self.rdr_pat[m])]))
+                R[10] += 1
+        yw = np.degrees(np.arctan2(Q[:, 1] - P[:, 1], Q[:, 0] - P[:, 0]))
+        self.yaw[g_] = yw                                    # (facing him: the turn key at nothing, the view's inertia cleared)
+        self.mv[g_] = 0.0
+        yr = np.radians(yw)
+        fwdv = np.stack([np.cos(yr), np.sin(yr)], 1)
+        left = np.stack([-np.sin(yr), np.cos(yr)], 1)
+        want = self.rdr_dir[m_][:, None] * self.rdr_u[m_]
+        along = (off * self.rdr_v[m_]).sum(1)
+        want = want - np.clip(along / 96.0, -1.0, 1.0)[:, None] * self.rdr_v[m_] * (np.abs(along) > 32.0)[:, None]
+        f_, l_ = (want * fwdv).sum(1), (want * left).sum(1)
+        nrm = np.maximum(np.hypot(f_, l_), 1e-6)
+        f_, l_ = f_ / nrm, l_ / nrm
+        k_ = np.searchsorted(idx, g_)
+        out[k_] = 0
+        out[k_, 0] = np.where(f_ > 0.38, 2, np.where(f_ < -0.38, 0, 1))
+        out[k_, 1] = np.where(l_ > 0.38, 0, np.where(l_ < -0.38, 2, 1))
+        out[k_, 2] = self.rdr_jump[m_].astype(np.int64)
+        out[k_, 3], out[k_, 4] = int(np.abs(TURN).argmin()), int(np.abs(PITCH).argmin())
+
+    def _rdr_step(self, s, st, do_fire, do_w, died):
+        """(RDRILL) a frame's end in the drills, before the senses: a death of his or the placement's time is a new placement; the
+        loadouts; his frames, shots and hits counted; his seat flagged for the trainer"""
+        n = self.n
+        self.rdr_on = np.zeros(n, bool)
+        R, SB = self.stats["rdrill"], self.stats["rdr_shot"]
+        m0 = np.nonzero(self.rdr_m0)[0]                      # (this frame's drills: his frames, shots and hits are theirs)
+        if len(m0):
+            h0_ = np.array([int(self._seats(int(m))[0]) for m in m0])
+            R[4] += float(len(m0))
+            R[5] += float(len(m0))
+            R[11] += float((self.weapon[h0_] == RG).sum())
+            df_ = np.asarray(do_fire, bool)[:n]
+            dw_ = np.asarray(do_w)[:n]
+            hit_ = {int(i_) for i_, v_ in st.get("rail", ()) if self.rdr_m0[self._match_of(i_)]}
+            for i in h0_:                                    # (his rail shots by the true distance at the shot; hits; off the body the frame before)
+                i = int(i)
+                if df_[i] and int(dw_[i]) == RG:
+                    d_ = float(np.linalg.norm(s[i, :3] - s[int(self._others_arr()[i, 0]), :3]))
+                    b_ = int(np.searchsorted(RDR_SB, d_, side="right") - 1)
+                    SB[b_, 0] += 1
+                    SB[b_, 1] += float(i in hit_)
+                    SB[b_, 2] += float(not self.rdr_prev[i])
+                    R[8] += 1
+                    R[9] += float(i in hit_)
+        ms = np.nonzero(self.rdr_m)[0]                       # (the drills going on after this step: the next frame's)
+        if not len(ms):
+            return
+        q_ = np.concatenate([self._seats(int(m)) for m in ms])
+        h_, g_ = q_[0::2], q_[1::2]
+        for m in ms:                                         # (a death of his, or the placement's time: a new placement; a drill begun
+            m = int(m)                                       # in this step was placed at its start)
+            if not self.rdr_m0[m]:
+                continue
+            h, g = (int(x_) for x_ in self._seats(m))
+            dead_ = self.hp[h] <= 0 or self.rsp_wait[h] > 0 or died[h] or self.hp[g] <= 0 or self.rsp_wait[g] > 0 or died[g]
+            if dead_:
+                R[7] += float(self.hp[h] <= 0 or self.rsp_wait[h] > 0 or died[h])
+                self._rdr_place(m, death=True)
+            elif self.rdr_k[m] < RDR_PLACES and self.round_t[m] >= self.rdr_k[m] * RDR_PLACE - 0.5 * DT:
+                self._rdr_place(m, death=False)
+        self._rdr_loadout(ms)
+        s2_ = self.w.state()
+        eye_ = s2_[h_, :3] + np.array([0, 0, VIEW_H], np.float32)
+        yr, pr = np.radians(self.yaw[h_]), np.radians(self.pitch[h_])
+        fd_ = np.stack([np.cos(pr) * np.cos(yr), np.cos(pr) * np.sin(yr), -np.sin(pr)], 1).astype(np.float32)
+        self.rdr_prev[h_] = self._seg_box(eye_, eye_ + fd_ * 4000.0, s2_[g_, :3], np.where(self.duck[g_], TOP_DUCK, TOP))
+        self.rdr_on[h_] = self.script[h_] == 0
+
+    def _rdr_pay(self, reward):
+        """(RDRILL) his drill frames: the pay is ONLY the hands' damage pay of a landed rail and the far-rail pay (the terms dmg_dealt
+        and rail, as booked), every other term exactly 0; the target's pay 0. Before _pt_end: the split says so"""
+        q_ = np.nonzero(np.repeat(self.rdr_m0, self.n // self.M)[:self.n])[0]    # (the matches in a drill on this frame)
+        if not len(q_):
+            return
+        h_, g_ = q_[0::2], q_[1::2]
+        keep_ = np.zeros(len(PAY_TERMS), bool)
+        keep_[[PT_IX["dmg_dealt"], PT_IX["rail"]]] = True
+        self.pt[np.ix_(h_, ~keep_)] = 0.0
+        self.pt[g_] = 0.0
+        reward[h_] = self.pt[h_][:, keep_].sum(1).astype(reward.dtype)
+        reward[g_] = 0.0
+        self.r_long[q_] = 0.0
+        if getattr(self, "win_pay", None) is not None and len(self.win_pay) >= self.n:
+            self.win_pay[q_] = 0.0
+        if WIN_SHADOW and getattr(self, "win_shadow", None) is not None:
+            self.win_shadow[q_] = 0.0
+            self.ws_flat[q_] = 0.0
+        P_ = self.stats["rdr_pt"]
+        P_[0] += self.pt[h_].sum(0)
+        P_[1] += np.abs(self.pt[h_]).sum(0)
+
+    def _rdr_end(self, m):
+        """(RDRILL) match m's drill is over (its round's end): the match is free for the next draw"""
+        self.rdr_m[m] = False
+        self.rdr_k[m] = 0
+        self.script[self._seats(m)] = 0
+        self.stats["rdrill"][1] += 1
 
     def _moment_keep(self, kd, mo):
         bank, cap = self.mom_bank[kd], (SPAWN_BANK, MID_BANK)[kd]
@@ -15495,6 +15837,8 @@ class DuelEnv:
             self.nm_bud = np.minimum(1.0, self.nm_bud + DT)
         if CONTEST:                                          # (2.2c) the contest pay's books: this frame
             self._cb_begin()
+        if RDRILL:                                           # (RDRILL) the matches in a drill on this frame (its pay and counters are theirs,
+            self.rdr_m0 = self.rdr_m.copy()                  # whatever this step's round ends begin)
         if a.ndim == 2 and a.shape[1] == len(ACTION_DIMS) + 1:
             self.keep_in = a[:, -1].astype(np.int64)
             a = a[:, :-1]
@@ -16271,6 +16615,9 @@ class DuelEnv:
                 took = False
                 if self.kind[m] != NORMAL and kind in ("wp", "am", "pack") and self.run_k[i] < 0:
                     continue                                  # aim / drill / movement rounds: no weapons or ammo (item runs: everything)
+                if RDRILL and self.rdr_m[m]:                  # (RDRILL) a rail drill: no item of any kind
+                    self.stats["rdrill"][12] += 1
+                    continue
                 if JUMP_PAST_PICK and self.jrun[i] and not self.jrun_past[i] and it == self.jrun_it[i]:
                     continue                                  # (JUMP_PAST_PICK) a jump run's own target: only once he is past the jump
                 gain = 0.0
@@ -16876,6 +17223,8 @@ class DuelEnv:
             for m_ in cf_[self.cf_t[cf_] <= 0]:
                 self._collect_to_fight(int(m_))
         klen = np.where(self.kind == NORMAL, self.round_len, np.where(self.kind == MOVE, self.move_len, 15.0))
+        if RDRILL:                                           # (RDRILL) a drill lasts RDR_LEN seconds to the frame (no round_fac)
+            klen = np.where(self.kind == RDR, (RDR_LEN - 0.5 * DT) / self.round_fac, klen)
         if self.fixed_kind is not None:
             klen = np.full(self.M, self.round_len)
         ends = np.nonzero(self.round_t > klen * self.round_fac)[0]
@@ -16902,6 +17251,8 @@ class DuelEnv:
             if GAME_ON and self.game[m]:                     # a whole game or a late round is over: its result into the counters
                 self._wsh_cut(int(m))                        # (WIN_SHAPE_K) cut before its end: PSI there is 0 (0 at the end anyway)
                 self._game_end(int(m))
+            if RDRILL and self.rdr_m[m]:                     # (RDRILL) a drill is over
+                self._rdr_end(int(m))
             self.round_fac[m] = self.rng.uniform(0.67, 1.33)
             self.drop_w[m] = -1
             self.run_k[self._seats(int(m))] = -1
@@ -16914,6 +17265,12 @@ class DuelEnv:
             if q_ is not None:
                 self.round_t[m] = 0.0
                 done[q_] = True
+                continue
+            rdk_ = self._rdr_draw(int(m)) if RDRILL else 0
+            if rdk_:                                         # (RDRILL) a rail drill, in its share of the playing time (before the games' draw)
+                self.round_t[m] = 0.0
+                self._rdr_start(int(m), stagger=rdk_ == 2)
+                done[self._seats(int(m))] = True
                 continue
             if GAME_ON and self._game_draw(int(m)):          # a whole game or a late round, in their share of the games' time
                 done[self._seats(int(m))] = True
@@ -17011,6 +17368,8 @@ class DuelEnv:
                 if len(pp_) > 3:                             # (2.2b, FIGHT_START_P) ... and a fight start: one seat just fragged
                     self._fight_start(pp_[0])
             self._pro_put = []
+        if RDRILL:                                           # (RDRILL) the drills' placements, loadouts, counters; his seats flagged
+            self._rdr_step(s, st, do_fire, do_w, died)
         if len(dead) or len(out) or len(ends) or self._replaced:
             self.state = s = self.w.state()
             self._replaced = False
@@ -17082,6 +17441,8 @@ class DuelEnv:
                 self._wsh_pay(reward, info)
         if (EDGE_PAY > 0 or COVER_PAY > 0) and self.space is not None:     # (2.0b) the pay by the place, after the blend: not faded
             self._space_pay(reward)
+        if RDRILL:                                           # (RDRILL) his drill frames: the hands' damage pay of a landed rail and the far rail only
+            self._rdr_pay(reward)
         self._pt_end(info)
         info["r_long"] = self.r_long.copy()                  # the game's part of this frame's pay, per player
         if LEGS_LAB:                                         # (stage C, part 1) what his legs chose on the frames they carried him, or

@@ -105,6 +105,11 @@ def aim_variants():
     out["a4_eye100_cap"] = (100, 225, dict(eye, VEL_DELAY_MS="175", **cap))
     out["a4_full"] = (100, 225, dict(eye, VEL_DELAY_MS="175", AIM2_SMOOTH_K="0", **cap))
     out["a4_eye75_cap"] = (75, 225, dict(eye, VEL_DELAY_MS="100", **cap))
+    # (2.2e) THE aim4 default as trained and checked: tools/aim2_levels.py TABLE4["default"] itself (aim3 "better" with AIM3_SIZE_A 0,
+    # AIM3_SIZE_B 0.49), only what differs from the checks'
+    rm, am, ev = AL.TABLE4["default"]
+    ev = dict(AL.COMMON, **ev)
+    out["aim4"] = (rm, am, {k: v for k, v in ev.items() if ref.get(k) != v})
     return out
 
 

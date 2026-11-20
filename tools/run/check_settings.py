@@ -111,8 +111,9 @@ def main():
             print("{:7s} checkpoint {}: checkpoint {!r} | command {!r}".format(tag, k, str(v), cenv.get(k, "<unset>")))
         for k, arg in (("react_ms", "--react-ms"), ("acquire_ms", "--acquire-ms")):
             if ck.get(k) is not None and not same(str(ck[k]), args.get(arg, "nan")):
-                bad += 1
-                print("DIFF    checkpoint {}: {} | command {} {}".format(k, ck[k], arg, args.get(arg)))
+                tag = "allowed" if arg in allow else "DIFF"         # (2.2e: a new aim level's delays, named in --allow)
+                bad += tag == "DIFF"
+                print("{:7s} checkpoint {}: {} | command {} {}".format(tag, k, ck[k], arg, args.get(arg)))
     print("settings check:", "PASS" if bad == 0 else "{} difference(s) not allowed: FAIL".format(bad))
     sys.exit(1 if bad else 0)
 

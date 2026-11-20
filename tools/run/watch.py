@@ -38,6 +38,11 @@ MAPS = ["bloodrun", "aerowalk", "lostworld", "sinister", "furiousheights", "batt
 #   CHECK_REF_AT="60"          ... and at these, a second check against CTRL_REF, queued after the first
 #   CHECK_END="1"              when the trainer's log ends with its "exit" line: the end save (policy.pt after the trainer exited, copied to
 #                              keep/policy_end_check_<n>.pt) checked against CTRL_PREV, unless its update was checked already
+# (2.2e) CHECK_DELAYS="react,acquire": both seats' tracking and acquire delays in a check (ms; unset: 125, 225 as before: !aim default under aim3).
+#   CHECK_ALARMS="1": two alarms on every check's ten maps (pooled, maps alike), FLAG lines in watch.log and "alarms" in checks_<tag>.jsonl:
+#   his red armor share (duel_eval's red_share) 0.05 or more under the opponent's; his time holding an empty weapon (empty_in_hand) over 0.015
+CHECK_DELAYS = [str(int(float(x_))) for x_ in (os.environ.get("CHECK_DELAYS") or "125,225").split(",")]
+CHECK_ALARMS = os.environ.get("CHECK_ALARMS") == "1"
 CHECK_AT = sorted(int(x_) for x_ in (os.environ.get("CHECK_AT") or "").split(",") if x_.strip())
 CHECK_REF_AT = sorted(int(x_) for x_ in (os.environ.get("CHECK_REF_AT") or "").split(",") if x_.strip())
 CHECK_END = os.environ.get("CHECK_END") == "1"
@@ -100,8 +105,8 @@ def games(pol, upd, ctrl, label, ps, table=False):
             cmd = [PY, "tools/duel_eval.py", "--run", RUN, "--policy", pol, "--opp", "policy:" + ctrl, "--opp-inputs",
                    os.path.join(P.CODE, "docs", "INPUTS.csv"), "--map", mp, "--games", str(CHECK_TABLE_GAMES if tag == "table" else CHECK_GAMES),
                    "--minutes", "10", "--procs", "2", "--swap",
-                   "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225",
-                   "--round", "600", "--opp-round", "600"]
+                   "--json", js, "--react-ms", CHECK_DELAYS[0], "--acquire-ms", CHECK_DELAYS[1], "--opp-react-ms", CHECK_DELAYS[0],
+                   "--opp-acquire-ms", CHECK_DELAYS[1], "--round", "600", "--opp-round", "600"]
             cmd += [x for s_ in sets for x in ("--set", s_)]
             cmd += hold_args(pol, ctrl, table)
             jobs.append((mp, js, subprocess.Popen(cmd, cwd=P.CODE, env=env, creationflags=0x4000 | 0x08000000, stdout=open(js + ".log", "w"),
@@ -112,6 +117,8 @@ def games(pol, upd, ctrl, label, ps, table=False):
                 v = json.load(open(js))["maps"][mp]
                 res[mp] = dict(share=v["frag_share"], won=v["won"], lost=v["lost"], hit=v["he"]["hit_rate"], spm=v["he"]["shots_per_min"],
                                owned=v["he"].get("weapons_owned"), hand=v["he"].get("in_hand_by_distance"))   # (1.7c) the rail owned, his hand by distance
+                if CHECK_ALARMS:                             # (2.2e) the two alarms' numbers: the red armor share, his and the opponent's; empty in hand
+                    res[mp].update(red=v["he"].get("red_share"), red_opp=v["opponent"].get("red_share"), empty=v["he"].get("empty_in_hand"))
             except Exception as e:                           # noqa: BLE001
                 res[mp] = dict(error=str(e))
     ok = [v for v in res.values() if "share" in v]
@@ -124,8 +131,24 @@ def games(pol, upd, ctrl, label, ps, table=False):
     if ow_:                                                  # (1.7c) the rail owned by map: the one number the play-time rules could not move
         say("check update", upd, "weapons owned (of his time alive), rail by map:", {k: "{:.0%}".format(v["rg"]) for k, v in ow_.items()},
             "| all maps rockets / rail / lightning {:.0%} / {:.0%} / {:.0%}".format(*[sum(v[w] for v in ow_.values()) / len(ow_) for w in ("rl", "rg", "lg")]))
+    alarms_ = []
+    if CHECK_ALARMS:                                         # (2.2e) the two alarms, the ten maps pooled (each map alike)
+        rd_ = [(v["red"], v["red_opp"]) for v in ok if v.get("red") is not None and v.get("red_opp") is not None]
+        em_ = [v["empty"] for v in ok if v.get("empty") is not None]
+        if rd_:
+            hr_, or_ = sum(x_ for x_, _ in rd_) / len(rd_), sum(y_ for _, y_ in rd_) / len(rd_)
+            if hr_ <= or_ - 0.05:
+                alarms_.append("his red armor share {:.1%} is 5 points or more under the opponent's {:.1%} ({} maps)".format(hr_, or_, len(rd_)))
+            say("check update", upd, "against", label, "red armor share (his / the opponent's) {:.1%} / {:.1%}".format(hr_, or_),
+                "| empty weapon in hand {:.2%}".format(sum(em_) / len(em_)) if em_ else "")
+        else:
+            alarms_.append("the red armor shares were not in the check's results (the alarm could not be read)")
+        if em_ and sum(em_) / len(em_) > 0.015:
+            alarms_.append("his time holding an empty weapon {:.2%} is over 1.5% ({} maps)".format(sum(em_) / len(em_), len(em_)))
+        for al_ in alarms_:
+            say("FLAG check update", upd, "against", label + ":", al_)
     with open(os.path.join(WD, "checks_{}.jsonl".format(tag)), "a") as f:
-        f.write(json.dumps(dict(update=upd, mean=mean, won=W_, lost=L_, percept_speed=ps, maps=res)) + "\n")
+        f.write(json.dumps(dict(update=upd, mean=mean, won=W_, lost=L_, percept_speed=ps, maps=res, **({"alarms": alarms_} if CHECK_ALARMS else {}))) + "\n")
     if cyd_:                                                 # (1.7b) the learner's and the control's fights by the stack ratio, beside the pros'
         try:
             r_ = subprocess.run([PY, "tools/run/cypher_measure.py", "check", cyd_, "--update", str(upd), "--out_", os.path.join(WD, "cypher.jsonl")],

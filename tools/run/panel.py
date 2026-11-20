@@ -108,11 +108,12 @@ def jobs(pol, out, ps):
             js = os.path.join(d, "eval_{}.json".format(mp))
             if os.path.exists(js):
                 continue
+            dl_ = [str(int(float(x_))) for x_ in (os.environ.get("CHECK_DELAYS") or "125,225").split(",")]   # (2.2e: the run's delays; unset: 125, 225)
             cmd = [PY, os.path.join(HERE, "dump_eval.py"), "--run", RUN_, "--policy", pol, "--map", mp, "--games", "6",
                    "--minutes", "3", "--procs", "2", "--json", js, "--round", "600", "--seed", "300",
-                   "--react-ms", "125", "--acquire-ms", "225"]
+                   "--react-ms", dl_[0], "--acquire-ms", dl_[1]]
             cmd += (["--opp", "policy:" + pol, "--opp-inputs", os.path.join(CODE, "docs", "INPUTS.csv"), "--opp-round", "600",
-                     "--opp-react-ms", "125", "--opp-acquire-ms", "225"] if opp is None else ["--opp", opp])
+                     "--opp-react-ms", dl_[0], "--opp-acquire-ms", dl_[1]] if opp is None else ["--opp", opp])
             cmd += [x for s_ in settings(ps, pol) for x in ("--set", s_)]
             J.append((cmd, env, js))
     return J

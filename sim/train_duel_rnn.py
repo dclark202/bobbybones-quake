@@ -208,6 +208,9 @@ def worker(remote, bsp, matches, seed, nav, loadout, item_reward, drill_p, drill
                 if want_:
                     delta["fgf"] = [fight22_w.pack(env)]
             delta["way_trips"] = list(getattr(env, "way_trips", ()))      # (WAYS) this step's trips between two places: [from, to, 16 points]
+            if getattr(E_, "RDRILL", False):                 # (2.2e, RDRILL) per seat (a list: not summed), on the frame the inputs just sent describe (the
+                rq_ = np.repeat(env.rdr_m, env.n // env.M)[:env.n]    # next frame played): 1 his seat in a rail drill, 2 the drill's target's seat, 0 neither
+                delta["rdr"] = [np.where(np.asarray(env.rdr_on[:env.n], bool), 1, np.where(rq_, 2, 0)).astype(np.int8)]
             # frags scored by even (learner) players and by odd players, for learner-vs-snapshot win tracking
             ev = info["events"]
             delta["kills_even"] = sum(1 for e in ev if e["killer"] >= 0 and e["killer"] != e["victim"] and e["killer"] % G % 2 == 0)
@@ -416,6 +419,7 @@ LIVE_RANGE["CEDE_W"] = (0.0, 0.5)                                    # pickup's 
 LIVE_RANGE["RAIL_PICK_PAY"] = (0.0, 1.0)
 LIVE_RANGE["RAIL_LINE_PAY"] = (0.0, 1.0)
 LIVE_RANGE["RAIL_FAR_PAY"] = (0.0, 1.0)
+LIVE_RANGE["RDRILL_P"] = (0.0, 0.5)                                  # (2.2e, the simulator's RDRILL) the rail drill's share of the playing time
 LIVE_RANGE["KEEPQ_G"] = (0.0, 1.0)                         # his quiet seconds the keep choice's quiet layer decides (with KEEP_ZONE=1; the
 LIVE_RANGE["KEEP_TEACH"] = (0.0, 100.0)                      # rest: the lock rule); the weight of the keep choice's lesson toward the stay
 LIVE_RANGE["STAY_W"] = (0.0, 100.0)                          # value's sign (both layers, all run); a factor on the stay value's own lesson
@@ -2084,7 +2088,7 @@ def main():
 
     FRZ_ = [bool(a.freeze_choice)]                           # (2.1a, --freeze-choice: read by head_masks)
 
-    def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False, lt=None, wl=None, wd=None):
+    def head_masks(dc, lv, ll, lo, act=None, so=None, ent=False, lt=None, wl=None, wd=None, rd=None):
         """per output: the frames its choice counted on (None: every frame). dc: the left hand's outputs were read, lv: the
         intention was read, ll: the switch to his legs was read, lo: his legs moved him (their outputs were not his).
         (LEGS_KEYS_ADD) act: his choices [..., outputs]: on his legs his own output of a column counts where he chose "mine"
@@ -2117,6 +2121,8 @@ def main():
                 m = lo
             if FRZ_[0] and j in (I_HEAD, HAND_HEAD):             # (2.1a, --freeze-choice) his target and the weapon key learn nothing
                 m = lo * 0.0
+            if rd is not None and j in (I_HEAD, W_HEAD, HAND_HEAD) and j >= 0:   # (2.2e, RDRILL) a drill's frames: his target, its way and the
+                m = (1.0 - rd) if m is None else m * (1.0 - rd)  # weapon key count nothing there (the rail is all he has; no item lies there)
             out.append(m)
         return out
 
@@ -2704,6 +2710,13 @@ def main():
     SW_ON = int(np.sum(ACTION_DIMS[:L_HEAD])) + 1 if L_HEAD >= 0 else -1
     HD_I0 = sum(ACTION_DIMS[:I_HEAD])                        # (--head) where the intention's and the way's logits begin
     HD_W0 = sum(ACTION_DIMS[:W_HEAD]) if W_HEAD >= 0 else -1
+    # (2.2e, the simulator's RDRILL: the owner's rail drill, docs/runs/2.2/2.2e/CARD.md) WHO LEARNS FROM A DRILL'S FRAMES: only the hands. The
+    # hands are told a frame is a drill by a learned vector of their own (rdr_emb, 256, zeros at the start) added to their fast GRU's input on
+    # that frame (none is added on any other frame: off, or no drill frame in a piece, is the network as it was). On a drill's frames: the
+    # hands' PPO terms (every output but the target, its way and the weapon key: head_masks' rd), their value and entropy; the item picker's
+    # plan into the hands' GRU is a number there (no gradient into the head); every other lesson (the item picker's, the fight network's and
+    # the lever's, the brain's forecasts, the hands' own forecasts --aux, the teachers) leaves the drill's frames out. Off: nothing of it runs.
+    RDR_ON = bool(getattr(E_, "RDRILL", False))
 
     def head_logits(lg, ta, wa):
         """(--head) his logits with the head's target and way added to the intention's and the way's"""
@@ -2802,6 +2815,8 @@ def main():
             self.h2_open = H2                                    # (--head2) a league network whose head is shut (or none) skips it
             if H2:                                               # (--head2, v0.4.3) sim/head2.py: plan_in and target at zero, the gate a buffer
                 self.head2 = head2_.make_module(H2L)
+            if RDR_ON:                                           # (2.2e, RDRILL) the hands told "a drill": zeros, made without a draw
+                self.rdr_emb = nn.Parameter(torch.zeros(256))
 
         def hx(self, x):
             """(--rule-fade) the inputs as the hands read them: the rule-made columns times (1 - rfg); x itself at 0"""
@@ -2848,7 +2863,7 @@ def main():
                 return add
             return dadd, gfn
 
-        def step(self, x, h, f=None, sm=None, hd=None, ev=None, xl=None, bt=None, g2=None):
+        def step(self, x, h, f=None, sm=None, hd=None, ev=None, xl=None, bt=None, g2=None, rd=None):
             dadd, gadd = self.uni_parts(xl)                      # (--legs-feat, --legs-guide; xl: the branch's inputs of this frame)
             x = self.hx(x)                                       # (--rule-fade) the hands' inputs (the brain is given its own, unfaded)
             if HAS_CELLS:
@@ -2867,6 +2882,8 @@ def main():
             ein_ = e if dadd is None else e + dadd               # (--legs-feat: only his fast GRU reads the legs' features)
             if g2 is not None:                                   # (--head2) the strategy head's plan into his fast GRU's input
                 ein_ = ein_ + g2[0]
+            if rd is not None and getattr(self, "rdr_emb", None) is not None:   # (2.2e, RDRILL) a drill's frame, told (rd [n] 0/1; None: none)
+                ein_ = ein_ + self.rdr_emb.to(ein_.dtype) * rd.to(ein_.dtype)[:, None]
             h = self.gru(ein_, h)
             if sm is None or self.slow is None:
                 self.zl = h                                      # (what the outputs read: his memory, or with the slow one)
@@ -2962,7 +2979,8 @@ def main():
             sd = {k_: v_ for k_, v_ in sd.items() if not k_.startswith(BRAIN_PFX)}   # memory beside one on the belief: left out;
         bad = net.load_state_dict(sd, strict=False)          # the learner's own readout reads every seat)
         odd = [k_ for k_ in list(bad.missing_keys) + list(bad.unexpected_keys) if not k_.startswith("aux.") and not k_.startswith("head.aux.")
-               and not k_.startswith(BRAIN_PFX) and not k_.startswith("attn.btok_")]     # (v0.4.1: a file without the brain's token plays it shut)     # (v0.3.11: the belief readout, as the aux layers; v0.4.0: the belief)
+               and not k_.startswith(BRAIN_PFX) and not k_.startswith("attn.btok_")      # (v0.4.1: a file without the brain's token plays it shut)
+               and k_ != "rdr_emb"]                                  # (2.2e: a file without the drill's vector: zeros, never added outside a drill)     # (v0.3.11: the belief readout, as the aux layers; v0.4.0: the belief)
         assert not odd, "the network does not fit: {}".format(odd)
 
     HEAD_SHUT = ("plan_in.", "target.", "way.", "win.", "aux.")      # (--head) the links of a new head: zeros
@@ -3181,8 +3199,10 @@ def main():
         pol.pi.bias[sum(ACTION_DIMS[:6])] += 3.0
     opt = torch.optim.Adam([p_ for n_, p_ in pol.named_parameters() if not n_.startswith("legs.") and not (HEADL and n_.startswith("head."))
                             and not (UNI_ON and n_.startswith(UNI_PFX)) and not n_.startswith(BRAIN_PFX) and not n_.startswith("attn.btok_")
-                            and not (H2 and n_.startswith("head2."))],
+                            and not (H2 and n_.startswith("head2.")) and n_ != "rdr_emb"],
                            lr=a.lr, eps=1e-5, **({"fused": True} if a.adam_fused else {}))   # (LEGS_IN: not the branch; --head: not the head)
+    RDR_OPT = torch.optim.Adam([pol.rdr_emb], lr=a.lr, eps=1e-5) if RDR_ON else None   # (2.2e, RDRILL) the drill's vector: its own Adam at the
+    #                                                          hands' rate (the main optimizer's groups and their saved state untouched; its state in policy.pt "rdr_opt")
     if HEADL:                                                # (--head) the head in a group of its own at --head-lr-scale of the rate
         opt.add_param_group({"params": list(pol.head.parameters()), "lr": a.lr * a.head_lr_scale, "lr_scale": a.head_lr_scale})
     if UNI_ON:                                               # (--legs-door-lr-scale) legs_door and the guide's weights in a group of their own
@@ -3328,6 +3348,12 @@ def main():
                 "is" if d_ == 0 else "differs from", d_), flush=True)
         obs_mean, obs_var, obs_count = ck["obs_mean"], ck["obs_var"], ck["obs_count"]
         elapsed0 = ck.get("minutes", 0.0)
+        if RDR_OPT is not None and ck.get("rdr_opt") is not None:   # (2.2e) the drill vector's Adam, as saved (a start without it: cold)
+            RDR_OPT.load_state_dict(ck["rdr_opt"])
+            print("rail drill: the drill vector's Adam loaded from policy.pt (|vector| {:.4g})".format(float(pol.rdr_emb.norm())), flush=True)
+        elif RDR_OPT is not None:
+            print("rail drill: the drill vector ({}) and its Adam start at zero (|vector| {:.4g})".format(
+                "in the file" if "rdr_emb" in ck["model"] else "not in the file", float(pol.rdr_emb.norm())), flush=True)
         op_ = os.path.join(out, "opt.pt")                     # (2026-10-18) the optimizer's state from the last save, if it fits
         if os.path.exists(op_):
             try:
@@ -4045,6 +4071,7 @@ def main():
                         **({"spawn": dict(layout=SPW_L, model={k_: v_.detach().cpu() for k_, v_ in SPW.state_dict().items()})} if SPW is not None
                            else ({"spawn": SPW_CK} if SPW_CK is not None else {})),           # (2.1, --spawn-odds: the same)
                         **({"switch_fade": float(FADE[0])} if a.switch_fade else {}),
+                        **({"rdr_opt": RDR_OPT.state_dict()} if RDR_OPT is not None else {}),   # (2.2e, RDRILL: the drill vector's Adam; the vector is in "model")
                         env_module=a.env, group=groups[0], groups=groups,
                         **({"inputs": INPUTS_CK, "input_names": INPUT_NAMES_CK} if INPUTS_CK else {}),   # (1.8) the cleaned list it reads, by name
                         **({"wrule": 1} if a.wrule >= 0 else {}),      # (1.7c) trained under the pros' weapon table: the checks play the save under it
@@ -4507,6 +4534,13 @@ def main():
     FGT_BIAS_APPLIED = [None]                                # ... the last value applied (kept in the checkpoint: a resume does not apply it again)
     FG_ST = [None]                                           # ... the update's record (its lesson's)
     LEVER = bool(FGT and a.lever)                            # (2.2c, --lever) the fight network as the aggression lever (sim/fightnet.py VERSION_LEVER)
+    if RDR_ON:                                               # (2.2e, RDRILL) built for 2.2e's command: every learner it has leaves a drill's frames out
+        off_ = {k_: v_ for k_, v_ in dict(head=bool(HEADL), slow_mem=bool(SLOW), keep=bool(KEEP), combat=bool(CMB), ins=bool(INS), outlook=bool(OUTL),
+                                          out22=bool(O22), slow_half=bool(SHALF), fight_odds=bool(FOD_ON), space_read=bool(SPR_ON),
+                                          map_sense=MS is not None, appraise=APR is not None, stay=STAY is not None, known=KN is not None,
+                                          spawn=SPW is not None, wrule=bool(WR_ON), branch=bool(BR_ON), fight22_not_lever=bool(FGT and not LEVER),
+                                          demo=a.demo_coef > 0, head2_copy=a.head2_copy > 0).items() if v_}
+        assert not off_, "RDRILL: these learners are not built to leave a drill's frames out: {}".format(sorted(off_))
     LEV_GV = [float(a.lev_g)]                                # ... live LEV_G: its share
     assert not a.lever or FGT, "--lever 1 needs --fight22 1"
     if FGT:
@@ -4754,11 +4788,19 @@ def main():
                 g_["lr"] = float(a.fight22_lr)
             Xf_ = X.reshape(J_ * NMf, -1)
             Rdf_, Rwf_ = Rd_.reshape(-1), Rw_.reshape(-1)
+            rk_ = None                                           # (2.2e, RDRILL) the readings in a drill: left out of the forecasts' lesson
+            if FGR.get("rdr") is not None and bool(FGR["rdr"].any()):
+                rk_ = ~FGR["rdr"][:J_].reshape(-1)
+                rec_["drill_rows_out"] = int((~rk_).sum())
             for ep_ in range(max(1, int(a.fight_epochs))):
                 pm_ = torch.randperm(J_ * NMf, generator=TRK_GEN)
                 nb_ = max(1, (J_ * NMf) // 16384)
                 eb_ = torch.randperm(NE_, generator=TRK_GEN).chunk(nb_) if NE_ else [None] * nb_
+                if rk_ is not None:
+                    pm_ = pm_[rk_[pm_]]
                 for b_, rr_ in enumerate(pm_.chunk(nb_)):
+                    if rr_.numel() == 0:                         # (2.2e: every reading of a piece in a drill: no lesson)
+                        continue
                     xb_ = Xf_[rr_].to(dev).float()
                     _, Vb_ = FN(xb_)
                     lv_ = 0.5 * ((Vb_[:, 0] - Rdf_[rr_.to(dev)]) ** 2).mean() + 0.5 * ((Vb_[:, 1] - Rwf_[rr_.to(dev)]) ** 2).mean()
@@ -6502,6 +6544,11 @@ def main():
         ACT, in the rollout's thread); C the carry from rollout to rollout (the simulators' last frame, the memories),
         updated at the end -> the rollout's buffers and counts (None: stopped by `stop`)"""
         obs, teach, hand, aux, legs_x, scr, h, h_opp = (C[k_] for k_ in ("obs", "teach", "hand", "aux", "legs_x", "scr", "h", "h_opp"))
+        rdr_np = C.get("rdr") if C.get("rdr") is not None else np.zeros(N, np.int8)   # (2.2e, RDRILL) each seat's frame about to be played: 1 his in
+        if C.get("rdr") is None and RDR_ON and os.environ.get("RDRILL_ALL") == "1":   # a drill, 2 the drill's target, 0 neither (RDRILL_ALL, a test only:
+            rdr_np = np.where(np.arange(N) % 2 == 0, 1, 2).astype(np.int8)         # every match in a drill from the simulators' first frame)
+        b_rdr = torch.zeros(T, N, dtype=torch.bool, device=dev) if RDR_ON else None   # ... his drill frames (the hands are told; the hands' lessons)
+        b_rdx = torch.zeros(T, N, dtype=torch.bool, device=dev) if RDR_ON else None   # ... any seat of a match in a drill (every other lesson leaves it out)
         b_hand = torch.zeros_like(B_HAND) if (OVL and B_HAND is not None) else B_HAND   # (--overlap: one a rollout)
         rjl = C.get("rjl")
         b_rj = torch.zeros(T, N, dtype=torch.int8, device=dev) if RJ_LAB else None     # (--rj-teach) the label of each frame's action
@@ -6824,6 +6871,7 @@ def main():
             FVAL_ = torch.zeros(J_F, NM_F, 4, dtype=torch.bool, device=dev)            # ... the valid options
             FPAY_ = torch.zeros(T, NM_F, 3, device=dev)                                  # ... his pay a frame: items, fight, win (the paid win part)
             FDN_ = torch.zeros(T, NM_F, device=dev)
+            FRD_ = torch.zeros(J_F, NM_F, dtype=torch.bool) if RDR_ON else None         # (2.2e, RDRILL) ... a reading in a drill (left out of every lesson)
             FLSE_ = []                                                                  # ... at his readings: the items left in the list and the four (log-sum-exps)
             FEV_ = []                                                                   # ... his decisions: (t, seat, opt, pick, at_draw, prac, on, lp,
             #                                                                             valid list, valid practice, items row, dealt weapon, owned)
@@ -6934,6 +6982,13 @@ def main():
                 raw.append(obs if obs_count < OBS_FREEZE else obs[np.random.rand(len(obs)) < 0.005])
             xc_ = torch.from_numpy(norm(obs))
             x = xc_.to(dev)
+            rd_t = None                                                  # (2.2e, RDRILL) this frame's drill seats: told to the hands, kept for the learner
+            if RDR_ON:
+                rdh_ = np.asarray(rdr_np) == 1
+                rdt_ = torch.from_numpy(rdh_).to(dev)
+                b_rdr[t] = rdt_
+                b_rdx[t] = torch.from_numpy(np.asarray(rdr_np) > 0).to(dev)
+                rd_t = rdt_.float() if bool(rdh_.any()) else None
             if ATT_MEM:
                 b_hq[t] = h.half().cpu()
             ev_ = None
@@ -6989,7 +7044,7 @@ def main():
                         HD_PEND.append((HS.u.half().cpu(), HS.r_tick.cpu()))
                     hd_secs[0] += time.time() - t_hd
                 else:
-                    logits, val, h = net.step(x, h, sm=SM, xl=xlu_, bt=bt_t, g2=H2S.adds(net.head2) if H2 else None)
+                    logits, val, h = net.step(x, h, sm=SM, xl=xlu_, bt=bt_t, g2=H2S.adds(net.head2) if H2 else None, rd=rd_t)
                     if H2:                                               # (--head2) its value of this frame (before its tick)
                         b_vh[t] = head2_.value(net.head2, H2S.s, h)
                         if b_vw is not None:                             # (2.1, --ins-pay-win) its value of the win-chance pay
@@ -7044,6 +7099,8 @@ def main():
                         al_ = torch.from_numpy(np.asarray(aux[:, O22_IX["en_alive"]], np.float32))
                         tr_ = torch.stack([o_f_[FOE_, 0] / 100.0, o_f_[FOE_, 1] / 100.0, o_f_[:, 2] / 100.0, o_f_[:, 3] / 100.0, o_f_[:, 4],
                                            al_[FOE_], al_], 1)
+                        if RDR_ON and bool(b_rdx[t].any()):              # (2.2e, RDRILL) a drill's seat: both "alive" columns 0, so none of its
+                            tr_[b_rdx[t].cpu(), 5:7] = 0.0               # rows has a label (the tracker's near and stack lessons leave it out)
                         TRK_RING[0].push(TRK_G0[upd] + t, torch.cat([tracker_.inp(TRK_L, BS_.s, x).cpu(), tr_], 1))
                     if TRKC_RING[0].kept(TRK_G0[upd] + t):              # (the in-control rows: his columns; the brain's state is the control ring's)
                         TRKC_RING[0].push(TRK_G0[upd] + t, x[:, torch.as_tensor(TRK_L["obs_cols"], dtype=torch.long, device=dev)])
@@ -7145,6 +7202,10 @@ def main():
                     FX_[j_f] = xn_f[MI_F].half().cpu()
                     FV_[j_f] = V_f[MI_F].float()
                     pe_f = MI_F[(torch.arange(NM_F, device=dev) % max(1, int(a.fight_pass_every))) == (j_f % max(1, int(a.fight_pass_every)))]
+                    if FRD_ is not None:                                 # (2.2e, RDRILL) a drill's reading: none of its rows in a lesson
+                        FRD_[j_f] = b_rdx[t][MI_F].cpu()
+                        if bool(b_rdx[t].any()):
+                            pe_f = pe_f[~b_rdx[t][pe_f]]
                     if len(pe_f):                                        # (the tracker's pass odds' rows: they keep learning, as in 2.2b)
                         FPS_["t"].append(torch.full((len(pe_f),), t, dtype=torch.int16))
                         FPS_["i"].append(pe_f.int().cpu())
@@ -7407,6 +7468,8 @@ def main():
                             lsm_p = torch.log_softmax(TL0_ if PIH else logits[:, HD_I0:HD_I0 + NI_H].float(), -1)    # picks (first order)
                             b_ps[j_p], b_pf[j_p] = s_keep_.float(), lsm_p.exp()
                             b_prow[j_p] = mine_p & PREF_
+                            if RDR_ON:                                       # (2.2e, RDRILL) never a drill's reading
+                                b_prow[j_p] = b_prow[j_p] & ~b_rdx[t]
                             PREF_ = torch.zeros_like(PREF_)
                             on_p = HD_["on"] & mine_p
                             lpl_p = torch.log(PL_[:, 0].clamp(min=1e-6))
@@ -7678,6 +7741,8 @@ def main():
             obs = np.concatenate([r[0] for r in res])
             if LEGS_IN:
                 legs_x = legs_cat([(r[15], r[0]) for r in res])
+            if RDR_ON:                                                   # (2.2e) the next frame's drill seats (the inputs just come are theirs)
+                rdr_np = np.concatenate([r[3]["rdr"][0] for r in res]).astype(np.int8)
             b_rew[t] = torch.from_numpy(np.concatenate([r[1] for r in res])).to(dev)
             if b_ow is not None:                                         # (2.1f) the win-chance part of the pay (win_raw x the gain): the win labels
                 b_ow[t] = torch.from_numpy(np.concatenate([r[3]["win_raw"][0] if "win_raw" in r[3] else np.zeros(len(r[1]), np.float32)
@@ -7879,6 +7944,8 @@ def main():
                         OHFA_ = None
                 if LEVER:                                                # (2.2c) THE LEVER'S ROWS: his every target decision (a new draw, or a change
                     ev_f = b_hon[t] & (live > 0) & dec_h & MINE_F        # mid-trip): the pick, its log-probability as played, his target logits as played
+                    if RDR_ON:                                           # (2.2e, RDRILL) never a drill's decision
+                        ev_f = ev_f & ~b_rdx[t]
                     if bool(ev_f.any()):                                 # less the lever's add, the add and its share as played
                         em_ = torch.nonzero(ev_f, as_tuple=True)[0]
                         la_e = FG_["levadd"][em_]
@@ -7962,7 +8029,8 @@ def main():
             b_logp[t] = sum(lp_ if m_ is None else lp_ * m_ for lp_, m_ in zip(lps, head_masks(
                 dec, live, ll, lo, act, b_so[t], lt=live * (1.0 - b_oon[t]) if CMB else (live * (1.0 - b_jl[t].float()) if FGT else None),
                 wl=b_wl[t] if b_wl is not None else None,
-                wd=b_wd[t] if b_wd is not None else None)))
+                wd=b_wd[t] if b_wd is not None else None,
+                rd=b_rdr[t].float() if RDR_ON else None)))           # (2.2e: the same masks as every learning pass, or the ratio lies)
             if KEEP:                                                     # (1.4c) the keep choice joins what he did, where it decided
                 b_logp[t] = b_logp[t] + b_lpk[t] * b_kl[t]
                 if KQ:                                                   # (2.1) the quiet layer too, where it decided
@@ -8118,7 +8186,7 @@ def main():
                         ev_[k_] = torch.cat([e_[k_] for e_ in FEV_]).cpu()
                 ev_["seat"] = SI_F[torch.cat([e_["i"] for e_ in FEV_])].cpu()
             if LEVER:                                                    # (2.2c) the lever's rows and record; no one list, no weapon add, no practice
-                FGR_ = dict(X=FX_, V=FV_.cpu(), pay=FPAY_.cpu(), done=FDN_.cpu(), ev=ev_, mine=MI_F.cpu(), nm=NM_F, lever=True,
+                FGR_ = dict(X=FX_, V=FV_.cpu(), pay=FPAY_.cpu(), done=FDN_.cpu(), ev=ev_, mine=MI_F.cpu(), nm=NM_F, lever=True, rdr=FRD_,
                             pas={k_: (torch.cat(v_) if v_ else None) for k_, v_ in FPS_.items()}, cnt=FC_.cpu().numpy(), sz=FSZ_.cpu().numpy(),
                             lvc=LVC_.cpu().numpy(), lvf=LVF_.cpu().numpy(), lvmax=float(LVMAX_),
                             dials=dict(LEV_G=LV_G, league_fight=bool(FGO_), league_lev_g=float(FN_OPP_D[0]) if FGO_ else 0.0),
@@ -8151,6 +8219,8 @@ def main():
         PLAN_R = None                                                    # (2.1c, --plan) this rollout's readouts, handed to its own update
         HELD_R = None
         C.update(obs=obs, teach=teach, hand=hand, aux=aux, legs_x=legs_x, scr=scr, h=h, h_opp=h_opp, rjl=rjl, rjc=rjc)
+        if RDR_ON:
+            C["rdr"] = rdr_np
         if HELD:
             HELD_R = (HG_PLAY, [float(x_) for x_ in HD_CNT.cpu()])   # (handed to its own update through R: --overlap)
             C["hd"] = HD_                                                # (2.1c) the held draw's numbers, coins and ends, carried to the next rollout
@@ -8289,7 +8359,7 @@ def main():
             C["ix"] = IX_                                                # (2.1) the candidates for the next rollout's first reading
             IB_["secs"] = BK * 0.025 * float(IB_["read"].sum()) * float(mine_i.sum())
         return dict(b_hr=b_hr, b_obs=b_obs, b_hq=b_hq, b_rl=b_rl, b_val2=b_val2, b_act=b_act, b_logp=b_logp, b_val=b_val, b_rew=b_rew,
-                    b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr,
+                    b_done=b_done, b_w=b_w, b_live=b_live, b_dec=b_dec, b_ll=b_ll, b_so=b_so, b_lo=b_lo, b_lx=b_lx, b_lr=b_lr, b_rdr=b_rdr,
                     b_llp=b_llp, b_lab=b_lab, b_iteach=b_iteach, b_teach=b_teach, b_aux=b_aux, b_ht=b_ht, b_bel=b_bel, b_ev=b_ev,
                     b_wg=b_wg, b_wb=b_wb, b_hand=b_hand, b_rj=b_rj, b_rjc=b_rjc, ctl_b=ctl_b, fod_b=fod_b, spr_b=spr_b, h0=h0, raw=raw, agg=agg, agg_map=agg_map, lk=lk, trips=trips,
                     b_wd=b_wd,
@@ -8397,6 +8467,25 @@ def main():
         b_lr, b_llp, b_lab, b_iteach, b_teach, b_aux, b_ht, b_bel = (R[k_] for k_ in ("b_lr", "b_llp", "b_lab", "b_iteach", "b_teach", "b_aux", "b_ht", "b_bel"))
         b_ev, b_wg, b_wb, b_hand, h0, raw, agg, agg_map, lk = (R[k_] for k_ in ("b_ev", "b_wg", "b_wb", "b_hand", "h0", "raw", "agg", "agg_map", "lk"))
         keep_raw, t_roll = R["keep_raw"], R["t_roll"]
+        B_RDR = R.get("b_rdr") if RDR_ON else None                      # (2.2e, RDRILL) the drill's frames [T, N] (his seats)
+        B_RDRF = B_RDR.float() if B_RDR is not None else None
+        RDR_FR = ([float((B_RDRF * (b_w > 0).float()).sum()), float((b_w > 0).float().sum())] if B_RDRF is not None else None)   # (his learner frames: in drills, all)
+        RDR_ACC = [0.0, 0.0] if RDR_ON else None                         # (2.2e) the drill vector's gradient: its size summed, the steps
+        RDR_NF = None                                                    # (2.2e) non-finite numbers in the learning's inputs
+        RDR_SKIP = [0]                                                   # (2.2e) pieces without a learner frame, skipped
+        RDR_PH = None                                                    # (2.2e, RDR_PROBE: a TEST only, never in a run) the gradient each parameter
+        if os.environ.get("RDR_PROBE"):                                  # of the network gets in each update's learning steps (its lessons), by
+            if os.environ["RDR_PROBE"] == "drill" and B_RDRF is not None and bool(B_RDR.any()):   # its name's first part ("drill": the learner frames are the drill's only:
+                b_w = b_w * B_RDRF                                       # every other frame's weight 0, so what is measured came from drill frames)
+            RDR_PH = [{}, []]
+            for n_p, p_p in list(pol.named_parameters()) + [("FN." + k_, v_) for k_, v_ in (FN.named_parameters() if FGT else ())] + \
+                    [("WV." + k_, v_) for k_, v_ in (WV.named_parameters() if WV is not None else ())]:
+                if p_p.requires_grad:
+                    RDR_PH[1].append(p_p.register_hook(lambda g_, n__=n_p: RDR_PH[0].__setitem__(n__, RDR_PH[0].get(n__, 0.0) + float(g_.detach().abs().sum()))))
+
+        def rd_of(chunk_):
+            """(2.2e) the drill's frames of these players [T, n] 0/1 for head_masks (None: off)"""
+            return B_RDRF[:, chunk_] if B_RDRF is not None else None
         B_WD = R.get("b_wd")                                             # (1.7c) the table's weapon key action, -1 where his own stood
         if a.adv_pay_ref > 0:                                            # (v0.6.1c, --adv-pay-ref) the advantages' factor: ref / the pay's size
             WBk_ = np.atleast_1d(agg.get("win_blend", np.zeros(8))).astype(np.float64)   # a player-minute in games (a running mean)
@@ -8932,7 +9021,11 @@ def main():
                 if HO_[2]:
                     with torch.no_grad():
                         ho2_["gin_share"] = ho2_["gin"].norm(dim=-1).mean() / (eg_.norm(dim=-1).mean() + 1e-8)
-                eg_ = eg_ + ho2_["gin"]
+                if B_RDRF is not None and bool(B_RDR[:, chunk].any()):   # (2.2e, RDRILL) on a drill's frames the item picker's plan is a number:
+                    rdm_ = B_RDR[:, chunk][..., None]                    # the hands' gradient there never reaches the head
+                    eg_ = eg_ + torch.where(rdm_, ho2_["gin"].detach(), ho2_["gin"])
+                else:
+                    eg_ = eg_ + ho2_["gin"]
                 if CMB:                                                  # (1.7) the order's numbers at each keep reading (frame j K: the state of its
                     ci_ = hchunk(chunk)                                  # segment) from the stored candidates, held over the segment's frames
                     xo_ = hsel(B_X, 1, chunk, ci_).float()
@@ -8949,7 +9042,9 @@ def main():
                 ho2_["out"] = B_OUT[:, chunk].float() if B_OUT is not None else None       # (2.1f) the outlook's term of these players, as played
                 ho2_["lev"] = (fightnet_.lever_vec(B_LEV[:, chunk].float(), ACTION_DIMS[I_HEAD], torch) if B_LEV is not None else None)   # (2.2c) the lever, as played
                 HO2_[0] = ho2_
-            if a.fast_gru:                                               # (B-237) the library's GRU over whole sequences, cut at his resets
+            if B_RDRF is not None and bool(B_RDR[:, chunk].any()):      # (2.2e, RDRILL) the hands told "a drill" on its frames (as played)
+                eg_ = eg_ + pol.rdr_emb.to(eg_.dtype) * B_RDRF[:, chunk][..., None].to(eg_.dtype)
+            if a.fast_gru:                                              # (B-237) the library's GRU over whole sequences, cut at his resets
                 hs_a = gru_seq(pol.gru, eg_, hh, b_done[:, chunk], lay=gru_layout(DN_H[:, hchunk(chunk)], dev) if NOSYNC else None)
             else:
                 dn_ = (1.0 - b_done[:, chunk])[..., None]
@@ -9075,7 +9170,7 @@ def main():
             AUX_TH, AUX_TWG = (AUX_TAILD["h"], AUX_TAILD["w"]) if AUX_TWN else (None, None)
             AUX_LIFE, AX2_ST, AUX_TAILD = AX2_["life"], AX2_["stats"], AX2_["tail"]
             if AUX_TAILD is not None:
-                AUX_TAILD.update(h=b_ht, w=b_w[T - AUX_TW:].cpu())
+                AUX_TAILD.update(h=b_ht, w=(b_w[T - AUX_TW:] * (1.0 - B_RDRF[T - AUX_TW:]) if B_RDRF is not None else b_w[T - AUX_TW:]).cpu())   # (2.2e: never a drill's frame)
             AX2_ = None
         if AUX_W > 0 and AUX_MEAS:                                       # (--aux-measure) bands: nothing believed, believed 0-2 s ago, 2-7.5 s, 7.5-20 s;
             mb_s = torch.zeros(4, 4, dtype=torch.float64, device=ADEV)                # frames, his memory's error, the belief's (nothing believed: the zero
@@ -9131,7 +9226,7 @@ def main():
                             lg_ = ord_lg(pol, lg_, b_act[:, chunk])
                         hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
                                          lt=B_LT[:, chunk] if (CMB or B_JL is not None) else None, wl=B_WL[:, chunk] if B_WL is not None else None,
-                                         wd=B_WD[:, chunk] if B_WD is not None else None)
+                                         wd=B_WD[:, chunk] if B_WD is not None else None, rd=rd_of(chunk))
                         lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
                         if LEGS_LEARN:
                             lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
@@ -9165,7 +9260,7 @@ def main():
                         lg_ = ord_lg(pol, lg_, b_act[:, chunk])
                     hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
                                      lt=B_LT[:, chunk] if (CMB or B_JL is not None) else None, wl=B_WL[:, chunk] if B_WL is not None else None,
-                                     wd=B_WD[:, chunk] if B_WD is not None else None)   # (1.7c: the same mask as the learner's, or the ratio lies)
+                                     wd=B_WD[:, chunk] if B_WD is not None else None, rd=rd_of(chunk))   # (1.7c: the same mask as the learner's, or the ratio lies)
                     lp_ = 0
                     for j, dd in enumerate(dists(lg_)):
                         l_ = dd.log_prob(b_act[:, chunk, j])
@@ -9228,6 +9323,19 @@ def main():
                 V_PX = V2_PX = None
                 IS_.append(time.time() - t_px)
             adv, ret, ret2, long_c, long_gap = gae_()
+        if RDR_ON:                                                       # (2.2e) a non-finite number in what the learning reads, on the drill's frames
+            with torch.no_grad():                                        # or the rest (his learner frames): counted, said in the log, in the record
+                lw_ = b_w > 0
+                rx_ = B_RDR if B_RDR is not None else torch.zeros_like(lw_)
+                RDR_NF = {}
+                for nm_x, x_ in (("logp", b_logp), ("logp_prox", LP_PX), ("adv", adv), ("ret", ret), ("rew", b_rew), ("val", b_val[:T])):
+                    if x_ is None:
+                        continue
+                    bad_x = ~torch.isfinite(x_) & lw_
+                    if bool(bad_x.any()):
+                        RDR_NF[nm_x] = [int((bad_x & rx_).sum()), int((bad_x & ~rx_).sum())]
+                if RDR_NF:
+                    print("MAJOR PROBLEM: non-finite numbers in the learning's inputs (drill frames, other frames): {}".format(RDR_NF), flush=True)
             if a.adv_pay_ref > 0:                                        # (--adv-pay-ref) the policy's advantages only; ret stays in pay units
                 adv = adv * ADVP[2]
         if OVL and not DEC and a.overlap_kl_pieces > 0:                  # behind) against the one that learns, before any step of this update,
@@ -9240,7 +9348,7 @@ def main():
                         lg_ = ord_lg(pol, lg_, b_act[:, chunk])
                     hm_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
                                      lt=B_LT[:, chunk] if (CMB or B_JL is not None) else None, wl=B_WL[:, chunk] if B_WL is not None else None,
-                                     wd=B_WD[:, chunk] if B_WD is not None else None)   # (1.7c: the same mask as the learner's, or the ratio lies)
+                                     wd=B_WD[:, chunk] if B_WD is not None else None, rd=rd_of(chunk))   # (1.7c: the same mask as the learner's, or the ratio lies)
                     lp_ = sum(dd.log_prob(b_act[:, chunk, j]) * (1.0 if hm_[j] is None else hm_[j]) for j, dd in enumerate(dists(lg_)))
                     if LEGS_LEARN:                                       # (the legs' part of the ratio, as in the learning passes)
                         lgl_ = pol.legs_comb(legs_fwd(pol, legs_x_of(chunk)), hs_)
@@ -9338,7 +9446,7 @@ def main():
                     with torch.no_grad():
                         hmu_ = head_masks(b_dec[:, chunk], b_live[:, chunk], b_ll[:, chunk], b_lo[:, chunk], b_act[:, chunk], b_so[:, chunk],
                                           lt=B_LT[:, chunk] if (CMB or B_JL is not None) else None, wl=B_WL[:, chunk] if B_WL is not None else None,
-                                          wd=B_WD[:, chunk] if B_WD is not None else None)
+                                          wd=B_WD[:, chunk] if B_WD is not None else None, rd=rd_of(chunk))
                         for i_, (o_, mp_) in enumerate(UGM.mapped(UG_[1])):
                             m_ = (1.0 if hmu_[o_] is None else hmu_[o_]) * UG_[2] * b_w[:, chunk]
                             ug_acc[i_] += HC_(torch.stack([m_.sum(), ((mp_.argmax(-1) == b_act[:, chunk, o_]).float() * m_).sum(),
@@ -9355,7 +9463,7 @@ def main():
                 dc = b_dec[:, chunk]
                 hm = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk],
                                 lt=B_LT[:, chunk] if (CMB or B_JL is not None) else None, wl=B_WL[:, chunk] if B_WL is not None else None,
-                                wd=B_WD[:, chunk] if B_WD is not None else None)
+                                wd=B_WD[:, chunk] if B_WD is not None else None, rd=rd_of(chunk))
                 lp = sum(dd.log_prob(A[..., j]) * (1.0 if hm[j] is None else hm[j]) for j, dd in enumerate(ds))
                 if H2ADD:                                                # (1.3b) the target's share of this term's gradient: 1 - c (its value as it is)
                     c_ = min(1.0, max(0.0, H2_PG_[0] * H2_PG_[2]))
@@ -9413,7 +9521,7 @@ def main():
                                 KEEP_ACC[6] += km_.sum().double()
                 hme = head_masks(dc, lv, b_ll[:, chunk], b_lo[:, chunk], A, b_so[:, chunk], ent=True,
                                  lt=B_LT[:, chunk] if (CMB or B_JL is not None) else None, wl=B_WL[:, chunk] if B_WL is not None else None,
-                                 wd=B_WD[:, chunk] if B_WD is not None else None) if JE else hm    # (JUMP_EVERY: the bonus on the hand's frames)
+                                 wd=B_WD[:, chunk] if B_WD is not None else None, rd=rd_of(chunk)) if JE else hm    # (JUMP_EVERY: the bonus on the hand's frames)
                 ent = sum(w_ * dd.entropy() * (1.0 if hme[j] is None else hme[j]) for j, (w_, dd) in enumerate(zip(ent_heads, ds)))
                 wgt = b_w[:, chunk]
                 if LEGS_LEARN:                                           # (--legs-learn) the branch's part of what he did, the same advantage
@@ -9441,6 +9549,9 @@ def main():
                     with torch.no_grad():
                         ug_first[0] = FV_(((lp - (LP_PX[:, chunk] if DEC else b_logp[:, chunk])).abs() * (wgt > 0)).max())   # (decoupled: the proximal pass's)
                 wsum = wgt.sum().clamp(min=1.0)
+                if RDR_ON and not bool((WP_H[:, hchunk(chunk)] if NOSYNC else (wgt > 0)).any()):   # (2.2e) a piece without one learner frame (his
+                    RDR_SKIP[0] += 1                                     # seats all a drill's targets or the league's: a small run's chance): no step
+                    continue                                             # (its advantages' spread would be that of no frame: NaN)
                 ad = adv[:, chunk]
                 ad = (ad - (ad * wgt).sum() / wsum) / ((ad[wgt > 0] if not NOSYNC else          # (--learn-nosync: the same frames, found on the host)
                                                         ad.reshape(-1).index_select(0, up_(WP_H[:, hchunk(chunk)].reshape(-1).nonzero().squeeze(1)))).std() + 1e-8)
@@ -9483,6 +9594,9 @@ def main():
                                              (ds[W_HEAD].probs * wyf_[..., None]).sum((0, 1)),
                                              torch.stack([((A[..., W_HEAD] == j_).float() * wyf_).sum() for j_ in range(3)])]).double()
                 loss = pg + 0.5 * vl - ent_coef * en
+                if B_RDRF is not None and bool(B_RDR[:, chunk].any()):   # (2.2e, RDRILL) the hands' PPO terms above are the only ones a drill's
+                    wgt = wgt * (1.0 - B_RDRF[:, chunk])                 # frames reach: every lesson below (the item picker's, the brain's, the
+                    wsum = wgt.sum().clamp(min=1.0)                      # hands' own forecasts, the teachers) counts the learner's other frames
                 if I_HEAD >= 0 and (IF_LIVE[0] > 0 or epoch == 0):      # (--item-floor) his item intentions' mean p by map, read frames
                     pi_ = ds[I_HEAD].probs                               # [T, n, intentions]
                     mr_ = lv * wgt                                       # (his own seats, the frames his intention was read)
@@ -10119,6 +10233,8 @@ def main():
                                     float((dd_[2].logits.argmax(-1) == da[..., 2]).float().mean()),
                                     float(((dd_[3].logits.argmax(-1) - da[..., 3]).abs() <= 1).float().mean())]
                 opt.zero_grad()
+                if RDR_OPT is not None:                                  # (2.2e) the drill's vector is not in opt: its gradient cleared here
+                    pol.rdr_emb.grad = None
                 if VW_[1] > 0 and epoch in (0, 2):                       # (--value-warm) the value loss, recorded while a warm-up is set
                     j_ = 0 if epoch == 0 else 2                          # (the first pass's and the last's, on the same frames)
                     VL_ACC[j_] = vl.detach() if VL_ACC[j_] is None else VL_ACC[j_] + vl.detach()
@@ -10128,6 +10244,18 @@ def main():
                 if H2 and a.head2_sole and not bool(torch.isfinite(loss)):     # (--head2-sole) one bad piece does not reach the weights
                     H2_SKIP[0] += 1
                     continue
+                if os.environ.get("RDR_NANDBG") == "1" and not bool(torch.isfinite(loss)):   # (2.2e, a test's diagnosis only)
+                    with torch.no_grad():
+                        rdc_ = B_RDRF[:, chunk] if B_RDRF is not None else torch.zeros_like(wgt)
+                        hl_ = []
+                        for j_, dd_ in enumerate(ds):
+                            l_ = dd_.log_prob(A[..., j_])
+                            hl_.append((j_, int((~torch.isfinite(l_) & (rdc_ > 0)).sum()), int((~torch.isfinite(l_) & (rdc_ == 0)).sum()),
+                                        int((~torch.isfinite(dd_.logits)).any(-1).sum())))
+                        print("RDR_NANDBG update {} epoch {} piece {}: pg {} vl {} en {} lp nonfinite {} ratio nonfinite {} | heads (j, -inf on drill, on other, "
+                              "logits nonfinite): {} | hs nonfinite {}".format(update, epoch, k_mb, float(pg), float(vl), float(en),
+                                                                             int((~torch.isfinite(lp)).sum()), int((~torch.isfinite(ratio)).sum()), hl_,
+                                                                             int((~torch.isfinite(hs_all)).sum())), flush=True)
                 loss.backward()
                 if VW_ON:
                     for g_ in opt.param_groups:
@@ -10199,6 +10327,14 @@ def main():
                     for p_, g_ in zip(pol.head2.parameters(), H2GR_):
                         p_.grad = g_
                 opt.step()
+                if RDR_OPT is not None and pol.rdr_emb.grad is not None and not VW_ON:   # (2.2e) the drill's vector: a step at the hands' rate
+                    if RDR_ACC is not None:
+                        RDR_ACC[0] += float(pol.rdr_emb.grad.norm())
+                        RDR_ACC[1] += 1.0
+                    for g_ in RDR_OPT.param_groups:
+                        g_["lr"] = opt.param_groups[0]["lr"]
+                    RDR_OPT.step()
+                    pol.rdr_emb.grad = None
                 if H2ADD and H2_L2_[0] > 0:                              # (--head2-l2, 1.3b) decoupled weight decay (AdamW's L2) on both parts'
                     with torch.no_grad():                                # own weights, one coefficient: the hands' 17 target rows and the head's
                         n2_ = int(H2L["n_target"])                       # target layer shrink by lr x wd a step. (An L2 in the loss went through
@@ -11684,7 +11820,50 @@ def main():
                                in_hand={b_: round(float(RR_[7 + k_] / max(1.0, RR_[0])), 4) for k_, b_ in enumerate(bd_)},        # share of his time: the rail in hand, the enemy at that range
                                in_hand_in_view={b_: round(float(RR_[10 + k_] / max(1.0, RR_[0])), 4) for k_, b_ in enumerate(bd_)},   # ... and in view
                                pay_got_per_min=round(float(RR_[13] / lm_), 4), pay_lost_per_min=round(float(RR_[14] / lm_), 4))
-        if "preaim" in agg and "preaim_x" in agg:                        # (PREAIM_PAY) fresh sightings by the weapon in hand, his counted seats in games
+        if RDR_ON and "rdrill" in agg:                                   # (2.2e, RDRILL) the rail drill: its share, his shots by the true distance, the pay terms
+            RD_ = np.atleast_1d(agg["rdrill"]).astype(np.float64)        # on his drill frames (every term but dmg_dealt and rail must be exactly 0),
+            RB_ = np.atleast_1d(agg.get("rdr_band", np.zeros(len(E_.RDR_BANDS)))).astype(np.float64)   # who learnt from them
+            RS_ = np.asarray(agg.get("rdr_shot", np.zeros((len(E_.RDR_SB), 3))), np.float64).reshape(len(E_.RDR_SB), 3)
+            RP_t = np.asarray(agg.get("rdr_pt", np.zeros((2, len(E_.PAY_TERMS)))), np.float64).reshape(2, -1)
+            sbn_ = ["<500", "500-750", "750-1000", "1000-1250", "1250+"]
+            keep_t = ("dmg_dealt", "rail")
+            rec["rdrill"] = dict(
+                share_live=float(getattr(E_, "RDRILL_P", 0.0)),
+                learner_frames_in_drills=(round(RDR_FR[0] / max(1.0, RDR_FR[1]), 4) if RDR_FR is not None else None),
+                his_minutes=round(float(RD_[4]) * DT_MIN, 2), begun=int(RD_[0]), ended=int(RD_[1]), placements=int(RD_[2]),
+                placements_after_death=int(RD_[3]), deaths=int(RD_[7]), mean_placement_dist=round(float(RD_[6] / max(1.0, RD_[2])), 1),
+                rail_in_hand=round(float(RD_[11] / max(1.0, RD_[4])), 4), items_touched=int(RD_[12]), weapons_taken_away=int(RD_[13]),
+                target_reversals_per_min=round(float(RD_[10] / max(1e-9, float(RD_[5]) * DT_MIN)), 1),
+                shots=int(RS_[:, 0].sum()), hits=int(RS_[:, 1].sum()), hit_rate=round(float(RS_[:, 1].sum() / max(1.0, RS_[:, 0].sum())), 4),
+                shots_per_min=round(float(RS_[:, 0].sum() / max(1e-9, float(RD_[4]) * DT_MIN)), 2),
+                off_body=round(float(RS_[:, 2].sum() / max(1.0, RS_[:, 0].sum())), 4),
+                by_band={b_: dict(shots=int(RS_[k_, 0]), hit_rate=round(float(RS_[k_, 1] / max(1.0, RS_[k_, 0])), 4),
+                                  off_body=round(float(RS_[k_, 2] / max(1.0, RS_[k_, 0])), 4)) for k_, b_ in enumerate(sbn_)},
+                placements_by_band={str(d_): int(RB_[k_]) for k_, d_ in enumerate(E_.RDR_BANDS) if RB_[k_] > 0},
+                pay_terms={t_: dict(sum=float(RP_t[0, k_]), size=float(RP_t[1, k_])) for k_, t_ in enumerate(E_.PAY_TERMS) if t_ in keep_t},
+                pay_other_size=float(sum(RP_t[1, k_] for k_, t_ in enumerate(E_.PAY_TERMS) if t_ not in keep_t)),
+                pay_other_terms_nonzero=[t_ for k_, t_ in enumerate(E_.PAY_TERMS) if t_ not in keep_t and RP_t[1, k_] != 0.0],
+                vector_norm=round(float(pol.rdr_emb.norm()), 6), vector_grad=(round(RDR_ACC[0] / max(1.0, RDR_ACC[1]), 6) if RDR_ACC else None),
+                vector_steps=(int(RDR_ACC[1]) if RDR_ACC else None), nonfinite_inputs=RDR_NF or {}, pieces_skipped=int(RDR_SKIP[0]))
+        if RDR_PH is not None:                                           # (2.2e, RDR_PROBE: a test) the gradient by part of the network, this update
+            for hk_ in RDR_PH[1]:
+                hk_.remove()
+            grp_ = {}
+            for n_p, p_p in list(pol.named_parameters()) + [("FN." + k_, v_) for k_, v_ in (FN.named_parameters() if FGT else ())] + \
+                    [("WV." + k_, v_) for k_, v_ in (WV.named_parameters() if WV is not None else ())]:
+                k_p = n_p.split(".")[0] if not n_p.startswith(("FN.", "WV.", "attn.btok_")) else (n_p.split(".")[0] if not n_p.startswith("attn.btok_") else "attn.btok")
+                if n_p.startswith("head2."):
+                    k_p = "head2." + n_p.split(".")[1]
+                g_p = grp_.setdefault(k_p, [0, 0, 0.0])
+                g_p[0] += 1
+                g_p[1] += int(RDR_PH[0].get(n_p, 0.0) > 0.0)
+                g_p[2] += float(RDR_PH[0].get(n_p, 0.0))
+            rec["rdr_probe"] = dict(mode=os.environ.get("RDR_PROBE"), frames_drill=RDR_FR, by_part={k_: dict(tensors=v_[0], reached=v_[1], grad_abs_sum=v_[2])
+                                                                                                   for k_, v_ in sorted(grp_.items())})
+            print("RDR_PROBE ({}): the gradient by part (tensors reached of all, |gradient| summed): {}".format(
+                os.environ.get("RDR_PROBE"), json.dumps(rec["rdr_probe"]["by_part"])), flush=True)
+            RDR_PH = None
+        if "preaim" in agg and "preaim_x" in agg:                      # (PREAIM_PAY) fresh sightings by the weapon in hand, his counted seats in games
             PA_ = np.asarray(agg["preaim"], np.float64).reshape(4, -1)   # (the simulator's stats["preaim"]: n, error summed, within 15 deg, q summed)
             PX_ = np.atleast_1d(agg["preaim_x"]).astype(np.float64)      # (PREAIM_X_COLS)
             wn_ = [(w_, k_) for k_, w_ in enumerate(E_.WEAPONS) if w_ != "hmg"]
