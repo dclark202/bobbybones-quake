@@ -13,6 +13,11 @@ btok_emb, btok_mark) also gets the brain (belief.*), the two readouts the token 
 ahead, which the token does not read), the layouts as text, and the token's layout with its gate: the checkpoint's gate as it
 was at that save, or --btoken-gate. plugins/netpass.py steps the brain while the gate is above zero. A network without the
 token is written exactly as before.
+
+(2.2c) A network with the aggression lever (the checkpoint's "fight22", sim/fightnet.py VERSION_LEVER) also gets its layout with the
+measured norm and its dials as text ("fight22") and its layers ("fight22.<name>"): plugins/netpass.py plays it as test_suite.Policy does.
+2.2b's fight network of four options (layout version 1) is refused. A head with the tracker and without the desc outlooks (2.2b on) is
+written with the tracker's weights only.
 """
 import argparse
 import datetime
@@ -51,10 +56,15 @@ def version_name(run):
 
 
 ck = torch.load(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, a.policy), weights_only=False, map_location="cpu")
-if ck.get("fight22") is not None:                           # (2.2b) a network with the fight network: the plugins do not play it yet (its readings,
-    raise SystemExit("REFUSED: {} has the fight network of 2.2b (sim/fightnet.py: its readings of the fight options, the one list, its weapon "   # the
-                     "nudge, the hands' fight inputs): plugins/netpass.py and plugins/duelbot.py do not play it yet, and a server would play it "   # options'
-                     "wrong. Not exported".format(a.policy))  # numbers, the hands' inputs of them, the four scores to the simulator)
+if ck.get("fight22") is not None:                           # (2.2b) a network with 2.2b's fight network of four options (layout version 1): the
+    import sys as _sys_f                                     # plugins do not play it (its readings of the options, the one list, its weapon nudge,
+    _sys_f.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # the hands' inputs of the option he is on). (2.2c) The aggression lever
+    import fightnet as _fightnet_x                           # (VERSION_LEVER) is played: plugins/netpass.py, plugins/duelbot.py
+    if not _fightnet_x.is_lever(ck["fight22"]["layout"]):
+        raise SystemExit("REFUSED: {} has the fight network of 2.2b with its four options (sim/fightnet.py layout version {}: its readings of "
+                         "the fight options, the one list, its weapon nudge, the hands' inputs of the option he is on): plugins/netpass.py and "
+                         "plugins/duelbot.py play only 2.2c's aggression lever, and a server would play it wrong. Not exported".format(
+                             a.policy, ck["fight22"]["layout"].get("version")))
 sd = {k: v.cpu().numpy() for k, v in ck["model"].items()}
 os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 env_vars = dict(ck.get("env_vars") or {})
@@ -173,7 +183,10 @@ if ck.get("head2") is not None:                              # (its value is the
         print("the outlook inside the head (2.1f): kinds {}, the term's strength {:.4f}, the kind that plays {} ({})".format(
             ck["head2"]["outlook"]["kinds"], float(head2["head2.out_g"]), int(round(float(head2["head2.out_pick"]))),
             ck["head2"]["outlook"]["kinds"][int(round(float(head2["head2.out_pick"])))]))
-    if ck["head2"].get("trk22"):                             # (2.2a) the tracker, the desc outlooks, the second value go with the head's (head2.trk.*,
+    if ck["head2"].get("trk22") and not ck["head2"].get("desc22"):   # (2.2b on) the tracker alone (the desc outlooks and the map sense out): its
+        assert all("head2.trk.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")),             "the head names the tracker and the checkpoint has not its weights"                  # weights go with the head's (head2.trk.*)
+        print("the tracker inside the head (2.2b on): {} outputs; no desc outlooks".format(len(ck["head2"]["trk22"]["outs"])))
+    elif ck["head2"].get("trk22"):                           # (2.2a) the tracker, the desc outlooks, the second value go with the head's (head2.trk.*,
         assert all("head2.trk.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")) and "head2.out_src" in head2 \
             and all("head2.dsc.desc.{}".format(k_) in head2 for k_ in ("l1s.weight", "l1t.weight", "l2.weight", "l3.weight")), \
             "the head names 2.2a's parts and the checkpoint has not their weights or out_src"     # head2.dsc.*, head2.vw.*); the map sense the desc
@@ -216,6 +229,20 @@ if ck.get("ins") is not None and ck.get("appraise") is not None and (ck.get("hea
         if ck.get(nm_) is not None and (nm_ != "map_sense" or int(ck["head2"]["ins"].get("ms", 0) or 0)):    # map sense where the rows read it:
             insx[nm_] = np.array(json.dumps(ck[nm_]["layout"]))                                              # plugins/netpass.py fills the rows)
             insx.update({nm_ + "." + k_: np.asarray(v_) for k_, v_ in ck[nm_]["model"].items()})
+fight = {}                                                   # (2.2c) the aggression lever (sim/fightnet.py VERSION_LEVER): its layout with the measured
+if ck.get("fight22") is not None:                            # norm and its dials (LEV_G) as text ("fight22"), its layers under "fight22.<name>";
+    assert head2, "the lever reads the strategy head's state and its tracker: the checkpoint has no strategy head"   # plugins/netpass.py reads it
+    fl_ = ck["fight22"]["layout"]                            # at each keep reading as test_suite.Policy does (NpFight.reading_lever)
+    assert fl_.get("norm") is not None, "the lever's inputs have no measured norm (tools/lever22_init.py): not a network to play"
+    assert all("head2.trk.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")), "the lever reads the tracker: no head2.trk.* weights"
+    dl_ = dict(ck["fight22"].get("dials") or {})
+    assert float(dl_.get("FGT_G", 0.0)) == 0.0 and float(dl_.get("FGT_W", 0.0)) == 0.0, "the lever's file names 2.2b's dials FGT_G / FGT_W above 0"
+    fight = {"fight22": np.array(json.dumps(dict(layout=fl_, dials=dl_)))}
+    fight.update({"fight22." + k_: np.asarray(v_.detach().cpu().numpy() if hasattr(v_, "detach") else v_, np.float32)
+                  for k_, v_ in ck["fight22"]["model"].items()})
+    assert all("fight22.l{}.{}".format(i_, w_) in fight for i_ in (1, 2, 3) for w_ in ("weight", "bias")), "the lever's layers are missing"
+    print("the aggression lever (2.2c): {} inputs, hidden {}, LEV_G {:.4f}, its last layer's size {:.4f}".format(
+        fl_["width"], fl_["hid"], float(dl_.get("LEV_G", 0.0)), float(np.linalg.norm(fight["fight22.l3.weight"]))))
 rfade = {}                                                   # (v0.4.2a, sim/rule_fade.py) the faded columns and the gate g; plugins/netpass.py
 if ck.get("rule_fade") is not None:                          # fades them as test_suite.Policy does (and with "readers", the simulator's
     rf_ = dict(ck["rule_fade"])                              # readers take the brain's answer: BRAIN_READ in env_vars)
@@ -249,7 +276,7 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
          env_vars=np.array(json.dumps(env_vars)), version=np.array(a.version or version_name(a.run)),
-         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **{**mind, **head2}, **rfade, **inlist, **insx, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **{**mind, **head2}, **rfade, **inlist, **insx, **fight, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
 print("wrote", a.out, "obs", ck["obs_dim"], "(list {}: {} of the simulator's {})".format(I_["list"], I_["n"], I_["full"]) if inlist else "", "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
       "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "",

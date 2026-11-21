@@ -28,6 +28,14 @@ unfaded), as test_suite's Policy. With its readers on (BRAIN_READ in training) t
 even with the token shut, and the simulator's readers (the legs' look point, the hunt's target) take the brain's answer for
 a life drawn on it: brain_life() at each life's start, brain_feed() after each step(). NET_RULE_FADE_G=<g> overrides the
 file's g when a plugin loads it.
+
+(2.2c) A network with the aggression lever (sim/fightnet.py VERSION_LEVER; the export's "fight22" and "fight22.<name>") reads it at each
+keep reading as test_suite.Policy does (NpFight.reading_lever: the brain's state, his inputs, his target scores before the pull, the head's
+state, his memory, his target and its seconds from kf), holds it, and adds LEV_G x the lever (half precision) to "the enemy" after the pull
+and the outlook's term, before the held draw. After step() the plugin gives the simulator fight_scores(P) (env.fg_score: the hands' inputs
+of the next frame, group "b22b fight"), as tools/duel_eval.py does; NET_LEV_G overrides the file's LEV_G. A list that reads the brain's places
+ahead (AHEAD_IN, group "b22c ahead") gets them made at the brain's ticks and sent with its answer (brain_answer's "fut", brain_feed).
+2.2b's four fight options (layout version 1) are not played: sim/export_duel.py refuses them.
 """
 import json
 import os
@@ -154,6 +162,20 @@ def load(path):
                     and int(stL_["kx"]) == head2_.KEEP_F and int(stL_["ksig"]) == head2_.KSIG, "stay: its widths do not fit the network"
                 st_ = (stL_, stW_, stay_.np_value)
             P["_kq"] = dict(stay=st_, sv=None)
+    P["_fgt"] = None                                         # (2.2c, sim/fightnet.py VERSION_LEVER) the aggression lever: the export's "fight22"
+    if "fight22" in P and P.get("_head2") is not None:      # (its layout with the measured norm, its dials) and "fight22.<name>" (its layers);
+        if "/sim" not in sys.path and os.path.isdir("/sim"):     # read at each keep reading as test_suite.Policy reads it (NpFight.reading_lever),
+            sys.path.insert(0, "/sim")                       # held to the next, x LEV_G on "the enemy" after the pull and the outlook's term;
+        import fightnet as fightnet_                         # NET_LEV_G overrides the file's LEV_G. 2.2b's four options (layout version 1)
+        fj_ = json.loads(str(P["fight22"]))                  # are refused (sim/export_duel.py never writes them)
+        assert fightnet_.is_lever(fj_["layout"]), "the file's fight network is not the aggression lever (2.2b's four options are not played here)"
+        Wf_ = {k[len("fight22."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("fight22.")}
+        lg_ = float(os.environ["NET_LEV_G"]) if os.environ.get("NET_LEV_G", "") != "" else float((fj_.get("dials") or {}).get("LEV_G", 0.0))
+        P["_fgt"] = dict(F=fightnet_.NpFight(dict(layout=fj_["layout"], model=Wf_), P["_head2"][1], P["_head2"][0]), g=lg_, lev=None, last=None,
+                         mod=fightnet_)
+    P["_ahead_in"] = False                                   # (2.2c, AHEAD_IN) his list reads the brain's places ahead (group "b22c ahead"): they are
+    if "input_names" in P:                                   # made at the brain's ticks (test_suite.Policy.ahead_in) and sent with its answer
+        P["_ahead_in"] = any(g_ == "b22c ahead" for g_, _ in json.loads(str(P["input_names"])))
     P["_ins"] = None                                        # (2.1) the head's choice of an instruction: the scorer, the appraisals it reads,
     if "ins" in P and "appraise" in P and P.get("_head2") is not None and P["_head2"][0].get("ins"):    # the brain's readouts written into
         if "/sim" not in sys.path and os.path.isdir("/sim"):                                             # the rows (sim/head2.py np_ins_prep,
@@ -354,6 +376,10 @@ def describe(P, A):
                                                                      "open" if np.abs(P["_head"][1]["plan_in.weight"]).sum() > 0 else "at zero")
     if P.get("_rfade") is not None:                          # (v0.4.2a)
         hd += ", rule fade of {} columns at g {:.4f} (readers {})".format(len(P["_rfade"][0]), P["_rfade"][1], "on the brain" if P["_rfade"][2] else "on the rule")
+    if P.get("_fgt") is not None:                            # (2.2c)
+        hd += ", the aggression lever (layout {}, {} inputs) at LEV_G {:.4f}".format(P["_fgt"]["F"].L["version"], P["_fgt"]["F"].L["width"], P["_fgt"]["g"])
+    if P.get("_ahead_in"):                                   # (2.2c)
+        hd += ", the brain's places ahead in his inputs"
     if P.get("_brain") is not None:                          # (v0.4.1)
         B_, bl_, _, _, g_ = P["_brain"]
         hd += ", brain of {} ticking every {} frames (readouts {}), its token of {} numbers at gate {:.4f}{}".format(
@@ -534,6 +560,34 @@ def bind_weapon(env, act, rows=None):
     return b
 
 
+def lever_on(P):
+    """(2.2c) the file has the aggression lever (sim/fightnet.py VERSION_LEVER)"""
+    return P.get("_fgt") is not None
+
+
+def lev_g(P):
+    """(2.2c) the lever's share LEV_G in play (the file's dial; NET_LEV_G overrides it; set_lev_g)"""
+    return float(P["_fgt"]["g"]) if lever_on(P) else 0.0
+
+
+def set_lev_g(P, g):
+    """(2.2c, tests and checks) play the lever at this share (test_suite.Policy.set_fight(g=))"""
+    assert lever_on(P), "this file has no lever"
+    P["_fgt"]["g"] = float(g)
+
+
+def fight_scores(P):
+    """(2.2c) what the plugin gives the simulator after step() for the hands' inputs of the next frame (env.fg_score, these seats' rows; group
+    "b22b fight"'s last four columns): the lever's add on "the enemy" as played (g x lev, half precision) clipped to +-5 in the first column,
+    zeros in the other three (test_suite.Policy.fight_scores, tools/duel_eval.py's env.fg_score). None: no lever in the file, or no step yet"""
+    FG_ = P.get("_fgt")
+    if FG_ is None or FG_["lev"] is None:
+        return None
+    out = np.zeros((len(FG_["lev"]), 4), np.float32)
+    out[:, 0] = np.clip(FG_["mod"].lever_add(FG_["lev"], FG_["g"]), -5.0, 5.0)
+    return out
+
+
 def order_due(P):
     """(1.7) the coming frame is a keep reading for some seat: give step() ox= (the simulator's order_feat() after this frame, these rows)"""
     kr_ = P.get("_k_r")
@@ -678,7 +732,23 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
             logits[:, int(o_[10]):int(o_[10]) + hm2a_.CMB_T] += np.float32(pa_) * ohs[:, o0_:o0_ + hm2a_.CMB_T]
             if len(o_) > 13:
                 logits[:, int(o_[12]):int(o_[12]) + hm2a_.CMB_W] += np.float32(pa_) * ohs[:, o0_ + hm2a_.CMB_T:]
-    if hh is not None:                                       # (v0.4) the head ticks after the fast memory's step (on its frames) and its
+    FG_ = P.get("_fgt")
+    if FG_ is not None:                                      # (2.2c) THE LEVER at a keep reading (test_suite.Policy's sums, the trainer's rollout): the
+        B_f = len(logits)                                    # brain's state of its tick, his inputs, his target scores before the pull, the head's
+        if FG_["lev"] is None or len(FG_["lev"]) != B_f:     # state his outputs read, his memory after this frame, his target and its seconds (the
+            FG_["lev"] = np.zeros(B_f, np.float32)           # keep rows after the frame before); held to the next reading (a clear keeps it)
+        krf_ = P.get("_k_r")
+        if krf_ is not None and len(krf_) == B_f and np.asarray(krf_).any() and h2s is not None:
+            assert kf is not None and bst is not None, "(2.2c) the lever reads at a keep reading: give step() kf=kf_rows(P, env)"
+            r_f = np.nonzero(np.asarray(krf_, bool))[0]
+            si_f = head_slices(P)[0]
+            kfa_ = np.asarray(kf, np.float32)
+            o_f = FG_["F"].reading_lever(np.asarray(bst[0].s, np.float32)[r_f], xa[r_f], logits[r_f, si_f], h2s[r_f, :int(P["_head2"][0]["size"])],
+                                         hfast[r_f, :H], kfa_[r_f, 2], kfa_[r_f, 0])
+            FG_["lev"] = FG_["lev"].copy()
+            FG_["lev"][r_f] = o_f["lev"]
+            FG_["last"] = (r_f, o_f)
+    if hh is not None:                                      # (v0.4) the head ticks after the fast memory's step (on its frames) and its
         _, t_add, w_add, hh = hm.np_tick(hW, hlay, x, hfast, hh, events)    # target and way are added to the hands' (held between ticks)
         si, sw = head_slices(P)
         logits[:, si] += t_add
@@ -735,6 +805,11 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
                 logits[:, si_] += P["_dsc"].term(B_)
             else:
                 logits[:, si_] += P["_head2"][2].np_out_vec(P["_out"]["W"], P["_head2"][0], h2s, P["_out"]["g"], P["_out"]["pick"])
+        if FG_ is not None and FG_["lev"] is not None and len(FG_["lev"]) == B_:     # (2.2c) THE LEVER on "the enemy", after the pull and the
+            logits = logits.copy()                                                  # outlook's term, before the draw (test_suite.Policy's sums)
+            logits[:, si_.start + FG_["mod"].EN_INTENT] += FG_["mod"].lever_add(FG_["lev"], FG_["g"])
+        if FG_ is not None:
+            P["_target_logits"] = np.asarray(logits[:, si_], np.float32).copy()    # (2.2c, readouts) his target logits as drawn (Policy.last_target_logits)
         li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
         lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
         HD_["t"] += 1
@@ -845,7 +920,8 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None,
         if tkd_.any():
             o1_, o2_ = br_.readouts(tkd_)
             tk_.answer(tkd_, o1_, o2_, np.asarray(pose, np.float32)[tkd_], np.asarray(zmap)[tkd_])
-            if P.get("_ord") is not None and P["_head2"][6] is not None:     # (1.7) the readout ahead's places, kept in map coordinates
+            if (P.get("_ord") is not None or P.get("_ahead_in")) and P.get("_head2") is not None and P["_head2"][6] is not None:   # (1.7; 2.2c
+                # AHEAD_IN: his list reads them) the readout ahead's places, kept in map coordinates
                 hm2f_, ah2f_ = P["_head2"][2], P["_head2"][6]                    # at the tick, for the simulator's order (test_suite's token_post)
                 if P.get("_fut") is None or len(P["_fut"]) != len(tkd_):
                     P["_fut"] = np.zeros((len(tkd_), 3, 3), np.float32)

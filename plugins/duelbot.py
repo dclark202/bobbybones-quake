@@ -477,7 +477,7 @@ class duelbot(minqlx.Plugin):
             player.tell("^3I'm ^5B^7o^5bbyB^7o^5nes^3, the learning Quake bot.^7 Here's some commands")
             player.tell(self.WELCOME)
             if self.FACTORY == "duel":                       # (!aim, owner, 2026-10-21: the 1v1 plugin's command)
-                player.tell(self.AIM_WELCOME)
+                player.tell(self.aim_welcome())
                 if self.WDIAL_LEVELS:                        # (!weapons, owner, 2026-11-07)
                     player.tell(self.WEAPONS_WELCOME)
             lad = minqlx.Plugin._loaded_plugins.get("ladder")
@@ -1053,7 +1053,12 @@ class duelbot(minqlx.Plugin):
         self.P["_wdial_mode"] = "replace" if getattr(self, "wdial", "off") == self.WDIAL_REPLACE else None    # (!weapons pros) the table chooses
         acts, self.h = _net.step(self.P, self.attn, obs, self.h, self.rng, ev, xl=xl, **kw_, **pz)
         if hasattr(_net, "brain_feed"):                      # (v0.4.2a) the brain's answer for the simulator's readers (a network with them)
-            _net.brain_feed(self.P, self.env, self.h, [0])
+            _net.brain_feed(self.P, self.env, self.h, [0])   # (2.2c, AHEAD_IN: with the brain's places ahead, read by observe() next frame)
+        fs_ = _net.fight_scores(self.P) if hasattr(_net, "fight_scores") else None
+        if fs_ is not None and hasattr(self.env, "fg_score"):    # (2.2c) the lever's add as the hands' inputs read it next frame (observe() never
+            sc_ = np.zeros((self.env.n, 4), np.float32)          # runs step(): the plugin sets it, as tools/duel_eval.py does; the opponent's
+            sc_[0] = fs_[0]                                      # seat zeros, as a seat without a fight network in the checks)
+            self.env.fg_score = sc_
         return [int(v) for v in acts[0]]
 
     # ------------------------------------------------------------------ v0.4: the head's events (sim/duel_env.py HEAD_EVENTS)
@@ -1626,6 +1631,21 @@ class duelbot(minqlx.Plugin):
     # (2026-10-26, owner: one aim setting, four values; a file names itself by AIM_NAME in its env_vars)
     AIM_KEEP = ("env_vars", "react_ms", "acquire_ms")        # the arrays that may differ between the files of the settings
 
+    AIM_SAY = dict(worse="easier", default="as he trains", better="sharper", max="no human limits")
+
+    def aim_here(self):
+        """(2.2e, aim4) the settings whose files are on this server, in the table's order (an aim4 network has default and max only); all
+        four when none is found (no files yet)"""
+        return [lv_ for lv_, fn_ in self.AIM_FILES.items() if os.path.exists(os.path.join(D, fn_))] or list(self.AIM_FILES)
+
+    def aim_welcome(self):
+        """the welcome's aim line: the settings on this server (AIM_WELCOME when all four are)"""
+        here_ = self.aim_here()
+        if here_ == list(self.AIM_FILES):
+            return self.AIM_WELCOME
+        return "^3My aim:^7 " + ", ".join("^2!aim {}^7 {}{}".format(lv_, self.AIM_SAY[lv_], " ^6(default)^7" if lv_ == self.AIM_DEFAULT else "")
+                                          for lv_ in here_) + ". The player in the duel can change it at any time."
+
     def aim_level(self):
         """the aim setting of the network loaded: AIM_NAME in its env_vars ("worse", "default", "better", "max"); else
         AIM_LEVEL ("1" to "5", "max")"""
@@ -1989,13 +2009,13 @@ class duelbot(minqlx.Plugin):
         """!aim: the aim setting now. !aim worse|default|better|max: that setting at once (the person playing the duel,
         or the server's owner)"""
         cur = self.aim_level()
+        here_ = self.aim_here()
         if len(msg) < 2:
-            player.tell("^3Aim^7 ^2{}^7 (^2!aim worse|default|better|max^7 to change)".format(cur))
+            player.tell("^3Aim^7 ^2{}^7 (^2!aim {}^7 to change)".format(cur, "|".join(here_)))
             return
         lv = msg[1].lower().strip()
         if lv not in self.AIM_FILES:
-            player.tell("^3Aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains, ^2!aim better^7 sharper, "
-                        "^2!aim max^7 no human limits")
+            player.tell("^3Aim:^7 " + ", ".join("^2!aim {}^7 {}".format(lv_, self.AIM_SAY[lv_]) for lv_ in here_))
             return
         try:
             team_, bot_ = getattr(player, "team", "spectator"), is_bot(player)
@@ -2475,8 +2495,9 @@ class duelbot(minqlx.Plugin):
             k_ = self.P.get("_keep") if hasattr(env, "keep_feat") else None
             env.keep_in = None if k_ is None else np.concatenate([np.asarray(k_, np.int64)[:1], np.full(env.n - 1, -1, np.int64)])   # (1.4c) his keep choice
             env.intend(np.full(env.n, int(a[10]), np.int64), np.arange(env.n) == 0)
-            if getattr(E, "COMBAT", False) and hasattr(env, "_cmb_points"):
-                env._cmb_points()                            # (1.7) the order's points for this frame's way and look, as step() does
+            if getattr(E, "CMB_PTS", getattr(E, "COMBAT", False)) and hasattr(env, "_cmb_points"):
+                env._cmb_points()                            # (1.7) the order's points for this frame's way and look, as step() does (2.2b: CMB_PTS
+                #                                              = COMBAT or FIGHT; under the lever no fight option is asked: it clears the points)
         yaw_in_, pitch_in_ = float(yaw), float(pitch)
         w, fire, pitch, yaw, keys = self.drive(bobby, env, E, 0, a, pitch, yaw, only=self.drill)
         if os.environ.get("DUEL_AIMDUMP"):                   # debugging: what became of the mouse output, frame by frame

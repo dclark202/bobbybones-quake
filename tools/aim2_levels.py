@@ -5,7 +5,8 @@ acquire_ms) and policy.npz = default. docs/v0.5.2/AIM_MODEL.md explains every va
     python tools/aim2_levels.py <data folder>              (policy_trained.npz in it)
     python tools/aim2_levels.py --show                     the table
     python tools/aim2_levels.py [--show | <data folder>] --aim3      the table under AIM3 (default, better, max; docs/design/AIM3.md)
-    python tools/aim2_levels.py [--show | <data folder>] --aim4      aim4: one level, "default" (2.2e's training default; no server uses it)
+    python tools/aim2_levels.py [--show | <data folder>] --aim4      aim4 (a network trained under it, 2.2e on): "default" (aim4's) and "max"
+                                                                     (aim3's); no "better" or "worse" (tools/run/local_server.sh AIM4=1)
 
 default = the pros' typical values, worse and better around their 75th and 25th percentiles (knob by knob; see the table's
 comment and docs/runs/v0.6.0's notes for where a value departs from that); max = every perception and reaction limit the server can switch
@@ -54,10 +55,14 @@ TABLE3 = {
 }
 # (2026-11-19, docs/runs/2.2/2.2e/CARD.md "Aim4 default"; the owner: "make that the aim4 default") one level, "default": aim3's "better"
 # row itself (its delays, every value of it) with the sight error in proportion to how big the enemy looks (no constant part: AIM3_SIZE_A 0,
-# AIM3_SIZE_B 0.49, equal to "better" at about 300 units). The training default of 2.2e (every seat) and of its checks. NO SERVER USES IT.
+# AIM3_SIZE_B 0.49, equal to "better" at about 300 units). The training default of 2.2e (every seat) and of its checks.
+# (2026-11-20, a server for a network trained under aim4, the planning session's word) the table a server gets with --aim4: "default" =
+# aim4's default, "max" = aim3's "max" (every limit off). No "better": aim3's "better" is worse than aim4's default in the sight error by
+# size (its constant part); no "worse" (on hold since 11-10). plugins/duelbot.py's !aim offers the settings whose files are on the server.
 TABLE4 = {
     "default": (TABLE3["better"][0], TABLE3["better"][1], dict(TABLE3["better"][2], AIM3_SIZE_A="0", AIM3_SIZE_B="0.49")),
 }
+TABLE4_SERVER = {"default": TABLE4["default"], "max": TABLE3["max"]}
 DROP = ("AIM_LEVEL", "AIM_NAME", "PERCEPT_SPEED", "PERCEPT_SPEED_MAX", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",
         "PERCEPT_SIGMA", "PERCEPT_TAU", "MOTOR_NOISE", "MOTOR_BASE", "SURPRISE_MS", "FLINCH_PER_DMG", "FLINCH_MAX", "FLINCH_TAU")
 
@@ -77,10 +82,10 @@ def main():
         sys.argv.remove("--aim3")
         TABLE.clear()
         TABLE.update(TABLE3)
-    if "--aim4" in sys.argv:                                 # (2.2e) the one level "default"
+    if "--aim4" in sys.argv:                                 # (2.2e) aim4's "default" and aim3's "max" (TABLE4_SERVER)
         sys.argv.remove("--aim4")
         TABLE.clear()
-        TABLE.update(TABLE4)
+        TABLE.update(TABLE4_SERVER)
     if sys.argv[1:] == ["--show"]:
         for k, (rm, am, ex) in TABLE.items():
             print(k, rm, am, ex)
