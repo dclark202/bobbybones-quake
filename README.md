@@ -1,77 +1,49 @@
-# Important
+# knecht-q3-bot — the DoomWarriors Quake 3 port of BobbyBones
 
-This is a fork from BobbyBones, which is a Quake Live duel bot trained from scratch by reinforcement learning. A neural network plays millions of
-games against copies of itself in a fast simulator built on Quake 3's own movement and collision code, then plays people
-on a real Quake Live server through a server plugin. All learning is from playing himself, human game demos are used for calibration.
+A fork of [BobbyBones](https://github.com/dclark202/bobbybones-quake), the Quake Live duel bot that was trained from scratch by reinforcement learning. BobbyBones plays Quake Live through a server plugin; **this project ports the same approach to Quake 3**: the clan runs the [Quake3e](https://github.com/doomwarriors-clan/Quake3e) engine (`dwc` branch) with the [OSP](https://github.com/doomwarriors-clan/osp) game mod, and the goal is a bot that learns our duel and TDM maps by playing against our own clan botfiles — with human-like senses only (field of view, line of sight, no wall hacks).
 
-We forked it and try to make it available for Quake3 as well - let's see how that goes.
+## Status (2026-11-22)
 
-## Below Information is original README.md from the fork. We will have to adjust it going forward.
+| Milestone | State |
+|---|---|
+| **Phase 0 — spike:** prove an external process can drive a bot client slot in Quake3e + OSP **per frame** (usercmds incl. substeps, game-state read-back, lifecycle edges like kicks / map rotation / sidecar death) | **DONE** — scenario suite T1–T10, final matrix **12/12 green** on the merged engine (2026-11-20); see `spike/` + `docs/spike/SPIKE_ENGINE.md` |
+| Engine-side `botctl` control channel (Unix socket, **off by default**, `botctl_enable 0`) | **merged** into [doomwarriors-clan/Quake3e](https://github.com/doomwarriors-clan/Quake3e) `dwc` (PR #13), shipped in release `dwc-2026.11.20` |
+| **Training PoC:** PPO on the live dedicated server against skill-5 clan botfiles | **IN PROGRESS** — the stack is in branch `phase3-poc` (merge PR planned 2026-11-24); a multi-day training run is active; how to run it: `phase3-poc/README.md` |
+| TDM 2v2 env (8 clan TDM maps) | built + smoke-verified, idle until the duel learning signal matures |
+| Sim parity (port the upstream `sim/` approach to Quake 3) | not started — next after the training PoC |
+| Live deploy on production servers | **open clan decision** — only after a trained net proves itself; the engine channel stays off by default until then |
 
-## Play him online
-
-Quake Live servers:
-- `Duel BobbyBones the self taught Quake bot | US Chicago` (`45.76.17.177:27970`)
-- `Duel BobbyBones the self taught Quake bot | EU Amsterdam` (`78.141.211.228:27970`)
-
-We keep a local leaderboard and game log (with detailed game stats) across the two servers, see it [here](https://dclark202.github.io/bobbybones-leaderboard/) 
-
-## Run him locally
-
-The networks that have played on the public server are released as open weights, one
-[GitHub Release](https://github.com/dclark202/bobbybones-quake/releases) per model, tagged at the code the server ran it with
-(each network needs its own version of the simulator and plugins).
-
-You need Docker (on Windows, Docker Desktop and Git Bash) and Quake Live from Steam to join. The image build downloads the
-Quake Live dedicated server with steamcmd (the image is about 3.4 GB). From a release, download the model's
-`bobbybones-<version>-weights.zip` and `bobbybones-duel-maps.zip` and unpack both at the top of the repository:
-
-```bash
-git clone https://github.com/dclark202/bobbybones-quake && cd bobbybones-quake
-git checkout v0.3.10                               # the model's tag
-unzip ~/Downloads/bobbybones-v0.3.10-weights.zip   # data/duellive/policy*.npz, legs.npz
-unzip ~/Downloads/bobbybones-duel-maps.zip         # data/maps/nav_<map>_sim.json, cells_<map>.npy (the ten duel maps)
-docker build -t qlbot .
-bash tools/duel_server.sh - bloodrun               # "-": the network already in data/duellive; the map is any of the ten
-```
-
-The weights and the map files are under CC-BY-4.0 ([WEIGHTS_LICENSE.md](WEIGHTS_LICENSE.md)): use, change and retrain them
-as you like, with credit to "BobbyBones by Duncan Clark (github.com/dclark202/bobbybones-quake)".
-
-# Architecture
-
-- **Simulator** (`sim/`): ioquake3's player movement and collision compiled into one library (`qsim.dll` / `libqsim.so`)
-  with Quake Live's settings, loading the game's own maps. A numpy game layer (`sim/duel_env.py`) adds the weapons, items,
-  sounds, clock and score as measured on a real server. It runs thousands of players at once on one PC.
-- **Network**: about 3 million weights. 868 inputs every 25 ms (what he sees, hears and remembers; [docs/INPUTS.csv](docs/INPUTS.csv)),
-  an encoder and attention over groups of inputs (the enemy, the items, the map's places), a GRU memory of 512, and
-  outputs for keys, mouse, fire, weapon and the item or place he is heading for.
-  A part of it, the brain, learns to predict from his senses alone where the enemy is and will be, his health and armor,
-  and who takes the next items; the rest acts on those predictions.
-- **Training** (`sim/train_duel_rnn.py`): PPO on whole ten-minute duels on ten of the game's duel maps, against a league
-  of his own past snapshots and the previous best network.
-- **Game server**: a Docker image with the Quake Live dedicated server and [minqlx](https://github.com/MinoMino/minqlx).
-  A small C patch (`minqlx/botctl.c`) lets a plugin set a bot's keys and view each frame; `plugins/duelbot.py` rebuilds
-  the network's inputs from the live game and runs it. The server plays 1v1 only, on the ten duel maps.
+## How it fits together
 
 ```
-sim/       simulator, game layer, trainer, export
-plugins/   minqlx plugins (the bots, logging, server rules)
-minqlx/    vendored minqlx with the input hook
-tools/     server scripts, evaluation, map and demo tools
-docs/      plan, backlog, results log, run reports
+training process (Python, consumer GPU)
+   │  observations (game-state snapshots)        usercmds every frame (+ substeps)
+   ▼                                             ▲
+botctl Unix-socket channel  ────────  Quake3e dedicated server (dwc build, USE_BOTCTL=1)
+   ▲                                  + OSP QVM + clan botfiles
+   └─ rcon: swaps the opponent bot at episode boundaries
 ```
 
-# Fairness
+The bot occupies a **regular client slot** (it shows up in `status`, joins teams, scores like a player) but is driven frame-by-frame from outside the engine — no scripting embedded in the engine, no changes to the game QVM. The spike proved the whole channel incl. its failure modes; the training PoC reuses the exact same protocol.
 
-He plays under a human's limits:
-- **Physics**: the same 125 fps movement as a human client.
-- **Senses**: he knows where the enemy is only when in his field of view with a clear line of sight, or roughly from
-  sound. No wallhack, no health readout, item timers only from what he saw or heard.
-- **Reaction, aim, and inputs**: human-like reflexes, aim limitation, and keypresses per second 
+## What lives where in this repo
 
+- `spike/` — Phase 0 client side: `botctl.py` (stdlib protocol client), `sidecar.py` (scenario brains T1–T10), `run_spike.sh` (spike driver), `rcon_probe.py`
+- `docs/spike/` — spike design (V1/V2), measurement methodology, the full 12/12 results matrix, and the archived engine issue/PR text (`QUAKE3E_ISSUE.md`)
+- `phase3-poc/` (branch, merge pending) — the RL training stack: duel / duel-v2 / TDM-2v2 environments on the botctl channel, PPO (`ppo2.py`), policy nets (`net2.py`), training loop (`train2.py`), smoke + recovery + rotation tests, server start/stop scripts
+- everything else (`sim/`, `tools/`, `plugins/`, `minqlx/`, `server/`, …) — the original BobbyBones Quake Live project, kept untouched as design reference
 
-# License
+## Relationship to upstream
 
-GPL-3.0 (see `LICENSE`), as the bundled minqlx and ioquake3 code require. The released networks and map files: CC-BY-4.0
-(see `WEIGHTS_LICENSE.md`).
+Upstream BobbyBones keeps moving fast, for **Quake Live**. We treat its code as a reference, keep all clan work **purely additive** (new directories only, no edits to upstream files), and pull upstream improvements in as periodic **upstream-sync merge PRs** into `main` — next one planned after the `phase3-poc` merge, and always refreshed before the sim-parity phase starts. QL-specific parts (minqlx plugin, QL maps and physics, QL sim tuning) are never ported blindly: each is evaluated against Quake 3 mechanics when its phase begins.
+
+## Related clan repos
+
+- [Quake3e](https://github.com/doomwarriors-clan/Quake3e) (`dwc`) — the engine incl. the `botctl` half of this project
+- [osp](https://github.com/doomwarriors-clan/osp) — the game mod on our servers (needs no botctl changes)
+- [dwc-bots](https://github.com/doomwarriors-clan/dwc-bots) — the clan botfiles used as training opponents
+- [q3-servers](https://github.com/doomwarriors-clan/q3-servers) — production server configs (a later live integration would touch this)
+
+## License
+
+Upstream code in this repository is covered by the [GPL-3.0](LICENSE) license (`LICENSE`); `WEIGHTS_LICENSE.md` covers upstream's published Quake Live model weights. The engine-side `botctl` code lives in the Quake3e fork under its GPL terms.
