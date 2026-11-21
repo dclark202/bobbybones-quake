@@ -1,0 +1,41 @@
+﻿11-11 06:41:18 keep\policy_u100_20c.pt or its optimizer is not there yet: nothing stopped
+11-11 07:34:08 update 100's save is kept (07:33:25); the last finished update is 100
+11-11 07:34:08 the trainer 8028 with 30 simulators; the self-play logger: 3 processes
+11-11 07:34:08 stopping 8028 C:\Users\dacla\anaconda3\python.exe  sim\train_duel_rnn.py --env duel_env_ffa --group 2 --map bloodrun,aerowalk,lostworld,sinister
+11-11 07:34:08 stopping 32560 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 3960 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 8664 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 31804 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 31192 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 31260 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 5076 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 8704 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 25536 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 18412 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 9920 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 23540 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 29452 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 16592 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 32008 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 18068 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 5616 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 14164 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 13424 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 30784 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 29672 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 4796 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 26276 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 30088 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 30724 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 6388 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 31448 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 31132 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 24688 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 1460 "C:\Users\dacla\anaconda3\python.exe" "-B" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=8028, pipe_ha
+11-11 07:34:08 stopping 10144 "C:\Users\dacla\anaconda3\python.exe" C:\Users\dacla\Documents\gh\BobbyBones\tools\run\selfplay_loop.py duel_gru_2_0c --every 40 -
+11-11 07:34:08 stopping 29504 C:\Users\dacla\anaconda3\python.exe C:\Users\dacla\Documents\gh\BobbyBones\tools\run\selfplay_log.py --run duel_gru_2_0c --policy 
+11-11 07:34:08 stopping 32064 C:\Users\dacla\anaconda3\python.exe C:\Users\dacla\Documents\gh\BobbyBones\tools\run\ws_eval.py --run duel_gru_2_0c --policy C:\Us
+11-11 07:34:13 the trainer, its simulators and the self-play logger are stopped
+11-11 07:34:13 the end kept: keep\policy_end_20c.pt (3BBA73FE762FD024, the same as policy_u100_20c.pt 3BBA73FE762FD024) with opt_end_20c.pt
+11-11 07:34:13 the watcher is left running (1 process): it finishes the check of update 100
+11-11 08:28:59 stopping the ramp 13180 "C:\Users\dacla\anaconda3\python.exe" C:\Users\dacla\Documents\gh\BobbyBones\docs\runs\2.0\2.0c\ramp_20c.py duel_gru_2_0c 

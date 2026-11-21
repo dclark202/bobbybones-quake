@@ -1,0 +1,93 @@
+11-08 21:29:00 the run window ends 07:00 (owner, 11-08): 565 minutes from now
+11-08 21:29:01 train.cmd, 565 minutes: written
+11-08 21:29:01 no firing cost in the command: every one at zero
+11-08 21:29:01 allowed arg --keep-g: run '0.975' | reference '0'
+11-08 21:29:01 allowed arg --minutes: run '565' | reference '1518'
+11-08 21:29:01 allowed arg --run: run 'duel_gru_2_0a' | reference 'duel_gru_1_7a'
+11-08 21:29:01 settings check: PASS
+11-08 21:29:02 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-08 21:29:02 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-08 21:29:02 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-08 21:29:02 settings check: PASS
+11-08 21:29:03 judge: judge judge_v060_wpn.npz (made 2026-10-28 19:54, fit on duel_gru_v0_6_0); WIN_SCALE 19.36 (a lead of 1 at 10:00 = 0.552); weight 0.6, floor 0.001 a point
+11-08 21:29:03 judge: 
+11-08 21:29:03 judge: scenario                                                  weight 1     x0.33  x0.60+floor      flat
+11-08 21:29:03 judge: 100 damage on an enemy at 100/50 (he is at 50/0 after)        1.62      0.54         1.07      0.55
+11-08 21:29:03 judge: 100 damage on an enemy at 200/200                             0.99      0.33         0.69      0.55
+11-08 21:29:03 judge: 50 chip on an enemy at 125/0                                  0.32      0.10         0.24      0.27
+11-08 21:29:03 judge: 50 chip on an enemy at 200/0 (the decaying part)              0.96      0.32         0.63      0.27
+11-08 21:29:03 judge: his death at 125/0 (beside the flat -1)                      -1.00     -0.33        -0.60          
+11-08 21:29:03 judge: his death at 200/200 (beside the flat -1)                    -5.26     -1.73        -3.15          
+11-08 21:29:03 judge: his death at 60/0 to an enemy at 150/100                     -0.53     -0.17        -0.32          
+11-08 21:29:03 judge: he takes the red at 100/0 (beside the table's 0.40)           1.86      0.61         1.12          
+11-08 21:29:03 judge: he takes the mega at 100/0 (beside 0.28)                      1.56      0.51         0.93          
+11-08 21:29:03 judge: he takes a yellow at 100/0 (beside 0.20)                      1.21      0.40         0.72          
+11-08 21:29:03 judge: he takes a yellow at 100/100 (beside 0.15)                    0.57      0.19         0.34          
+11-08 21:29:03 judge: he owns the rail (against not), both at 125/0                 0.26      0.09         0.16          
+11-08 21:29:03 judge: he owns rockets (against not)                                 0.26      0.09         0.16          
+11-08 21:29:03 judge: a frag at 0:0 with 2:00 left (beside the flat 1)              4.51      1.49         2.71          
+11-08 21:29:03 judge: a frag when 3 behind with 2:00 left                           1.37      0.45         0.82          
+11-08 21:29:03 judge: a frag when 3 ahead with 2:00 left                            0.56      0.18         0.33          
+11-08 21:29:03 judge: the leader's trickle, one ahead, 5:00 to 4:00                 0.53      0.17         0.32          
+11-08 21:29:03 judge: 
+11-08 21:29:03 judge: chip (the floor included)                          today | w 0.33 w 0.50 w 0.60 w 0.70 w 1.00
+11-08 21:29:03 judge: 50 chip, enemy 200/200 -> 183/167                   0.27 |   0.17   0.23   0.27   0.31   0.42
+11-08 21:29:03 judge: 100 chip, enemy 200/200 -> 167/133                  0.55 |   0.43   0.59   0.69   0.79   1.09
+11-08 21:29:03 judge: the next 50, enemy 150/100 -> 133/67                0.27 |   0.29   0.41   0.48   0.55   0.76
+11-08 21:29:03 judge: the next 50, enemy 133/67 -> 117/33                 0.27 |   0.33   0.47   0.55   0.63   0.88
+11-08 21:29:03 judge: 50 chip, enemy 200/0 -> 150/0 (a mega holder)       0.27 |   0.37   0.53   0.63   0.72   1.01
+11-08 21:29:03 judge: 50 chip, enemy 100/100 -> 83/67                     0.27 |   0.27   0.38   0.44   0.51   0.70
+11-08 21:29:03 judge: 50 chip, enemy 125/0 -> 75/0 (a fresh spawn)        0.27 |   0.15   0.21   0.24   0.27   0.37
+11-08 21:29:03 judge: 50 chip by a 60/0 Bobby on a 200/200 enemy          0.27 |   0.17   0.23   0.26   0.30   0.41
+11-08 21:29:03 judge: the red at 100/0, the table's 0.40 included         0.40 |   1.01   1.33   1.52   1.70   2.26
+11-08 21:29:03 judge: a kill of a fresh spawn, the flat 1 included        1.00 |   1.33   1.50   1.60   1.70   2.00
+11-08 21:29:03 judge: 
+11-08 21:29:03 judge: rule 1: the first 50 off a 200/200 pays 0.272 at weight 0.6 (today 0.275): OK
+11-08 21:29:03 judge: rule 2: the red at 100/0 pays 1.52 against a spawn kill's 1.60: OK
+11-08 21:29:03 judge: 
+11-08 21:29:03 judge: the losing fight           |  today:fi   chip+go  margin | new:fight   chip+go  margin
+11-08 21:29:03 judge: 100/0 vs 200/200           |     -0.83      0.40    1.23 |     -0.90      0.27    1.17
+11-08 21:29:03 judge: 125/0 vs 200/200           |     -0.69      0.40    1.09 |     -0.69      0.27    0.96
+11-08 21:29:03 judge: 150/100 vs 200/200         |     -0.63      0.42    1.05 |     -0.83      0.31    1.14
+11-08 21:29:03 judge: 200/200 vs 200/200         |     -0.71      0.42    1.14 |     -1.28      0.32    1.60
+11-08 21:29:03 judge: 200/200 vs 125/0           |     -3.63      0.36    3.99 |     -4.10      0.20    4.31
+11-08 21:29:03 judge: 60/0 vs 150/100            |     -0.83      0.51    1.33 |     -0.81      0.47    1.28
+11-08 21:29:03 judge: an even trade of 200 for 200, nobody dies: today +0.22 each, new +0.00 each
+11-08 21:29:05 backup: copied 125 files 1.01 GB to T:\BobbyBones_backup
+11-08 21:29:07 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\policy.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-08 21:29:19 the files' own shares: 400 frames x 8 seats, 14 output columns, actions that differ: 0 -> PASS
+11-08 21:29:19 keep choice and order at share 1, random keep numbers and candidates: 400 frames x 8 seats, 15 output columns, actions that differ: 0 -> PASS
+11-08 21:29:19 ALL PASSED
+11-08 21:29:21 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\snapshots\anchor_17a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-08 21:29:23 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\snapshots\anchor_16a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-08 21:29:24 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\snapshots\anchor_15a.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-08 21:29:26 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\snapshots\anchor_13b.pt: 4 new inputs, new tokens ['timers']; its strategy head's inputs widened (at zero)
+11-08 21:29:28 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\snapshots\anchor_b12d.pt: 4 new inputs, new tokens ['timers']
+11-08 21:29:30 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\snapshots\anchor_b11.pt: 4 new inputs, new tokens ['timers']
+11-08 21:29:31 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\snapshots\anchor_v060_end.pt: 4 new inputs, new tokens ['timers']
+11-08 21:29:33 live.json: from 1.7a's last live.json (not in the save's record): H2_GATE_CAP = 0.0
+11-08 21:29:33 live.json: from 1.7a's last live.json (not in the save's record): H2_GATE_OPEN = 0.0
+11-08 21:29:33 live.json: from 1.7a's last live.json (not in the save's record): H2_PG = 1.0
+11-08 21:29:33 live.json: from 1.7a's last live.json (not in the save's record): H2_MIX = 0.0
+11-08 21:29:33 live.json: the save (1.7a's update 90) played: {"BRAIN_FADE": 1.0, "BTOK_GATE_CAP": 1.0, "CMB_G": 0.0, "CONTACT_FREE": 1.0, "COST_FIRE_W": 0.0, "COST_JERK_W": 0.0, "DMG_REWARD": 0.0055, "DMG_TAKEN_W": 0.8, "FADD": 0.0, "FADE_CAP": 1.0, "FADE_V": 0.0, "H2_COPY": 0.0, "H2_FPG": 0.0, "H2_GATE_CAP": 0.0, "H2_GATE_OPEN": 0.0, "H2_MIX": 0.0, "H2_PG": 1.0, "H2_WPG": 1.0, "HABIT_P": 0.3, "INTENT_HOLD": 8.0, "INTENT_TEACH_W": 0.0, "ITEM_DECAY": 0.002, "ITEM_FLAT": "MH:0.35,RA:0.30,YA:0.15", "ITEM_PT_HI": 0.002, "ITEM_PT_LO": 0.004, "ITEM_PT_MIX": 1.0, "ITEM_RATE_AR": 0.002, "ITEM_RATE_HP": 0.0025, "KEEP_G": 0.975, "LEVEL_PULL": 1.0, "ORD_GATE": -30.0, "PADD": 0.0, "RAIL_FAR_PAY": 0.25, "RJ_TEACH_W": 0.0, "SPEED_PAY": 0.0, "STACK_DIFF": 0.0, "VALUE_WARM": 0.0, "WIN_ADD": 0.33, "WIN_GAIN": 1.0, "WIN_SHAPE_K": 0.0, "WIN_W": 0.0}
+11-08 21:29:33 live.json: 2.0a's start values: {}
+11-08 21:29:33 live.json: differs from 1.7a's last live.json (update 246): {"CMB_G": [1.0, 0.0], "DMG_REWARD": [null, 0.0055], "FADD": [1.0, 0.0], "H2_FPG": [0.5, 0.0], "KEEP_G": [1.0, 0.975], "ORD_GATE": [0.0, -30.0], "PADD": [0.3, 0.0], "VALUE_WARM": [0, 0.0]}
+11-08 21:29:33 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\live.json
+11-08 21:29:34 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\live.json: accepted
+11-08 21:29:34 the ramp ramp_20a.py: 72 files (clocks 0 to 71), all accepted
+11-08 21:29:34 LIVE ACCEPT: PASS
+11-08 21:29:34 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7a\keep\policy_end_17a.pt widened, with its optimizer; anchors 1.7a's update 90, 1.6a's end, 1.5a's end, 1.3b's end, b1.2d's end, b1.1, v0.6.0's end; the judge C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\judge\judge_v060_wpn.npz
+11-08 21:29:34 trainer started: cmd 34808, from 1.7a's update 90, 565 minutes
+11-08 21:29:49 live.json applied by the trainer before its first rollout (2026-11-08 21:29:46)
+11-08 21:29:54 watcher 29228 | ramp 43720 (its dials: ramp_20a.py, DMG_REWARD 0.0055 -> 0.001, DMG_TAKEN_W 0.8 -> 1.0, WIN_ADD 0.33 -> 0.6 over updates 10 to 70; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 40088 | no guard (owner: never stop the run)
+11-08 21:30:04 trainer: combat order (1.7): the readout ahead's places (1, 2, 4 s) go to the simulators with the brain's answer
+11-08 21:30:04 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1005 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + obs 89 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 714,403 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+11-08 21:30:04 trainer: optimizer: the small tokens' first layer starts fresh
+11-08 21:30:04 trainer: optimizer: attn.mark carried over, (64, 96) -> (65, 96)
+11-08 21:30:04 trainer: optimizer: enc.0.weight carried over, (256, 990) -> (256, 994)
+11-08 21:30:04 trainer: optimizer: head2.inp.weight carried over, (256, 950) -> (256, 960)
+11-08 21:30:04 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 107 step counts moved to the host)
+11-08 21:30:04 trainer: keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.975 (live KEEP_G); its weights: bias -7.646, on its own numbers [6.709, 7.195, -0.293, 7.088, -0.038, 0.041, 0.038]
+11-08 21:30:04 trainer: keep choice: share 0.9750 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+11-08 21:30:04 trainer: combat order (1.7): asked at a share 0.0000 of his readings (target, cut, spam, out); the pointer's adds on the targets and the way x 0.0000; the kinds' bias [0.15, -4.903, -4.347, -5.501], |op_v| 8.371
+11-08 21:30:04 trainer: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 3843138 weights, device cuda, 565.0 min

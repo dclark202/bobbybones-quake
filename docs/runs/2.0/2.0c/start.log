@@ -1,0 +1,60 @@
+11-10 22:11:18 the run ends 09:00 (owner, 11-10: 'it can run until 9am tomorrow'): 643 minutes from now
+11-10 22:11:18 train.cmd, 643 minutes: written
+11-10 22:11:18 no firing cost in the command: every one at zero
+11-10 22:11:19 allowed set AIM3: run '1' | reference '<unset>'
+11-10 22:11:19 allowed set AIM3_FIX_TAU: run '0.10' | reference '<unset>'
+11-10 22:11:19 allowed set AIM3_PURSUIT_GAIN: run '1.0' | reference '<unset>'
+11-10 22:11:19 allowed set AIM3_PURSUIT_TAU: run '0.125' | reference '<unset>'
+11-10 22:11:19 allowed set AIM3_SIZE_A: run '1' | reference '<unset>'
+11-10 22:11:19 allowed set AIM3_SIZE_B: run '0' | reference '<unset>'
+11-10 22:11:19 allowed set AIM3_W: run '0' | reference '<unset>'
+11-10 22:11:19 allowed arg --gate-open: run '0' | reference '120'
+11-10 22:11:19 allowed arg --keep-g: run '0.975' | reference '0'
+11-10 22:11:19 allowed arg --minutes: run '643' | reference '1518'
+11-10 22:11:19 allowed arg --run: run 'duel_gru_2_0c' | reference 'duel_gru_1_7a'
+11-10 22:11:19 settings check: PASS
+11-10 22:11:20 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-10 22:11:20 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-10 22:11:20 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-10 22:11:20 settings check: PASS
+11-10 22:11:22 backup: copied 213 files 1.55 GB to T:\BobbyBones_backup
+11-10 22:11:24 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\policy.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-10 22:11:36 the files' own shares: 400 frames x 8 seats, 14 output columns, actions that differ: 0 -> PASS
+11-10 22:11:36 keep choice and order at share 1, random keep numbers and candidates: 400 frames x 8 seats, 15 output columns, actions that differ: 0 -> PASS
+11-10 22:11:36 ALL PASSED
+11-10 22:11:38 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\snapshots\anchor_17a.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-10 22:11:40 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\snapshots\anchor_16a.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-10 22:11:42 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\snapshots\anchor_15a.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-10 22:11:44 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\snapshots\anchor_13b.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-10 22:11:46 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\snapshots\anchor_b12d.pt: 59 new inputs, new tokens ['space', 'targets']
+11-10 22:11:47 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\snapshots\anchor_b11.pt: 59 new inputs, new tokens ['space', 'targets']
+11-10 22:11:49 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\snapshots\anchor_v060_end.pt: 59 new inputs, new tokens ['space', 'targets']
+11-10 22:11:51 live.json: from 1.7a's last live.json (not in the save's record): H2_GATE_CAP = 0.0
+11-10 22:11:51 live.json: from 1.7a's last live.json (not in the save's record): H2_GATE_OPEN = 0.0
+11-10 22:11:51 live.json: from 1.7a's last live.json (not in the save's record): H2_PG = 1.0
+11-10 22:11:51 live.json: from 1.7a's last live.json (not in the save's record): H2_MIX = 0.0
+11-10 22:11:51 live.json: the save (1.7a's update 90) played: {"BRAIN_FADE": 1.0, "BTOK_GATE_CAP": 1.0, "CMB_G": 0.0, "CONTACT_FREE": 1.0, "COST_FIRE_W": 0.0, "COST_JERK_W": 0.0, "DMG_REWARD": 0.0055, "DMG_TAKEN_W": 0.8, "FADD": 0.0, "FADE_CAP": 1.0, "FADE_V": 0.0, "H2_COPY": 0.0, "H2_FPG": 0.0, "H2_GATE_CAP": 0.0, "H2_GATE_OPEN": 0.0, "H2_MIX": 0.0, "H2_PG": 1.0, "H2_WPG": 1.0, "HABIT_P": 0.3, "INTENT_HOLD": 8.0, "INTENT_TEACH_W": 0.0, "ITEM_DECAY": 0.002, "ITEM_FLAT": "MH:0.35,RA:0.30,YA:0.15", "ITEM_PT_HI": 0.002, "ITEM_PT_LO": 0.004, "ITEM_PT_MIX": 1.0, "ITEM_RATE_AR": 0.002, "ITEM_RATE_HP": 0.0025, "KEEP_G": 0.975, "LEVEL_PULL": 1.0, "ORD_GATE": -30.0, "PADD": 0.0, "RAIL_FAR_PAY": 0.25, "RJ_TEACH_W": 0.0, "SPEED_PAY": 0.0, "STACK_DIFF": 0.0, "VALUE_WARM": 0.0, "WIN_ADD": 0.33, "WIN_GAIN": 1.0, "WIN_SHAPE_K": 0.0, "WIN_W": 0.0}
+11-10 22:11:51 live.json: 2.0a's start values: {}
+11-10 22:11:51 live.json: differs from 1.7a's last live.json (update 246): {"CMB_G": [1.0, 0.0], "DMG_REWARD": [null, 0.0055], "FADD": [1.0, 0.0], "H2_FPG": [0.5, 0.0], "KEEP_G": [1.0, 0.975], "ORD_GATE": [0.0, -30.0], "PADD": [0.3, 0.0], "VALUE_WARM": [0, 0.0]}
+11-10 22:11:51 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\live.json
+11-10 22:11:51 live.json: 
+11-10 22:11:51 live.json: 2.0c's start values: {"AIM3_W": 0.0, "AIM3_SIZE_A": 1.0, "AIM3_SIZE_B": 0.0, "AIM3_PURSUIT_TAU": 0.125, "AIM3_PURSUIT_GAIN": 1.0, "AIM3_FIX_TAU": 0.1}
+11-10 22:11:51 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\live.json
+11-10 22:11:52 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0c\live.json: accepted
+11-10 22:11:52 the ramp ramp_20c.py: 42 files (clocks 0 to 41), all accepted
+11-10 22:11:52 LIVE ACCEPT: PASS
+11-10 22:11:52 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7a\keep\policy_end_17a.pt widened to 1,053 inputs (C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\keep\policy_start_20a.pt, b20b_init widen-league), with its optimizer; anchors 1.7a's update 90, 1.6a's end, 1.5a's end, 1.3b's end, b1.2d's end, b1.1, v0.6.0's end; the judge C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\judge\judge_v060_wpn.npz
+11-10 22:11:52 trainer started: cmd 30952, from 1.7a's update 90, 643 minutes
+11-10 22:12:07 live.json applied by the trainer before its first rollout (2026-11-10 22:12:04)
+11-10 22:12:12 watcher 27936 | ramp 13180 (its dials: ramp_20c.py, AIM3_W 0 -> 1, AIM3_SIZE_A 1 -> 0.39, AIM3_SIZE_B 0 -> 0.355, DMG_REWARD 0.0055 -> 0.002, DMG_TAKEN_W 0.8 -> 1.0 over updates 0 to 40; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 10144 | all on 0x3C3C; the checks under AIM3's end values, both seats | no guard (owner: never stop the run)
+11-10 22:12:22 trainer: combat order (1.7): the readout ahead's places (1, 2, 4 s) go to the simulators with the brain's answer
+11-10 22:12:22 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1064 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + obs 148 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 729,507 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+11-10 22:12:22 trainer: optimizer: the 3 new token(s)' first layer starts fresh
+11-10 22:12:22 trainer: optimizer: attn.mark carried over, (64, 96) -> (67, 96)
+11-10 22:12:22 trainer: optimizer: enc.0.weight carried over, (256, 990) -> (256, 1053)
+11-10 22:12:22 trainer: optimizer: head2.inp.weight carried over, (256, 950) -> (256, 1019)
+11-10 22:12:22 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 107 step counts moved to the host)
+11-10 22:12:22 trainer: keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.975 (live KEEP_G); its weights: bias -7.646, on its own numbers [6.709, 7.195, -0.293, 7.088, -0.038, 0.041, 0.038]
+11-10 22:12:22 trainer: keep choice: share 0.9750 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+11-10 22:12:22 trainer: combat order (1.7): asked at a share 0.0000 of his readings (target, cut, spam, out); the pointer's adds on the targets and the way x 0.0000; the kinds' bias [0.15, -4.903, -4.347, -5.501], |op_v| 8.371
+11-10 22:12:22 trainer: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 3879202 weights, device cuda, 643.0 min

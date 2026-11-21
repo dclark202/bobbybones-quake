@@ -1,0 +1,14 @@
+recorded 400 frames on bloodrun (resets on 4 seat-frames, zones' map 0)
+gate 0: test_suite.Policy vs netpass                       {"action_frames_differ": 0, "logits": 0.0, "logp": 0.0, "memory": 0.0, "token": 0.0}
+gate 0.1: test_suite.Policy vs netpass                     {"action_frames_differ": 0, "logits": 0.0, "logp": 0.0, "memory": 0.0, "token": 0.0}
+gate 1: test_suite.Policy vs netpass                       {"action_frames_differ": 0, "logits": 0.0, "logp": 0.0, "memory": 0.0, "token": 0.0}
+the token moves the network: logits at gate 1 vs 0, max |diff| 5.37
+gate 1, rule fade 0: test_suite.Policy vs netpass          {"action_frames_differ": 0, "logits": 0.0, "logp": 0.0, "memory": 0.0, "token": 0.0}
+gate 1, rule fade 0.5: test_suite.Policy vs netpass        {"action_frames_differ": 0, "logits": 0.0, "logp": 0.0, "memory": 0.0, "token": 0.0}
+gate 1, rule fade 1: test_suite.Policy vs netpass          {"action_frames_differ": 0, "logits": 0.0, "logp": 0.0, "memory": 0.0, "token": 0.0}
+gate 0, rule fade 0.5: test_suite.Policy vs netpass        {"action_frames_differ": 0, "logits": 0.0, "logp": 0.0, "memory": 0.0, "token": 0.0}
+gate 0, rule fade 1: test_suite.Policy vs netpass          {"action_frames_differ": 0, "logits": 0.0, "logp": 0.0, "memory": 0.0, "token": 0.0}
+the fade moves the network: logits at fade 1 vs 0 (gate 1), max |diff| 0
+netpass.step, one seat, gate 0: mean 1.31 ms, p99 2.22, max 2.59
+netpass.step, one seat, gate 1: mean 1.27 ms, p99 1.94, max 2.44
+PASS: every difference 0

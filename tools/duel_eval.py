@@ -36,6 +36,13 @@ def names(path):
     return [(r["group"], r["input"]) for r in csv.DictReader(open(path, encoding="utf-8"))]
 
 
+def fit_list(lst, n):
+    """(1.7) a network made before the order's inputs (group "b17 order", appended at the end of the list): the list's first n"""
+    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets", "b21 instruction", "b20d dodge") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
+        return lst[:n]
+    return lst
+
+
 GAME_SECS = 600.0     # a seat whose round is this long or longer is a whole-games seat (the simulator's GAME_LEN)
 
 
@@ -147,8 +154,14 @@ def play(job):
     (envmod, envvars, mp, games, minutes, seed, pol, idx, opp_kind, opp_pol, opp_idx, round_secs, swap, delays) = job
     os.environ.update(envvars)
     E = importlib.import_module(envmod)
-    nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
-    env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
+    CYR_ = os.environ.get("CY_REC") or ""                    # (1.7b) Cypher's measures of this job's games (tools/run/cypher_measure.py):
+    if CYR_:                                                 # every frame recorded, a small summary written at the end; off: as before
+        sys.path.insert(0, os.path.join(ROOT, "tools", "run"))
+        import cypher_measure as CY_
+        CY_._recorder(E)
+        CY_._REC.clear()
+    nav_ = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", "nav_{}_sim.json".format(mp))
+    env = E.DuelEnv(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", mp + ".bsp"), n_matches=games, seed=seed, loadout="all",
                     nav=nav_ if os.path.exists(nav_) else None)
     import test_suite as T_                                   # (B-226) each network's seats at the delays it was trained with; a scripted
     sw_ = int(bool(swap) and opp_pol is not None)             # opponent: his tracking delay, the simulator's own acquire delay
@@ -232,7 +245,9 @@ def play(job):
                                   "standing", "stuck", "own_deaths", "fire_vis", "both", "lower", "higher", "vis_lower", "vis_higher", "empty", "empty_fire",
                                   "legs", "at400",        # (LEGS) frames his legs carried him; frames at 400 units a second or more
                                   "unseen_hits", "unseen_dmg",    # hits he takes (10 points or more on a frame) while the other side has nobody in view
-                                  "exposed", "watching")}         # the other side has him in view and he has nobody in view; the reverse
+                                  "exposed", "watching",          # the other side has him in view and he has nobody in view; the reverse
+                                  "out", "out_rl", "out_rg", "out_lg",    # (1.7c) alive with nobody in view: frames, and with each in hand
+                                  "own_rl", "own_rg", "own_lg")}          # (1.7c) alive and owning each of the three (the rail: the run's measured target)
     still = np.zeros(n)                                         # seconds he has been standing (under 50 units a second)
     life, got, was = np.zeros(n), np.zeros(n, bool), np.zeros(n, bool)
     first = [[], []]
@@ -246,10 +261,12 @@ def play(job):
           + [w + x for w in E.WEAPONS for x in ("_frags", "_shots", "_hits")] if k in env.stats]
     for k_, n_, on_ in (("big_seq", 6, bool(getattr(E, "BIG_PICK_SEQ", ()))), ("rg_far", 4, getattr(E, "RG_FAR_PRICE", 0.0) > 0),
                         ("weapon_own", 2, bool(getattr(E, "WEAPON_FREE", False)) and hasattr(E, "WEAPON_OWN")),   # (1.4b) readings, held weapons turned into "nothing"
-                        ("keep", 16, hasattr(env, "keep_feat"))):          # (1.4c) the readings not forced: who decided, what came of it (duel_env.intend)
+                        ("keep", 16, hasattr(env, "keep_feat")),           # (1.4c) the readings not forced: who decided, what came of it (duel_env.intend)
+                        ("keep2", 14, hasattr(env, "kown")),               # (1.7a) the keep choice's seconds and readings (duel_env.intend)
+                        ("cmb", 1 + 4 * len(getattr(E, "CMB_KINDS", ())), bool(getattr(E, "COMBAT", False)))):   # (1.7) the order: asked, by kind
         if on_:                                                 # (v0.3.8) counters a simulator makes at their first use: made now
             env.stats.setdefault(k_, np.zeros(n_))
-    SK += [k for k in ("rail", "big_seq", "rg_far", "weapon_own", "keep") if k in env.stats]   # (the raw counters, every seat: --json's st_raw; 1.4c: keep)
+    SK += [k for k in ("rail", "big_seq", "rg_far", "weapon_own", "keep", "keep2", "cmb") if k in env.stats]   # (the raw counters, every seat: --json's st_raw; 1.4c: keep; 1.7a: keep2; 1.7: cmb)
     st0 = {k: np.array(env.stats[k], np.float64).copy() for k in SK}
     side = (np.arange(n) + int(swap)) % 2                       # 0: he, 1: the opponent
     # by the kind of life (STYLE_P, STYLE_MIX; a scripted player's lives are all general): rows he / the opponent, columns
@@ -265,16 +282,44 @@ def play(job):
     end_ = frames
     final = None
     ot_n, reg_ = 0, None
+    fw_ = np.zeros((2, len(E.WEAPONS)))                       # (1.7c) frags by weapon, he / the opponent (overtime included)
+    BH_ = None                                                # (2.0c) a measurement's hook on this loop (BRANCH_HOOK: a module of tools/run)
+    if os.environ.get("BRANCH_HOOK"):
+        sys.path.insert(0, os.path.join(ROOT, "tools", "run"))
+        BH_ = importlib.import_module(os.environ["BRANCH_HOOK"]).Hook(E, env, mp, seed, ev, od)
     t = -1
     while t + 1 < end_:
         t += 1
+        if BH_ is not None:
+            BH_.top(t, obs, h, h2 if opp_pol is not None else None)
         nA_ = len(E.ACTION_DIMS)
         kp_ = hasattr(env, "keep_feat") and (getattr(pol, "keep_on", False) or getattr(opp_pol, "keep_on", False))
         a = np.zeros((n, nA_ + int(kp_)), np.int64)                            # (1.4c) the keep column after the outputs: -1 the lock rule
         kf_ = None
         if kp_:
             a[:, -1] = -1
-            kf_ = env.keep_feat()
+            kf_ = __import__("head2").np_kf_end(env)                             # (2.1c: with the trip-end column, for the held draw)
+        ox_ = None                                                              # (1.7) the combat order's candidates after the frame before
+        dd_ = getattr(pol, "desc_due", False) or getattr(opp_pol, "desc_due", False)   # (2.2a) a network whose desc term plays reads the description
+        if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False) or dd_):
+            ox_ = env.order_feat()                                              # (a keep reading of some seat: its head ticked on that frame)
+            if dd_:                                                             # (2.2a: + his weapons and the weapon in his hand, sim/desc22.py env_ox;
+                __import__("desc22").need_om(env)                               # (no map numbers: raise, never zeros)
+                ox_ = tuple(ox_) + (np.asarray(env.has[:env.n, :9], bool).copy(), np.asarray(env.weapon[:env.n], np.int64).copy())   # the map's name
+                for p_m in (pol, opp_pol):                                      # for the map sense's table)
+                    if p_m is not None and hasattr(p_m, "set_maps"):
+                        p_m.set_maps(mp)
+        ix_ = None                                                              # (2.1) the instruction's candidates of this reading (some seat's
+        if getattr(E, "INSTR", False) and hasattr(env, "instr_feat") and (getattr(pol, "ins_due", False) or getattr(opp_pol, "ins_due", False)):
+            import branch as branch_e                                           # head ticked on the frame before): the rows, the signals, the row he is on
+            ix_ = branch_e.worker_feat(env)
+            for p_m in (pol, opp_pol):                                          # (the map sense at a row's place reads this map's table)
+                if p_m is not None and hasattr(p_m, "ins_map"):
+                    p_m.ins_map = mp
+        fx_ = None                                                              # (2.2b) the fight options' numbers after the frame before (a 2.2b network
+        if hasattr(env, "fight_feat") and (getattr(pol, "fight_due", False) or getattr(opp_pol, "fight_due", False)):   # at a keep reading)
+            import fight22 as fight22_e
+            fx_ = fight22_e.reader_fx(env)
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -287,24 +332,42 @@ def play(job):
             pz_, zz_ = btoken_.pose_from_env(env, mp)
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
                         **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
-                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}))
+                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}),
+                        **({"ox": (tuple(v_[ev] for v_ in ox_) if getattr(pol, "desc_due", False) else (ox_[0][ev], ox_[1][ev]))}
+                           if (ox_ is not None and (pol.order_due or getattr(pol, "desc_due", False))) else {}),
+                        **({"ix": tuple(v_[ev] for v_ in ix_)} if (ix_ is not None and getattr(pol, "ins_due", False)) else {}),
+                        **({"fx": {k_: v_[ev] for k_, v_ in fx_.items()}} if (fx_ is not None and getattr(pol, "fight_due", False)) else {}))
         a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]                        # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if kp_ and pol.keep_on:
             a[ev, -1] = al[:, -1]
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
-                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}))
+                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}),
+                                 **({"ox": (tuple(v_[od] for v_ in ox_) if getattr(opp_pol, "desc_due", False) else (ox_[0][od], ox_[1][od]))}
+                                    if (ox_ is not None and (opp_pol.order_due or getattr(opp_pol, "desc_due", False))) else {}),
+                                 **({"ix": tuple(v_[od] for v_ in ix_)} if (ix_ is not None and getattr(opp_pol, "ins_due", False)) else {}),
+                                 **({"fx": {k_: v_[od] for k_, v_ in fx_.items()}} if (fx_ is not None and getattr(opp_pol, "fight_due", False)) else {}))
             a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
             if kp_ and opp_pol.keep_on:
                 a[od, -1] = ao[:, -1]
+        if hasattr(env, "fg_score") and (getattr(pol, "fgt", None) is not None or getattr(opp_pol, "fgt", None) is not None):
+            fs_ = np.zeros((n, 4), np.float32)                                  # (2.2b) each side's four scores: the hands' inputs (a side without a
+            for m_, p_ in ((ev, pol),) + (((od, opp_pol),) if opp_pol is not None else ()):    # fight network reads zeros)
+                fsc_ = p_.fight_scores() if getattr(p_, "fgt", None) is not None else None
+                if fsc_ is not None:
+                    fs_[m_] = fsc_
+            env.fg_score = fs_
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
+            if getattr(E, "COMBAT", False) or getattr(E, "AHEAD_IN", False):    # (1.7; 2.2c AHEAD_IN: the hands' inputs) the brain's places ahead: the combat order's
+                ans_["fut"] = np.zeros((n, 3, 3), np.float32)
             for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
                 an_ = p_.brain_answer(hs_) if hasattr(p_, "brain_answer") else None
                 if an_ is not None:
                     for k_ in ans_:
-                        ans_[k_][m_] = an_[k_]
+                        if k_ in an_:
+                            ans_[k_][m_] = an_[k_]
             env.brain_in(ans_)
         sty0 = np.where(env.script == 0, env.style, 0) if NS_ > 1 else SZ_      # (the style of the life a frag or a death of this step
         sc_.before()
@@ -321,7 +384,24 @@ def play(job):
                         w0_, b0_, w1_, b1_, wp_, bp_ = env.teacher_w[:6]        # control) moves on the movement network's own sums, the other on
                         lg_[m_] = np.tanh(np.tanh(xl_[m_] @ w0_.T + b0_) @ w1_.T + b1_) @ wp_.T + bp_    # its learnt branch
             env.legs_lg = lg_                                                   # (None: the simulator's own sums for all)
+        if ix_ is not None:                                                     # (2.1) the heads' picks of this reading, given before the step
+            ci_, wi_, wh_, qi_ = np.full(n, -1, np.int64), np.full(n, -1, np.int64), np.zeros(n, bool), np.zeros(n, np.int64)
+            for p_, rows_ in ((pol, ev), (opp_pol, od)):
+                pk_ = getattr(p_, "ins_pick", None) if p_ is not None else None
+                if pk_ is not None:
+                    q_ = np.asarray(rows_)[pk_[0]]
+                    ci_[q_], wi_[q_], wh_[q_], qi_[q_] = pk_[1], pk_[2], pk_[3], pk_[4]
+                    p_.ins_pick = None
+            if wh_.any():
+                if hasattr(env, "force_quiet"):                                 # (a simulator with the sixth field: quiet movement)
+                    env.instr_pick(ci_, wi_, wh_, qi_)
+                else:
+                    env.instr_pick(ci_, wi_, wh_)
+        if BH_ is not None and hasattr(BH_, "act"):                             # (2.0c) a measurement's own keys for some seats
+            BH_.act(t, obs, a)
         obs, r, done, info = env.step(a)                                        # falls in; a scripted seat's is never drawn: general)
+        if BH_ is not None:
+            BH_.after(t, r, info)
         c["restarts"][0] += int(done.any())
         died = np.zeros(n, bool)                                # (a death and the respawn fall in the same step here)
         for e in info["events"]:
@@ -331,6 +411,8 @@ def play(job):
             if k >= 0 and k != v:
                 score[k] += 1
                 kills[k] += 1
+                if int(e.get("weapon", -1)) >= 0:                # (1.7c) frags by weapon, each side its own (the simulator's counters add both networks)
+                    fw_[side[k], int(e["weapon"])] += 1
                 sty["frags"][side[k], sty0[k]] += 1
             else:
                 score[v] -= 1                                   # his own hand or the map: a point off, as in the game
@@ -385,6 +467,12 @@ def play(job):
                 c["unseen_dmg"][s_] += -(dh + da)[hit_ & m].sum()
                 c["exposed"][s_] += (alive & ~vis & vis[other])[m].sum()
                 c["watching"][s_] += (vis & alive[other] & ~vis[other])[m].sum()
+            oov_ = alive & ~vis
+            c["out"][s_] += oov_[m].sum()
+            for w_, k_ in zip(big, ("out_rl", "out_rg", "out_lg")):
+                c[k_][s_] += (oov_ & (env.weapon == w_))[m].sum()
+            for w_, k_ in zip(big, ("own_rl", "own_rg", "own_lg")):
+                c[k_][s_] += (alive & env.has[:, w_])[m].sum()
             c["standing"][s_] += (alive & (spd < 50.0))[m].sum()
             c["stuck"][s_] += (still > 3.0)[m].sum()
             c["wp"][s_] += gain_w[m].sum()
@@ -409,16 +497,28 @@ def play(job):
             if OT_ and live_.any() and ot_n < int(getattr(E, "OT_CAP", 10)):
                 ot_n += 1
                 end_ += int(round(float(getattr(E, "OT_LEN", 120.0)) / E.DT))
+    if CYR_ and CY_._REC.get("R"):                          # (1.7b, CY_REC) the summary, by side (0: he, 1: the opponent)
+        try:
+            R_ = {k_: np.stack(v_) for k_, v_ in CY_._REC["R"].items()}
+            R_.update(dt=float(E.DT), big=np.array(CY_._REC["big_lab"]), big_pos=CY_._REC["big_pos"])
+            os.makedirs(CYR_, exist_ok=True)
+            with open(os.path.join(CYR_, "cy_{}_{}_{}.json".format(mp, seed, int(swap))), "w") as fh_:
+                json.dump(CY_.summarize(R_, side), fh_)
+        except Exception as e_:                              # noqa: BLE001  (a measure, never the check's result)
+            print("CY_REC: no summary ({})".format(repr(e_)[:200]), flush=True)
+        CY_._REC.clear()
     if reg_ is not None:
         kills, c, sty, first, st_reg = reg_
         score = final.reshape(-1)
     else:
         st_reg = {k: np.array(env.stats[k], np.float64) for k in SK}
     flip = slice(None, None, -1) if swap else slice(None)
+    if BH_ is not None:
+        BH_.end()
     return dict(score=score.reshape(-1, 2)[:, flip].tolist(), kills=kills.reshape(-1, 2)[:, flip].tolist(), c={k: v.tolist() for k, v in c.items()},
                 overtime_periods=ot_n,
                 first=first, minutes=minutes, games=games, weapons=list(E.WEAPONS), clock=sc_.told(),
-                sty={k: v.tolist() for k, v in sty.items()}, styles=SN_, delays=set_,
+                sty={k: v.tolist() for k, v in sty.items()}, styles=SN_, delays=set_, fw=fw_.tolist(),
                 st={k: (st_reg[k] - st0[k]).tolist() for k in SK})
 
 
@@ -468,10 +568,18 @@ def main():
     ap.add_argument("--aim-he", default="", help="(branch aim2) his seats' own aim settings, NAME=VALUE,... of duel_env SEAT_AIM (e.g. "
                     "PERCEPT_SIGMA=0.48,AIM2_W=0); the rest of his aim is the process's. Needs AIM2, AIM2_SPLIT, AIM2_FOCUS on (--set) to seat AIM2 beside the old model")
     ap.add_argument("--aim-opp", default="", help="... the opponent's seats")
+    ap.add_argument("--wpush", type=float, default=0.0, help="(1.7c experiments) a fixed push of this size on his weapon key toward the pros' weapon "
+                    "in hand (sim/test_suite.py WeaponPush: in view by distance, out of view their travelling hand); 0: none")
+    ap.add_argument("--opp-wpush", type=float, default=0.0, help="... on the opponent network's")
+    ap.add_argument("--wpush-form", default="share", help="(1.7c experiments) share, ratio, dial or replace (sim/test_suite.py WeaponPush; dial and replace: sim/weapon_dial.py, the servers' !weapons; replace: the table chooses his weapon, --wpush 1 switches it on)")
+    ap.add_argument("--lev-g", type=float, default=None, help="(2.2c lever checks) play his aggression lever at this share (sim/test_suite.py "
+                    "Policy.set_fight: what the lever adds to 'the enemy', and what the hands are shown of it, is this x its number; default: his "
+                    "checkpoint's LEV_G; 0: the lever at zero). Only for a network with the lever")
+    ap.add_argument("--opp-lev-g", type=float, default=None, help="... the opponent network's")
     ap.add_argument("--json", default="")
     a = ap.parse_args()
     import test_suite as T
-    path = a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt")
+    path = a.policy or os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, "policy.pt")
     pol = T.Policy(path, seed=1)
     if a.btoken_gate is not None:
         pol.set_gate(a.btoken_gate)
@@ -483,6 +591,10 @@ def main():
         pol.set_head2_wadd(a.head2_wadd)
     if a.head2_mix is not None:
         pol.set_head2_mix(a.head2_mix)
+    if a.lev_g is not None:                                  # (2.2c lever checks) his lever at this share
+        assert getattr(pol, "lever", False), "--lev-g: his network has no lever"
+        pol.set_fight(g=a.lev_g)
+        print("lever: his share {:g} (what it adds to 'the enemy' and shows the hands: share x its number)".format(pol.lev_g), flush=True)
     if getattr(pol, "h2", None) is not None:
         print("strategy head: gate {:g}, mix {:g} ({})".format(float(pol.h2W["gate"]), float(pol.h2W.get("mix", 0.0)),
               "played" if pol.h2_live else "shut or at zero: the network without it"), flush=True)
@@ -492,9 +604,16 @@ def main():
     if getattr(pol, "btok", None) is not None:
         print("brain token: gate {:g} ({})".format(pol.bgate, "shut: the network without it" if pol.bgate <= 0 else "the brain stepped as in training"), flush=True)
     now = names(os.path.join(ROOT, "docs", "INPUTS.csv"))
-    old = names(a.inputs)
+    old = pol.names if getattr(pol, "names", None) else fit_list(names(a.inputs), len(pol.mean))   # (1.8: a network of a cleaned list carries its own)
     assert len(old) == len(pol.mean), "the network has {} inputs, {} lists {}".format(len(pol.mean), a.inputs, len(old))
     idx = np.array([now.index(x) for x in old])
+    if a.wpush:                                              # (1.7c experiments) the fixed push toward the pros' weapon, his seats
+        pol.wpush = T.WeaponPush(a.wpush, old, a.wpush_form)
+        if a.wpush_form == "replace":
+            print("weapon dial, replace form: the owner's table chooses his weapon (sim/weapon_dial.py choose(); his seats)", flush=True)
+        else:
+            print("weapon push {:g} ({}) toward {} (in view by distance, out of view the travelling hand)".format(
+                a.wpush, a.wpush_form, "the owner's table (sim/weapon_dial.py)" if a.wpush_form == "dial" else "the pros' hand"), flush=True)
     opp_pol, opp_idx, kind = None, None, a.opp
     if a.opp.startswith("policy:"):
         opp_pol = T.Policy(a.opp[7:], seed=2)
@@ -506,9 +625,15 @@ def main():
             opp_pol.set_head2_gate(a.opp_head2_gate)
         if a.opp_head2_mix is not None:
             opp_pol.set_head2_mix(a.opp_head2_mix)
-        oo = names(a.opp_inputs)
+        if a.opp_lev_g is not None:                          # (2.2c lever checks) the opponent's lever at this share
+            assert getattr(opp_pol, "lever", False), "--opp-lev-g: the opponent network has no lever"
+            opp_pol.set_fight(g=a.opp_lev_g)
+            print("lever: the opponent's share {:g}".format(opp_pol.lev_g), flush=True)
+        oo = opp_pol.names if getattr(opp_pol, "names", None) else fit_list(names(a.opp_inputs), len(opp_pol.mean))
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
+        if a.opp_wpush:
+            opp_pol.wpush = T.WeaponPush(a.opp_wpush, oo, a.wpush_form)
         kind = "policy"
     envvars = dict(x.split("=", 1) for x in a.set)
     if a.contact:
@@ -529,6 +654,8 @@ def main():
         envvars["SEAT_AIM_OPP"] = a.aim_opp
     if any(getattr(p_, "rf_read", False) and p_.rfg > 0 for p_ in (pol, opp_pol) if p_ is not None) and "BRAIN_READ" not in envvars:
         envvars["BRAIN_READ"] = "1"                              # (v0.4.2a) a network trained with the readers on the brain plays so
+    if any(getattr(p_, "ahead_in", False) for p_ in (pol, opp_pol) if p_ is not None) and "AHEAD_IN" not in envvars:
+        envvars["AHEAD_IN"] = "1"                                # (2.2c) a network that reads the brain's places ahead: the simulator makes them
     delays = (pol.react_ms if a.react_ms is None else a.react_ms, pol.acquire_ms if a.acquire_ms is None else a.acquire_ms,
               None if opp_pol is None else (opp_pol.react_ms if a.opp_react_ms is None else a.opp_react_ms),
               None if opp_pol is None else (opp_pol.acquire_ms if a.opp_acquire_ms is None else a.opp_acquire_ms))
@@ -570,7 +697,9 @@ def main():
                             lower_in_view=round(float(c["vis_lower"][s_] / max(1.0, c["vis"][s_])), 3), higher_in_view=round(float(c["vis_higher"][s_] / max(1.0, c["vis"][s_])), 3),
                             weapons_per_min=round(float(c["wp"][s_] / pm), 2),
                             mega_share=round(float(c["mega"][s_] / (pm * 60 / 35.0)), 3), red_share=round(float(c["red"][s_] / (pm * 60 / 25.0)), 3),
-                            yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2))
+                            yellow_per_min=round(float(c["yellow"][s_] / pm), 2), lives_per_min=round(float(c["lives"][s_] / pm), 2),
+                            in_hand_out_of_view={w_: round(float(c["out_" + w_][s_] / max(1.0, c["out"][s_])), 3) for w_ in ("rl", "rg", "lg")},   # (1.7c) travelling
+                            weapons_owned={w_: round(float(c["own_" + w_][s_] / al), 3) for w_ in ("rl", "rg", "lg")})   # (1.7c) of his time alive
             # by the kind of life: lives begun; the share of his time alive in such lives; frags, deaths (of any kind) and frags a
             # death; of that time the share with the enemy in view; of the time in view the share with each of the three in hand
             row[who]["by_style"] = {nm: dict(lives=int(sy["lives"][s_, j]), time=round(float(sy["alive"][s_, j] / max(1.0, sy["alive"][s_].sum())), 3),
@@ -580,10 +709,12 @@ def main():
                                              in_hand_in_view={w: round(float(sy["hand"][s_, j, q] / max(1.0, sy["vis"][s_, j])), 3)
                                                               for q, w in enumerate(("rl", "rg", "lg"))})
                                     for j, nm in enumerate(SN)}
+            fws_ = np.sum([np.array(r["fw"])[s_] for r in res if "fw" in r], 0)     # (1.7c) this side's own frags by weapon
+            row[who]["frags_by_weapon"] = {w_: round(float(x_ / max(1.0, np.sum(fws_))), 3) for w_, x_ in zip(res[0]["weapons"], np.atleast_1d(fws_)) if x_ > 0}
         st = {k: np.sum([np.array(r["st"][k]) for r in res], 0) for k in res[0].get("st", {})}
         if "sc_frags_w" in st:                               # (staging) the scripted opponent's frags by weapon
             row["opponent"]["frags_w"] = {w: float(x) for w, x in zip(res[0]["weapons"], np.array(st["sc_frags_w"])) if x > 0}
-        row["st_raw"] = {k: np.asarray(st[k], np.float64).tolist() for k in ("rail", "big_seq", "rg_far", "weapon_own", "keep") if k in st}
+        row["st_raw"] = {k: np.asarray(st[k], np.float64).tolist() for k in ("rail", "big_seq", "rg_far", "weapon_own", "keep", "keep2", "cmb") if k in st}
         if "lob" in st:                                      # (staging) the lobber's frames firing at a place: plasma, grenades; at an exit
             row["opponent"]["lob"] = [float(x) for x in np.array(st["lob"])]
         if st:                                               # the learner's side, from the simulator's counters
@@ -633,7 +764,8 @@ def main():
                         v_["in_hand_in_view"]["rg"], v_["in_hand_in_view"]["lg"]) for nm, v_ in bs.items()), flush=True)
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
-            json.dump(dict(run=a.run, policy=path, opp=a.opp, env=a.env, set=envvars, delays_ms=dl_out, maps=out), f, indent=1)
+            json.dump(dict(run=a.run, policy=path, opp=a.opp, env=a.env, set=envvars, delays_ms=dl_out, maps=out,
+                           **({"lev_g": dict(he=a.lev_g, opponent=a.opp_lev_g)} if (a.lev_g is not None or a.opp_lev_g is not None) else {})), f, indent=1)
 
 
 if __name__ == "__main__":

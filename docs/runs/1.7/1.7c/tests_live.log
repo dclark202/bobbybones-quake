@@ -1,0 +1,12 @@
+19:41:38 after update 1: live.json WRULE_P 0.5
+19:41:53 PASS no refusal in the log
+19:41:53 PASS live_status.json says applied ({'update': 4, 'status': 'applied', 'reason': None, 'time': '2026-11-07 19:41:40'})
+19:41:53 PASS 3 updates or more (5)
+19:41:53 update 1: wrule {'p': 0.0, 'lives': 0.0, 'set': 0.0, 'imit': 0.1, 'frames': 0, 'loss': 0.0, 'agree': 0.0, 'keep_frozen': True} | live in force {'WRULE_P': 0.0, 'HABIT_P': 0.0, 'KEEP_G': 0.975}
+19:41:53 update 2: wrule {'p': 0.0, 'lives': 0.0, 'set': 0.0, 'imit': 0.1, 'frames': 0, 'loss': 0.0, 'agree': 0.0, 'keep_frozen': True} | live in force {'WRULE_P': None, 'HABIT_P': None, 'KEEP_G': None}
+19:41:53 update 3: wrule {'p': 0.5, 'lives': 0.0, 'set': 0.0, 'imit': 0.1, 'frames': 0, 'loss': 0.0, 'agree': 0.0, 'keep_frozen': True} | live in force {'WRULE_P': None, 'HABIT_P': None, 'KEEP_G': None}
+19:41:53 update 4: wrule {'p': 0.5, 'lives': 0.0085, 'set': 0.0085, 'imit': 0.1, 'frames': 0, 'loss': 0.0, 'agree': 0.0, 'keep_frozen': True} | live in force {'WRULE_P': 0.5, 'HABIT_P': 0.0, 'KEEP_G': 0.975}
+19:41:53 update 5: wrule {'p': 0.5, 'lives': 0.0085, 'set': 0.0085, 'imit': 0.1, 'frames': 5, 'loss': 1.4639, 'agree': 0.2, 'keep_frozen': True} | live in force {'WRULE_P': None, 'HABIT_P': None, 'KEEP_G': None}
+19:41:53 PASS update 1 at WRULE_P 0 (0.0)
+19:41:53 PASS WRULE_P 0.5 written after update 1 played by the last update (0.5)
+19:41:53 ALL PASSED

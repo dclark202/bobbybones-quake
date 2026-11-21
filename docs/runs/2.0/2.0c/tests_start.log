@@ -1,0 +1,9 @@
+22:05:48 PASS 2.0a's start file is 1.7a's update 90 with four zero-weight inputs: every weight outside the attention part, the encoder's first layer and the head's input layer equal (0 differ; the widened layers answered alike at 2.0a's start: its start.log, b17b_init same), the first 990 input columns equal, the other 4 zero
+the files' own shares: 400 frames x 8 seats, 14 output columns, actions that differ: 0 -> PASS
+keep choice and order at share 1, random keep numbers and candidates: 400 frames x 8 seats, 15 output columns, actions that differ: 0 -> PASS
+ALL PASSED
+
+22:05:56 PASS b20b_init same: the start widened to 1,053 answers as the 994 one (0 actions differ)
+22:05:56 PASS the start's shut tokens are the order, the timers, space and targets ({'order': -30.0, 'timers': -30.0, 'space': -30.0, 'targets': -30.0})
+22:05:56 PASS the start has 1053 inputs
+22:05:56 ALL PASSED

@@ -161,7 +161,7 @@ class Net:
         out, xs = [], []
         for i in range(0, len(obs), chunk):
             o = np.asarray(obs[i:i + chunk])
-            x = np.clip((o - p.mean) / np.sqrt(p.var + 1e-8), -10, 10).astype(np.float32)
+            x = np.clip((o - p.mean) / np.sqrt(p.var + 1e-8), -10, 10).astype(np.float16).astype(np.float32)
             xa = x
             if p.cell is not None:
                 ids = np.clip(o[:, -2:].astype(np.int64), 0, len(p.cell) - 1)
@@ -320,7 +320,7 @@ def probes(net, stem, kept, a):
     vis = (np.load(stem + "_flags.npy") & 1) > 0
     ts = np.arange(0, T, sub)
     p = net.pol
-    X = np.stack([np.clip((np.asarray(obs[s][ts]) - p.mean) / np.sqrt(p.var + 1e-8), -10, 10).astype(np.float32) for s in range(S)])
+    X = np.stack([np.clip((np.asarray(obs[s][ts]) - p.mean) / np.sqrt(p.var + 1e-8), -10, 10).astype(np.float16).astype(np.float32) for s in range(S)])
     Ee = E[:, ts]
     since = np.zeros((S, T), np.float32)                      # seconds since the enemy was last in his view (from the game's start)
     c = np.zeros(S)

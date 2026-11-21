@@ -1,0 +1,29 @@
+21:25:21 scratch_20a_smoke: done in 0.8 min; the log ends: exit 0
+21:25:21 PASS the trainer exited 0
+21:25:21 PASS on the CPU
+21:25:21 PASS the optimizer's state loaded from S0's opt.pt
+21:25:21 PASS no weapon table, the keep choice not frozen, no REFUSED
+21:25:21 PASS 8 or more updates (10)
+21:25:21 update 1: dmg 0.0391 / -0.1031 frag None death None win 2.5186 (share 0.8126) | frags a match-minute 0.0 | keep {'g': 0.975, 'kl': -0.001623}
+21:25:21 update 2: dmg 0.6328 / -0.4356 frag 1.5625 death -3.125 win -4.4858 (share 0.7286) | frags a match-minute 4.688 | keep {'g': 0.975, 'kl': -0.001074}
+21:25:21 update 3: dmg 0.2641 / -0.3453 frag None death None win -2.807 (share 0.8397) | frags a match-minute 0.0 | keep {'g': 0.975, 'kl': 0.002668}
+21:25:21 update 4: dmg 0.1156 / -0.2078 frag None death -1.5625 win 0.4726 (share 0.7405) | frags a match-minute 1.562 | keep {'g': 0.975, 'kl': -0.00049}
+21:25:21 update 5: dmg 0.4047 / -0.4625 frag None death -1.5625 win -1.2156 (share 0.714) | frags a match-minute 1.562 | keep {'g': 0.975, 'kl': -0.000958}
+21:25:21 update 6: dmg 0.1 / -0.1953 frag None death -1.5625 win -3.0649 (share 0.7658) | frags a match-minute 1.562 | keep {'g': 0.975, 'kl': -0.002572}
+21:25:21 update 7: dmg 0.075 / -0.0734 frag None death None win -0.094 (share 0.7934) | frags a match-minute 0.0 | keep {'g': 0.975, 'kl': -0.003357}
+21:25:21 update 8: dmg 0.1766 / -0.2078 frag None death None win 0.465 (share 0.7152) | frags a match-minute 0.0 | keep {'g': 0.975, 'kl': 0.00307}
+21:25:21 update 9: dmg 0.5738 / -0.3313 frag 1.5625 death None win 5.651 (share 0.8211) | frags a match-minute 1.562 | keep {'g': 0.975, 'kl': 0.001578}
+21:25:21 update 10: dmg 0.2953 / -0.2219 frag None death -1.5625 win -1.0858 (share 0.7446) | frags a match-minute 1.562 | keep {'g': 0.975, 'kl': 0.000122}
+21:25:21 PASS the ledger on every update
+21:25:21 PASS the damage pay carries the floor: dmg_dealt under 0.6 x frags' pay on every update with frags
+21:25:21 PASS the win part's size share above the damage dealt's on every update
+21:25:21 PASS no NaN in the head's lessons or the trainer's kl and entropy
+21:25:21 PASS the save carries no wrule
+21:25:41 scratch_20a_smoke: done in 0.3 min; the log ends: exit 0
+21:25:41 PASS a restart from the save with its optimizer: loaded, no cold start, one more update (10 -> 11)
+21:26:39 check: exit 0; memory never start over) | opponent the whole game (clock, score and memory never start over)
+    he        bare 5% | first weapon 3.4 s | 150+ 74% | weapons 1.25/min | mega 88%, red 62% of spawns | yellow 0.75/min | in view 13% | firing 11% (74% of the time in view) | speed 326, standing 4% (over 3 s: 0%) | lives 1.0/min, own deaths 0.0 a game
+    opponent  bare 11% | first weapon 4.0 s | 150+ 52% | weapons 1.5/min | mega 15%, red 31% of spawns | yellow 2.25/min | in view 13% | firing 8% (52% of the time in view) | speed 310, standing 4% (over 3 s: 0%) | lives 2.25/min, own deaths 0.0 a game
+
+21:26:39 PASS a one-map check of the save against S0 finished (2-0)
+21:26:39 ALL PASSED

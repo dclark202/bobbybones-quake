@@ -31,6 +31,82 @@ MAPS = ("bloodrun", "aerowalk", "lostworld")
 SUITE_VERSION = 1
 
 
+class WeaponPush:
+    """(1.7c experiments, 2026-11-07) a fixed push on the weapon key's logits toward the pros' weapon in hand, in the checks only
+    (tools/duel_eval.py --wpush): the trainer's habit seats' "pro" kind (sim/train_duel_rnn.py habit_push, 1.5a part C). With the
+    enemy noticed in view: p x the pros' share in hand at that distance (docs/pro_tables.json, bins of 50 units); out of view: p x
+    their travelling hand (sim/pro_hand.json, the four bands weighted by their minutes); each share among rockets, rail and the
+    lightning gun he owns with ammunition, on those three keys (the key: 0 keep, then 1 + the weapon's index). Nothing else moves.
+      p      the push (the habit seats': 2)
+      names  the network's input names, its columns in order (duel_eval's `old`)
+      form   "share" (above: every press of the three raised by p x the pros' share, so in view the lightning gun's about as much as
+             rockets'; it moved his hand 20 -> 22% at p 2) or "ratio" (by the weapon he holds: a press of weapon j gets
+             p x (log s_j - log s_held), the pros' shares floored at 0.03; plus where they prefer j to what he holds, minus where
+             less, nothing for the one in hand; holding none of the three: against the mean of the owned ones' logs) or "dial" (the
+             ratio form on the owner's table instead of the pros': sim/weapon_dial.py, the servers' !weapons) or "replace" (no push:
+             the owner's table chooses his weapon and the key's action is set to it in place of the network's, sim/weapon_dial.py
+             choose(); the servers' !weapons pros; p only switches it on)"""
+
+    def __init__(self, p, names, form="share"):
+        self.p = float(p)
+        assert form in ("share", "ratio", "dial", "replace"), form
+        self.form = form
+        self.state = {}                                      # (replace) weapon_dial.choose's memory of the seats, frame to frame
+        if form in ("dial", "replace"):                      # (owner, 2026-11-07) the owner's table: sim/weapon_dial.py, as the servers run it
+            return                                           # (no module kept on self: the checks' pools pickle the policy)
+        ix = {(n_[1] if isinstance(n_, (tuple, list)) else n_): i_ for i_, n_ in enumerate(names)}   # (duel_eval's names: (group, input))
+        self.hold = [ix["holding " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")]
+        self.inv = ix["noticed in view"]
+        self.pos = [ix["last known position: " + d_] for d_ in ("forward", "left", "up")]
+        self.own = [ix["owns " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")]
+        self.ammo = [ix["ammo: " + n_] for n_ in ("rocket launcher", "railgun", "lightning gun")]
+        pt_ = json.load(open(os.path.join(ROOT, "docs", "pro_tables.json"), encoding="utf-8"))["all"]
+        self.tin = np.stack([np.asarray(pt_["in_hand_by_distance"][w_], np.float64) for w_ in ("rl", "rg", "lg")], 1)
+        ph_ = json.load(open(os.path.join(HERE, "pro_hand.json"), encoding="utf-8"))
+        sh_ = np.asarray(ph_["maps"]["all"]["share"][0], np.float64)[:, :3]
+        mn_ = np.asarray(ph_["maps"]["all"]["minutes"][0], np.float64)
+        self.tout = (sh_ * mn_[:, None]).sum(0) / mn_.sum()
+
+    def __call__(self, obs):
+        """obs [B, his inputs] raw -> [B, 3] the adds on the keys of rockets, rail, lightning (zeros in the replace form: actions())"""
+        if self.form == "replace":
+            return np.zeros((len(obs), 3), np.float32)
+        if self.form == "dial":
+            import weapon_dial
+            return weapon_dial.push(obs, self.p)
+        own_ = (obs[:, self.own] > 0.5) & (obs[:, self.ammo] > 0.0)
+        d_ = 1000.0 * np.sqrt((obs[:, self.pos].astype(np.float64) ** 2).sum(1))
+        bin_ = np.clip((d_ // 50.0).astype(np.int64), 0, len(self.tin) - 1)
+        if self.form == "ratio":
+            lp_ = np.log(np.maximum(np.where((obs[:, self.inv] > 0.5)[:, None], self.tin[bin_], self.tout[None, :]), 0.03))
+            hd_ = obs[:, self.hold] > 0.5
+            no_ = own_.sum(1)
+            ref_ = np.where(hd_.any(1), (lp_ * hd_).sum(1), (lp_ * own_).sum(1) / np.maximum(no_, 1))
+            return (self.p * (lp_ - ref_[:, None]) * own_).astype(np.float32)
+        sh_ = np.where((obs[:, self.inv] > 0.5)[:, None], self.tin[bin_], self.tout[None, :]) * own_
+        tot_ = sh_.sum(1)
+        b_ = np.zeros((len(obs), 3), np.float32)
+        ok_ = tot_ > 0
+        b_[ok_] = (self.p * sh_[ok_] / tot_[ok_, None]).astype(np.float32)
+        return b_
+
+    def actions(self, obs, rng):
+        """(replace) [B] the weapon key's action the table chooses this frame, -1 where the network's own stands (none of the three
+        owned with ammunition); None in the push forms"""
+        if self.form != "replace":
+            return None
+        import weapon_dial
+        return weapon_dial.choose(obs, self.state, rng)
+
+    def targets(self, obs, rng):
+        """(replace) [B] the intention output's action where the dial's target rule speaks (the railgun or the rocket launcher he lacks,
+        sim/weapon_dial.py target()), -1 where his own stands; None in the push forms"""
+        if self.form != "replace":
+            return None
+        import weapon_dial
+        return weapon_dial.target(obs, self.state, rng)
+
+
 def sig(x):
     return 1.0 / (1.0 + np.exp(-x))
 
@@ -47,6 +123,7 @@ class Policy:
         self.wp, self.bp = sd["pi.weight"], sd["pi.bias"]
         self.cell = sd.get("cell.weight")                    # the learned map (v8): the last two inputs are cell numbers
         self.mean, self.var = ck["obs_mean"], ck["obs_var"]
+        self.names = [tuple(x_) for x_ in ck["input_names"]] if ck.get("input_names") else None   # (1.8, sim/input_list.py) a cleaned list: its inputs by name
         self.dims = [int(x) for x in ck["action_dims"]]
         self.minutes = float(ck.get("minutes", 0.0))
         self.react_ms = float(ck.get("react_ms", 100.0))      # (a checkpoint without it: !aim default; 150 until branch aim2)
@@ -54,6 +131,7 @@ class Policy:
         self.round_secs = float(ck.get("round_secs") or 120.0)    # his clock, score and memory start over every this many seconds; 600: whole games, never (tools/duel_eval.py SeatClock)
         self.H = self.whh.shape[1]
         self.rng = np.random.default_rng(seed)
+        self.seed = int(seed)                                # (the weapon dial's own stream, replace form: seed + 101)
         self.attn = ck.get("attn")                           # (v0.2) the attention part: its layout and weights; skipped while its door is shut
         self.attP = None
         if self.attn is not None:
@@ -122,12 +200,127 @@ class Policy:
             self.h2W = head2_.params_np(sd)
             self.h2_ah = head2_.mlp_of(sd, "ahead")         # (its inputs: the brain's readouts; the "in control" one if the network has it)
             self.h2_ct = head2_.np_ctrl_params(sd, self.h2)     # (the ctrl slot: the layout's "ctrl_src" readout, None: zeros)
+            self.h2_fo = head2_.np_fight_params(sd, self.h2)    # (1.7b, the part fight: the fight odds readout, None: zeros)
+            self.h2_wv = head2_.np_wv_params(ck, self.h2)       # (1.9a, the part wv: the shadow win value, None: zeros)
             self.h2_live = head2_.np_open(self.h2W)          # (gate 0 or its links at zero: the network without it, not stepped)
             self.W = self.h2_at + head2_.np_state_width(self.h2)
+        self.o_at = None                                     # (1.7) the combat order's held numbers a seat (head2.CMB_HELD), after the head's state
+        if self.h2 is not None and self.h2.get("cmb") and "op_v.weight" in self.h2W:
+            import head2 as head2_
+            self.o_at = self.W
+            self.W = self.o_at + head2_.CMB_HELD
+        self.i_at = None                                     # (2.1) the head's choice of an instruction (sim/head2.py "ins": the scorer INSIDE
+        self.ins_pick, self.ins_g, self.ins_none = None, 0.0, -1   # the head, head2.ins_* of the network's weights, with the appraisals it reads):
+        if self.h2 is not None and self.h2.get("ins") and ck.get("ins") is not None and ck.get("appraise") is not None \
+                and "head2.ins_iv.weight" in ck["model"]:    # a seat's held instruction, after the order's
+            import appraise as appraise_
+            import head2 as head2_
+            self.insL = self.h2["ins"]
+            self.insW = head2_.np_ins_params({k_: v_ for k_, v_ in ck["model"].items() if str(k_).startswith("head2.ins_")})
+            self.ins_g = float(self.insW.get("ins_g", 0.0))
+            self.ins_none = int(ck["ins"].get("none_row", -1))
+            self.ins_warm = int(ck["ins"].get("seen", 0)) >= int(ck["ins"].get("warm", 0))
+            self.aprL, self.aprP = ck["appraise"]["layout"], appraise_.np_params(ck["appraise"]["model"])
+            self.insFILL = dict(ck["ins"].get("fill") or {})     # (the rows' columns the brain's answers are written into: sim/head2.py np_ins_prep)
+            self.knP = self.spP = self.msP = self.msL = None     # (the brain's readouts "does he know where I am", "where does he respawn"; the map
+            self.msT, self.ins_map = {}, None                    # sense where the rows read it: its table is the map's, named by the caller: ins_map)
+            if ck.get("known") is not None:
+                import knownodds as knownodds_
+                self.knP = knownodds_.np_params(ck["known"]["model"])
+            if ck.get("spawn") is not None:
+                import spawnodds as spawnodds_
+                self.spP = spawnodds_.np_params(ck["spawn"]["model"])
+            if int(self.insL.get("ms", 0) or 0) and ck.get("map_sense") is not None:
+                import mapsense as mapsense_
+                self.msL, self.msP = ck["map_sense"]["layout"], mapsense_.np_params(ck["map_sense"]["model"])
+            self.irng = np.random.default_rng(int(seed) + 4067)       # (its draws: a stream of their own)
+            self.i_at = self.W
+            self.W = self.i_at + head2_.ins_held_width(self.insL)    # (the row, its forecast then and now, the signals, weapon, age, on one, the coin, the brain's questions)
+            self.h2_live = self.h2_live or self.ins_g > 0            # (the scorer reads the head's state: it is stepped)
+        self.passL = self.passW = None                       # (1.7) the brain's pass readout (sim/passodds.py): the candidates' odds
+        if ck.get("passodds") is not None and "passr.l1.weight" in sd:
+            self.passL = ck["passodds"]
+            self.passW = {k_[len("passr."):]: np.asarray(v_, np.float32) for k_, v_ in sd.items() if k_.startswith("passr.")}
         self.keep_g = 0.0                                    # (1.4c) the keep choice's share of his readings (the file's head2.keep_g)
         self.krng = np.random.default_rng(int(seed) + 1414)  # ... its draws: a stream of their own (the outputs' draws untouched)
+        self.k_r = None                                      # (1.7a) the seats whose head ticked on the frame before (their keep reading)
         if self.h2 is not None and self.h2.get("keep") and "keep.weight" in self.h2W:
             self.keep_g = float(np.asarray(self.h2W.get("keep_g", 0.0)))
+        self.held_g, self.goal_on = 0.0, False               # (2.1c) the held draw's share of his trips (the file's head2.held_g); the head
+        if self.h2 is not None:                              # reads the goal he holds (the layout's part "goal")
+            import head2 as head2_g
+            self.held_g = float(np.asarray(self.h2W.get("held_g", 0.0)))
+            self.goal_on = head2_g.has_goal(self.h2)
+        self.planW, self.pull_g, self.pull_h = None, 0.0, 0   # (2.1d, the pull) the slow plan inside the head (head2.plan.*), its strength (the
+        self.pl_odds = self.pl_cnt = None                    # file's head2.pull_g; set_pull_g), its horizon; each seat's held odds and its
+        if self.h2 is not None and head2_g.has_slowplan(self.h2):    # count of keep readings
+            self.planW = head2_g.np_plan_params(self.h2W)
+            assert self.planW is not None, "the layout names the slow plan and the file has no head2.plan.* weights"
+            self.pull_g = float(np.asarray(self.h2W.get("pull_g", 0.0)))
+            self.pull_h = int(round(float(np.asarray(self.h2W.get("pull_h", 0.0)))))
+            self.pull_floor = float(self.h2["slowplan"]["floor"])
+            self.plan_every = int(self.h2["slowplan"]["every"])
+        self.shL = self.shP = self.sh = None                 # (2.1e, the slow halves inside the head: sim/slowhalf.py) the layout, the picked
+        self.sh_mix, self.sh_back, self.sh_pick = 0.0, 0.0, 1    # half's arrays and its per-seat state (NpState); the file's head2.slow_mix
+        if self.h2 is not None and head2_g.has_slowhalf(self.h2):    # (the pull's source), slow_back (the read-back's gate), slow_pick
+            self.shL = head2_g.slowhalf_layout(self.h2)      # (set_slow_mix, set_slow_back, set_slow_pick)
+            self.sh_mix = float(np.asarray(self.h2W.get("slow_mix", 0.0)))
+            self.sh_back = float(np.asarray(self.h2W.get("slow_back", 0.0)))
+            self.set_slow_pick(int(round(float(np.asarray(self.h2W.get("slow_pick", 1.0))))))
+        self.outW, self.out_g, self.out_pick = None, 0.0, 0   # (2.1f, the outlook inside the head: sim/outlook.py) its arrays, its term's strength (the
+        if self.h2 is not None and head2_g.has_outlook(self.h2):    # file's head2.out_g; set_out_g) and the kind that plays (head2.out_pick; set_out_pick)
+            import outlook as outlook_g
+            self.outW = outlook_g.np_params(self.h2W)
+            assert self.outW is not None, "the layout names the outlook and the file has no head2.out.* weights"
+            self.out_g = float(np.asarray(self.h2W.get("out_g", 0.0)))
+            self.set_out_pick(int(round(float(np.asarray(self.h2W.get("out_pick", 0.0))))))
+        self.dsc22 = None                                    # (2.2a: sim/desc22.py NpDesc) the desc outlook's term, as the trainer makes it at a keep
+        self.maps = None                                     # reading and holds it to the next (out_src 1: the file's head2.out_src; set_out_src);
+        if self.h2 is not None and head2_g.has_parts22(self.h2):    # the seats' maps (set_maps: the map sense's tables)
+            import desc22 as desc22_g
+            ms_ = ck.get("map_sense")
+            self.dsc22 = desc22_g.NpDesc(self.h2W, self.h2, dict(layout=ms_["layout"], model={k_: (v_.detach().cpu().numpy() if hasattr(v_, "detach")
+                                                                                                   else np.asarray(v_)) for k_, v_ in ms_["model"].items()})
+                                         if ms_ else None)
+        self.fgt = None                                      # (2.2b, sim/fightnet.py NpFight) the fight network: its readings at a keep reading (the
+        self.fight_g = self.fight_w = 0.0                    # simulator's fight_feat(): act(fx=)), its four scores in his list at the save's FGT_G,
+        self.fg_S = self.fg_W = self.fg_valid = self.fg_cand = self.fg_on = self.fg_gf = self.fg_q = None   # its weapon scores x FGT_W
+        self.fg_last = None
+        self.lever, self.lev_g, self.fg_lev = False, 0.0, None   # (2.2c, sim/fightnet.py VERSION_LEVER) the aggression lever: its one number at a keep
+        fck_ = ck.get("fight22")                             # reading, held, x the save's LEV_G on "the enemy" after the pull (as the trainer plays it)
+        if fck_ is not None and self.h2 is not None:
+            import fightnet as fightnet_g
+            self.fgt = fightnet_g.NpFight(fck_, self.h2W, self.h2)
+            dl_ = fck_.get("dials") or {}
+            self.fight_g, self.fight_w = float(dl_.get("FGT_G", 0.0)), float(dl_.get("FGT_W", 0.0))
+            self.lever = bool(self.fgt.lever)
+            if self.lever:
+                self.fight_g = self.fight_w = 0.0
+                self.lev_g = float(dl_.get("LEV_G", 0.0))
+            self.frng = np.random.default_rng(int(seed) + 2222)     # (its coins and numbers: a stream of their own)
+            self.fg_shut = fightnet_g.shut_mask(int(self.h2["n_target"]))
+        self.hrng = np.random.default_rng(int(seed) + 2121)  # ... its numbers and coins: a stream of their own
+        self.hd_g = self.hd_on = self.held_pick = None       # ... each seat's held numbers, its trip's coin; this frame's targets under it
+        self.hd_t = 0
+        self.kq_on, self.keepq_g = False, 0.0                # (2.1) the keep choice's quiet layer (sim/head2.py keepq) and its share (the file's
+        self.stayL = self.stayW = None                       # head2.keepq_g); the stay value (sim/stay.py, the checkpoint's "stay"; none: 0)
+        self.sv = None                                       # ... made at each keep reading of a seat, held between (the trainer's SV_)
+        if self.h2 is not None and self.h2.get("keep") and self.h2.get("keepq") and "keep.weight" in self.h2W:
+            import head2 as head2_
+            if head2_.np_has_keepq(self.h2W):
+                self.kq_on = True
+                self.keepq_g = float(np.asarray(self.h2W.get("keepq_g", 0.0)))
+                if ck.get("stay") is not None:
+                    self.stayL = dict(ck["stay"]["layout"])
+                    self.stayW = {k_: np.asarray(v_.cpu().numpy() if hasattr(v_, "cpu") else v_, np.float32) for k_, v_ in ck["stay"]["model"].items()}
+                    assert int(self.stayL["mem"]) == self.H and int(self.stayL["head"]) == int(self.h2["size"]) \
+                        and int(self.stayL["kx"]) == head2_.KEEP_F and int(self.stayL["ksig"]) == head2_.KSIG, "stay: its widths do not fit the network"
+        self.cmb_g = 0.0                                    # (1.7) the combat order's share of his readings (the file's head2.cmb_g)
+        if self.o_at is not None:
+            self.cmb_g = float(np.asarray(self.h2W.get("cmb_g", 0.0)))
+            self.h2_live = self.h2_live or self.cmb_g > 0    # (the order reads the head's state: it is stepped)
+        self.fut = None                                      # (1.7) the brain's places ahead of these seats (kept at their ticks)
+        self.ahead_in = bool(self.names) and any(g_ == "b22c ahead" for g_, _ in self.names)   # (2.2c, AHEAD_IN) his list reads them: made at ticks too
         self.h2_tick = None
         self.brain_at = None                                 # (v0.4.1) the brain's and the token's state, at the end of a seat's array
         if self.btok is not None:
@@ -136,12 +329,64 @@ class Policy:
             self.W = self.brain_at + btoken_.packed_width(self.brainP["H"])
 
     @property
+    def fight_due(self):
+        """(2.2b) a seat's keep reading is on this frame: act() needs fx= (the simulator's fight_feat() after the frame before, with "fk": its
+        fgt_k) and kf; after act() the caller gives the simulator the four scores (fight_scores())"""
+        return self.fgt is not None and self.k_r is not None and bool(np.any(self.k_r))
+
+    def fight_scores(self):
+        """(2.2b) the four scores of every seat (held from its last reading; clipped as the simulator's inputs read them), or None. (2.2c, the
+        lever) what the lever adds to "the enemy" in the first column, as the trainer sends it"""
+        if self.lever:
+            if self.fg_lev is None:
+                return None
+            import fightnet as fightnet_g
+            out_ = np.zeros((len(self.fg_lev), 4), np.float32)
+            out_[:, 0] = np.clip(fightnet_g.lever_add(self.fg_lev, self.lev_g), -5.0, 5.0)
+            return out_
+        return None if self.fg_S is None else np.clip(self.fg_S, -5.0, 5.0).astype(np.float32)
+
+    def set_fight(self, g=None, w=None):
+        """(2.2b, checks) play the fight network's list at this share (FGT_G) and its weapon scores at this factor (FGT_W). (2.2c) the lever:
+        g is its share (LEV_G); w must be None"""
+        assert self.fgt is not None, "this network has no fight network"
+        if self.lever:
+            assert w is None, "the lever has no weapon scores"
+            if g is not None:
+                self.lev_g = float(g)
+            return
+        if g is not None:
+            self.fight_g = float(g)
+        if w is not None:
+            self.fight_w = float(w)
+
+    @property
     def needs_xl(self):
         """(--legs-feat, --legs-guide) act() needs the branch's inputs (xl=, the simulator's legs_prep() of the frame)"""
         return self.uniD is not None or self.uniG is not None or self.uniT is not None
 
     def zeros(self, n):
         return np.zeros((n, self.W), np.float32)
+
+    def _ins_u(self, st):
+        """(2.1) the part "ins" of the head's input from a seat's held numbers (sim/head2.py ins_u)"""
+        import head2 as head2_
+        return head2_.np_ins_held_u(self.insL, st)
+
+    def _ins_ms(self, tok, r_):
+        """(2.1) the map sense at the rows' places, for np_ins_prep: None where the network does not read it, the caller named no map
+        (ins_map) or the map has no table (data/maps/space_<map>.npz): the eight numbers are then zeros"""
+        if self.msP is None or not self.ins_map or tok is None:
+            return None
+        import mapsense as mapsense_
+        if self.ins_map not in self.msT:
+            self.msT[self.ins_map] = mapsense_.load_tables(os.environ.get("QLBOT_ROOT") or os.path.dirname(HERE), [self.ins_map])[0].get(self.ins_map)
+        S = self.msT.get(self.ins_map)
+        if S is None:
+            return None
+        en_, ok_, hd_ = np.asarray(tok.P, np.float32)[r_], np.asarray(tok.valid, bool)[r_], np.asarray(tok.hand)[r_].argmax(1)
+        return lambda P, pk, wme: mapsense_.rows_at(lambda x, row: mapsense_.np_forward(self.msP, x, row), self.msL, {self.ins_map: S},
+                                                    np.full(len(r_), self.ins_map), P, pk, en_, ok_, wme, hd_)
 
     @property
     def hm(self):
@@ -172,7 +417,10 @@ class Policy:
             return None
         import btoken as btoken_
         _, tk_ = btoken_.unpack(self.brainP, self.btok, h[:, self.brain_at:])
-        return btoken_.answer_of(tk_)
+        d_ = btoken_.answer_of(tk_)
+        if self.fut is not None and len(self.fut) == len(h):    # (1.7) the places ahead, as the trainer sends them (COMBAT)
+            d_["fut"] = self.fut.copy()
+        return d_
 
     def token_pre(self, obs, pose, zmap, hb):
         """(v0.4.1) before a frame: the brain's last answer turned to his pose now, as the trainer makes it ([B, F] float32, the
@@ -197,6 +445,14 @@ class Policy:
             o1_, o2_ = br_.readouts(tk)
             tk_.answer(tk, o1_, o2_, np.asarray(pose, np.float32)[tk], np.asarray(zmap)[tk])
             self.h2_tick = (tk, br_.s[tk], o1_, o2_)        # (v0.4.3) what the strategy head reads at the tick
+            if self.h2 is not None and (self.h2.get("cmb") or self.ahead_in) and self.h2_ah is not None:   # (1.7; 2.2c) the readout ahead's places, kept in map
+                import head2 as head2_                       # coordinates at the tick (btoken.answer_fut's), for the combat order
+                if self.fut is None or len(self.fut) != len(tk):
+                    self.fut = np.zeros((len(tk), 3, 3), np.float32)
+                f_ = np.asarray(head2_.np_mlp(self.h2_ah, br_.s[tk]), np.float64)[:, :15].reshape(-1, 3, 5)
+                pz_ = np.asarray(pose, np.float64)[tk]
+                x_, y_ = btoken_._turn(np.repeat(pz_[:, 3:4], 3, 1), f_[..., 0] * 1000.0, f_[..., 1] * 1000.0)
+                self.fut[tk] = np.stack([pz_[:, None, 0] + x_, pz_[:, None, 1] + y_, pz_[:, None, 2] + f_[..., 2] * 1000.0], -1)
         return btoken_.pack(br_, tk_).astype(np.float32)
 
     def set_head2_gate(self, g):
@@ -229,7 +485,12 @@ class Policy:
         """a seat's memory cleared (the trainer's `done`), in place; the head's tick clock kept (sim/head.py np_clear). For a
         network without a head the same as h[rows] = 0."""
         r = slice(None) if rows is None else rows
-        if self.brain_at is not None:                        # (v0.4.1) the brain and its answer, by the same flag (its own clear)
+        if self.pl_odds is not None and len(self.pl_odds) == len(h):    # (2.1d) the plan's held odds of these seats: even (the trainer's reset)
+            self.pl_odds = self.pl_odds.copy()
+            self.pl_odds[r] = np.float32(1.0 / self.pl_odds.shape[-1])
+        if self.sh is not None and self.sh.s is not None and len(self.sh.s) == len(h):   # (2.1e) the slow half of these seats: zeros, even
+            self.sh.clear(rows)                                                        # odds, its clock from naught (the trainer's reset)
+        if self.brain_at is not None:                      # (v0.4.1) the brain and its answer, by the same flag (its own clear)
             import btoken as btoken_
             btoken_.packed_clear(h[:, self.brain_at:], rows, self.brainP["H"])
         if self.head is None:                                # (the strategy head's state is cleared with it: zeros)
@@ -267,19 +528,212 @@ class Policy:
 
     @property
     def keep_on(self):
-        """(1.4c) the keep choice decides a share of his readings: act(kf=...) gives one more column (-1 the lock rule, 0 keep,
-        1 re-decide)"""
-        return self.keep_g > 0
+        """(1.4c, 1.7a) the keep choice decides a share of his seconds, or (1.7) the combat order is asked at a share of his readings:
+        act(kf=...) gives one more column, d + 2 c + 4 r (its draw, the hand-over's coin, a keep reading: the frame after the head's
+        tick; sim/duel_env.py KEEP_FEAT) + (8 kind + 32 candidate + 256) where the order is asked"""
+        return self.keep_g > 0 or self.cmb_g > 0 or self.held_g > 0 or self.goal_on
+
+    @property
+    def order_on(self):
+        """(1.7) the order plays: asked at a share, or its adds on the targets' and the way's above 0"""
+        return self.o_at is not None and (self.cmb_g > 0 or float(np.asarray(self.h2W.get("padd", 0.0))) > 0)
+
+    @property
+    def order_due(self):
+        """(1.7) the coming frame is a keep reading for some seat (their head ticked on this one): give its act() ox= (the simulator's
+        order_feat() after this frame's step, these rows)"""
+        return self.order_on and self.k_r is not None and bool(self.k_r.any())
+
+    @property
+    def ins_due(self):
+        """(2.1) the coming frame is a reading for some seat and this network gives instructions: give its act() ix= (sim/branch.py
+        worker_feat(env) of these rows) and, after it, the simulator its picks (ins_pick)"""
+        return self.i_at is not None and self.ins_g > 0 and self.k_r is not None and bool(self.k_r.any())
+
+    def set_ins_g(self, g):
+        """(2.1, the checks) the share of seats whose instruction is the head's, in place of the file's"""
+        assert self.i_at is not None, "set_ins_g: this network has no instruction scorer"
+        self.ins_g = float(g)
+        if self.ins_g > 0:
+            self.h2_live = True
+
+    def set_cmb_g(self, g):
+        """(1.7, the checks) the combat order's share, in place of the file's (a network without it: refused)"""
+        assert self.o_at is not None, "set_cmb_g: this network has no combat order"
+        self.cmb_g = float(g)
+        if self.cmb_g > 0:
+            self.h2_live = True
+
+    def set_padd(self, p):
+        """(1.7, the checks) the pointer's adds on the targets' and the way's at this share (0: none)"""
+        assert self.o_at is not None, "set_padd: this network has no combat order"
+        import head2 as head2_
+        self.h2W = dict(self.h2W, padd=np.float32(p))
+        self.h2_live = head2_.np_open(self.h2W) or self.cmb_g > 0
+
+    def set_fadd(self, f):
+        """(1.7, the checks) the head's push on the fire key at this add (0: none)"""
+        assert self.h2 is not None and "fsc.weight" in self.h2W, "set_fadd: this network has no fire push"
+        import head2 as head2_
+        self.h2W = dict(self.h2W, fadd=np.float32(f))
+        self.h2_live = head2_.np_open(self.h2W) or self.cmb_g > 0
 
     def set_keep_g(self, g):
         """(1.4c, the checks) the keep choice's share, in place of the file's (a network without it: refused)"""
         assert self.h2 is not None and self.h2.get("keep"), "set_keep_g: this network has no keep choice"
         self.keep_g = float(g)
 
-    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None):
+    @property
+    def pull_on(self):
+        """(2.1d) the pull plays: the slow plan inside the head and its strength above 0"""
+        return self.planW is not None and self.pull_g > 0
+
+    def set_pull_g(self, g):
+        """(2.1d, the checks and tests) the pull's strength, in place of the file's (a network without the plan inside its head: refused)"""
+        assert self.planW is not None, "set_pull_g: this network has no slow plan inside its head"
+        self.pull_g = float(g)
+
+    def _pull(self, logits, si_, h2s, fr_):
+        """(2.1d) the pull on the target's logits, as the trainer's rollout plays it: each seat's plan odds made from the head's state this frame's
+        outputs read (before its tick) at its keep readings every `every` of its own and where its numbers are drawn anew (fr_), held between,
+        even after a clear; + pull_g x log(max(odds of its horizon, floor)), rounded to half precision (head2.np_plan_odds, np_pull: the plugin's
+        sums). -> the logits with it (a copy: last_logits stays the network's own)"""
+        import head2 as head2_
+        B_ = len(logits)
+        nh_, ni_ = len(self.h2["slowplan"]["horizons"]), si_.stop - si_.start
+        if self.pl_odds is None or len(self.pl_odds) != B_:
+            self.pl_odds = np.full((B_, nh_, ni_), 1.0 / ni_, np.float32)
+            self.pl_cnt = np.zeros(B_, np.int64)
+        kr_ = self.k_r if (self.k_r is not None and len(self.k_r) == B_) else np.zeros(B_, bool)
+        rf_ = np.asarray(fr_, bool) | (kr_ & (self.pl_cnt % self.plan_every == 0))
+        self.pl_cnt = self.pl_cnt + kr_.astype(np.int64)
+        if rf_.any():
+            self.pl_odds = self.pl_odds.copy()
+            self.pl_odds[rf_] = head2_.np_plan_odds(self.planW, self.h2, np.asarray(h2s)[rf_])
+        logits = logits.copy()
+        if self.sh_on and self.sh_mix > 0:                   # (2.1e, channel 2) the pull's source mixed: (1 - mix) x the fast plan's log-odds +
+            import slowhalf as slowhalf_                     # mix x the picked slow half's, the same horizon (slowhalf.np_pull_mix)
+            logits[:, si_] += slowhalf_.np_pull_mix(self.pl_odds[:, self.pull_h], self.sh.odds[:, self.pull_h], self.pull_g, self.pull_floor,
+                                                    self.sh_mix)
+        else:
+            logits[:, si_] += head2_.np_pull(self.pl_odds[:, self.pull_h], self.pull_g, self.pull_floor)
+        return logits
+
+    @property
+    def desc_on(self):
+        """(2.2a) the desc outlook's term plays (the outlook's term plays and its source is desc)"""
+        return self.dsc22 is not None and self.dsc22.src == 1 and self.out_on
+
+    @property
+    def desc_due(self):
+        """(2.2a) the coming frame is a keep reading for some seat and desc's term plays: give act() ox=desc22.env_ox(env) (these rows) and the
+        seats' maps (set_maps)"""
+        return self.desc_on and self.k_r is not None and bool(self.k_r.any())
+
+    def set_out_src(self, k):
+        """(2.2a, the checks and tests) which outlook's term plays: 0 the built one, 1 desc"""
+        assert self.dsc22 is not None, "set_out_src: this network has not 2.2a's parts"
+        self.dsc22.src = int(k)
+
+    def set_maps(self, maps):
+        """(2.2a) the map of each seat (a name, or one a seat), for the desc term's map sense"""
+        self.maps = maps
+
+    @property
+    def out_on(self):
+        """(2.1f) the outlook's term plays: the outlook inside the head and its strength above 0"""
+        return self.outW is not None and self.out_g > 0
+
+    def set_out_g(self, g):
+        """(2.1f, the checks and tests) the outlook's strength, in place of the file's (a network without the outlook: refused)"""
+        assert self.outW is not None, "set_out_g: this network has no outlook inside its head"
+        self.out_g = float(g)
+
+    def set_out_pick(self, k):
+        """(2.1f, the checks and tests) the kind that plays (an index of the layout's kinds), in place of the file's"""
+        assert self.outW is not None, "set_out_pick: this network has no outlook inside its head"
+        k = int(k)
+        assert 0 <= k < len(self.h2["outlook"]["kinds"]), "set_out_pick: one of 0 .. {}".format(len(self.h2["outlook"]["kinds"]) - 1)
+        self.out_pick = k
+
+    @property
+    def sh_on(self):
+        """(2.1e) the picked slow half plays: the network has the halves and its read-back's gate is above 0, or the pull plays with its
+        source's mix above 0 (otherwise nothing of them is read: they are not stepped)"""
+        return self.shL is not None and (self.sh_back > 0 or (self.pull_on and self.sh_mix > 0))
+
+    def set_slow_mix(self, m):
+        """(2.1e, the checks and tests) the pull's source mix (0: the fast plan alone, 1: the slow half alone), in place of the file's"""
+        assert self.shL is not None, "set_slow_mix: this network has no slow halves inside its head"
+        assert 0.0 <= float(m) <= 1.0, "set_slow_mix: 0 .. 1"
+        self.sh_mix = float(m)
+
+    def set_slow_back(self, b):
+        """(2.1e, the checks and tests) the read-back's gate, in place of the file's"""
+        assert self.shL is not None, "set_slow_back: this network has no slow halves inside its head"
+        assert 0.0 <= float(b) <= 1.0, "set_slow_back: 0 .. 1"
+        self.sh_back = float(b)
+
+    def set_slow_pick(self, k):
+        """(2.1e) the half that plays (0, 1, 2: the clocks of the layout), in place of the file's; its state starts afresh"""
+        import head2 as head2_
+        import slowhalf as slowhalf_
+        assert self.shL is not None, "set_slow_pick: this network has no slow halves inside its head"
+        k = int(k)
+        assert 0 <= k < len(self.shL["clocks"]), "set_slow_pick: one of 0 .. {}".format(len(self.shL["clocks"]) - 1)
+        self.sh_pick = k
+        self.shP = slowhalf_.np_params(head2_.params_np(self.h2W, prefix=""), k)
+        assert self.shP is not None, "the layout names the slow halves and the file has no head2.slow.{}.* weights".format(k)
+        self.sh = slowhalf_.NpState(self.shL, k, self.shP)
+
+    def set_keepq_g(self, g):
+        """(2.1, the checks) the quiet layer's share (its coin), in place of the file's (a network without it: refused). It acts only in
+        the keep choice's seconds (keep_g) and with KEEP_ZONE in the simulator; at 0 the column is 1.7a's (no 512 / 1024 bits, no draw)"""
+        assert self.kq_on, "set_keepq_g: this network has no quiet layer"
+        self.keepq_g = float(g)
+
+    def keepq_play(self, kf, kx, h2s, hfast, bst, kcol):
+        """(2.1) the quiet layer's draw and its coin added to the keep column kcol (in place): + 512 d + 1024 c, after 1.7a's and the order's
+        draws on the keep choice's stream (the trainer's rollout: "the quiet layer's draw and its coin"). The stay value is made at the
+        seats' keep readings (k_r: the frame after their head's tick) from the brain's state, the hands' memory after the frame, the head's
+        state this frame's outputs read, keep_x and the change signals, and held between (0 before a seat's first reading; 0 without the
+        file's "stay"). Shared with plugins/netpass.py by the same sums (head2.np_keepq_*, stay.np_value)"""
+        import head2 as head2_
+        kf = np.asarray(kf, np.float32)
+        K0, K1 = head2_.KEEP_FEAT, head2_.KEEP_FEAT + head2_.KSIG
+        assert kf.shape[1] >= K1, "the quiet layer reads the change signals: a simulator with KEEP_SIG=1 (keep_feat {} columns, {} given)".format(K1, kf.shape[1])
+        n_ = len(kf)
+        if self.sv is None or len(self.sv) != n_:
+            self.sv = np.zeros(n_, np.float32)
+        if self.stayW is not None and bst is not None and self.k_r is not None and len(self.k_r) == n_ and self.k_r.any():
+            import stay as stay_
+            r_ = np.nonzero(self.k_r)[0]
+            S_ = int(self.h2["size"])
+            x_ = np.concatenate([np.asarray(bst[0].s, np.float32)[r_], np.asarray(hfast, np.float32)[r_, :self.H], np.asarray(h2s, np.float32)[r_, :S_],
+                                 np.asarray(kx, np.float32)[r_], kf[r_, K0:K1]], 1)
+            self.sv = self.sv.copy()
+            self.sv[r_] = stay_.np_value(self.stayW, x_)
+        kqx_ = head2_.np_keepq_x(kf, self.sv)
+        kqz_ = head2_.np_keepq_logit(self.h2W, kqx_)
+        kqd_ = (self.krng.random(n_) < sig(kqz_)).astype(np.int64)
+        kqc_ = (self.krng.random(n_) < self.keepq_g).astype(np.int64)
+        self.last_keepq = (kqx_, kqz_, kqd_, kqc_)
+        kcol += 512 * kqd_ + 1024 * kqc_
+        return kcol
+
+    def norm(self, obs):
+        """the network's raw inputs [B, its list] -> what its readers read: the trainer's norm() (sim/train_duel_rnn.py), bit for bit"""
+        x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float16).astype(np.float32)   # (owner, 2026-11-15) rounded
+        if self.cell is not None:                            # to half precision at the source, as the trainer's norm(); the cell numbers
+            x[:, -2:] = obs[:, -2:]                          # stay as they are (the trainer's HAS_CELLS)
+        return x
+
+    def act(self, obs, h, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None, fx=None):
         """events [B, 32]: the head's tick events (events()); None: zeros. xl [B, the branch's inputs]: (--legs-feat,
-        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, 3]: (1.4c,
-        with keep_on) the simulator's keep_feat() rows after the frame before: one more column comes back, the keep choice"""
+        --legs-guide, while their parts are not at zero) the simulator's legs_prep() rows of this frame. kf [B, KEEP_FEAT]: (1.4c,
+        with keep_on) the simulator's keep_feat() rows after the frame before: one more column comes back, the keep choice.
+        ox: (1.7, with order_due after the frame before) the simulator's order_feat() of these rows after the frame before (X, C, ...):
+        the seats with a keep reading make their order from it (the trainer's order_tick) before this frame's outputs"""
         dadd = gadd = h2_ = lgl_ = ok_ = None
         if self.needs_xl:
             import legs_unify as LU_
@@ -288,9 +742,13 @@ class Policy:
             h2_, lgl_ = LU_.np_branch(self.legsP, xl)
             dadd = LU_.np_door(self.uniD[0], self.uniD[1], h2_, ok_) if self.uniD is not None else None
             gadd = LU_.np_guide_add(self.uni, self.uniG, lgl_, ok_, sum(self.dims)) if self.uniG is not None else None
-        hh = hb = h2s = None
+        hh = hb = h2s = ohs = ist = None
         if self.brain_at is not None:                        # (v0.4.1) the brain's packed state, at the end of the array
             hb, h = h[:, self.brain_at:], h[:, :self.brain_at]
+        if self.i_at is not None:                            # (2.1) the instruction's held numbers, before the brain's state
+            ist, h = h[:, self.i_at:], h[:, :self.i_at]
+        if self.o_at is not None:                            # (1.7) the order's held numbers, after the head's state
+            ohs, h = h[:, self.o_at:], h[:, :self.o_at]
         if self.h2 is not None:                              # (v0.4.3) the strategy head's state, before the brain's
             h2s, h = h[:, self.h2_at:], h[:, :self.h2_at]
         if self.head is not None:
@@ -300,17 +758,20 @@ class Policy:
             h = hf[:, :self.H]
         if obs.shape[1] > len(self.mean):                    # an older network in a simulator with more inputs: they are appended at the end
             obs = obs[:, :len(self.mean)]
-        x = np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32)
-        xa = x                                               # (the brain reads these: unfaded)
+        x = self.norm(obs)                                   # (half precision at the source, as the trainer: owner 2026-11-15)
+        xa = x                                             # (the brain reads these: unfaded)
         bt, bst = self.token_pre(obs, pose, zmap, hb)
         if self.rfg > 0 and len(self.rf_cols):               # (v0.4.2a) the hands' inputs: the rule-made columns times (1 - g)
             import rule_fade as rfade_
             x = rfade_.apply_np(x, self.rf_cols, self.rfg)
+        if self.rf is not None and (self.rf.get("more") or {}).get("cols") and float(self.rf["more"].get("g", 0.0)) > 0:   # (1.8) its second group:
+            import rule_fade as rfade_                       # the strategy inputs out of the hands (the head reads xa)
+            x = rfade_.apply_np(x, [int(c_) for c_ in self.rf["more"]["cols"]], float(self.rf["more"]["g"]))
         xh = x                                               # (the hands' attention reads these)
         if self.cell is not None:
             ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(self.cell) - 1)
             x = np.concatenate([x[:, :-2], self.cell[ids[:, 0]], self.cell[ids[:, 1]]], 1)
-        x = np.tanh(x @ self.w0.T + self.b0)
+        x = np.tanh(x[:, :self.w0.shape[1]] @ self.w0.T + self.b0)   # (a cleaned list, sim/input_list.py: the hands' encoder reads its first n_hands columns)
         x = np.tanh(x @ self.w1.T + self.b1)
         if self.attP is not None:
             bta = bt if self.bgate > 0 else None             # (v0.4.2a: the brain stepped for the readers alone: its token stays out)
@@ -321,6 +782,20 @@ class Policy:
             xf = x + self.hm.np_plan_in(self.headP, hh[:, o_[0]:o_[1]])
         if dadd is not None:                                 # (--legs-feat) only his fast GRU reads the legs' features
             xf = xf + dadd
+        ord_ = None
+        if ohs is not None and self.order_on and ox is not None and self.k_r is not None and len(self.k_r) == len(ohs) and self.k_r.any():
+            import head2 as head2_                           # (1.7) a keep reading (the frame after the head's tick): the order made from
+            r_ = np.nonzero(self.k_r)[0]                     # the candidates the simulator made after that frame, the brain's odds written
+            X_ = np.array(np.asarray(ox[0])[r_], np.float32)    # in (its state: the tick's), held to the next reading (the trainer's order_tick)
+            C_ = np.asarray(ox[1], np.float32)[r_]
+            if self.passW is not None and bst is not None:
+                import passodds as passodds_
+                X_[..., head2_.CMB_PASS0:head2_.CMB_PASS0 + 3] = passodds_.np_forward(self.passW, self.passL, bst[0].s[r_], X_)
+            kl_, ps_, ta_, ya_, okc_ = head2_.np_order_scores(self.h2W, self.h2, h2s[r_], X_, C_)   # (1.7b: okc_, not ok_: ok_ is the
+            okf_ = okc_.astype(np.float32)[:, None]                                                 # legs' way flags, read by their gate below)
+            ohs = ohs.copy()
+            ohs[r_] = np.concatenate([kl_, ps_, ta_ * okf_, ya_ * okf_], 1)
+            ord_ = (r_, kl_, ps_, okc_)
         b2 = None
         if h2s is not None and self.h2_live:                 # (v0.4.3) the plan of its last tick into his fast GRU, its bias on his intention
             import head2 as head2_
@@ -344,6 +819,51 @@ class Policy:
             wa2_ = head2_.np_wadd(self.h2W, self.h2, h2s)    # (1.5a) its weapon scores on the weapon key's (none without the part or at wadd 0)
             if wa2_ is not None:
                 logits[:, int(np.sum(self.dims[:6])):int(np.sum(self.dims[:7]))] += wa2_
+            fa2_ = head2_.np_fadd(self.h2W, self.h2, h2s)    # (1.7) its fire scores on the fire key's (none without the part or at fadd 0)
+            if fa2_ is not None:
+                logits[:, int(np.sum(self.dims[:5])):int(np.sum(self.dims[:6]))] += fa2_
+            pa_ = float(np.asarray(self.h2W.get("padd", 0.0))) if ohs is not None else 0.0
+            if pa_ > 0:                                      # (1.7) the pointer's scores held from the last reading on the targets' and the way's
+                o0_ = head2_.CMB_NK + head2_.CMB_NEW
+                i0_ = int(np.sum(self.dims[:10]))
+                logits[:, i0_:i0_ + head2_.CMB_T] += np.float32(pa_) * ohs[:, o0_:o0_ + head2_.CMB_T]
+                if len(self.dims) > 12:
+                    w0_ = int(np.sum(self.dims[:12]))
+                    logits[:, w0_:w0_ + head2_.CMB_W] += np.float32(pa_) * ohs[:, o0_ + head2_.CMB_T:]
+        if self.fgt is not None and self.lever:              # (2.2c) THE LEVER at a keep reading, as the trainer's rollout: the brain's state of its tick,
+            B_ = len(logits)                                 # his inputs, his target scores before the pull, the head's state his outputs read, his
+            if self.fg_lev is None or len(self.fg_lev) != B_:   # memory after this frame, his target and its seconds; held to the next reading
+                self.fg_lev = np.zeros(B_, np.float32)
+            if self.k_r is not None and len(self.k_r) == B_ and self.k_r.any() and h2s is not None:
+                assert kf is not None and bst is not None, "(2.2c) the lever reads at a keep reading: give act() kf"
+                r_ = np.nonzero(self.k_r)[0]
+                si_f = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
+                kfa_ = np.asarray(kf, np.float32)
+                o_f = self.fgt.reading_lever(np.asarray(bst[0].s, np.float32)[r_], xa[r_], logits[r_, si_f], h2s[r_, :int(self.h2["size"])],
+                                             hfast[r_, :self.H], kfa_[r_, 2], kfa_[r_, 0])
+                self.fg_lev[r_] = o_f["lev"]
+                self.fg_last = (r_, o_f)
+        if self.fgt is not None and not self.lever:          # (2.2b) THE FIGHT NETWORK at a keep reading, as the trainer's rollout: the options
+            B_ = len(logits)                                 # the simulator made after the frame before, the brain's state of its tick, his inputs, his
+            if self.fg_S is None or len(self.fg_S) != B_:    # target scores before the pull, the head's state his outputs read, his memory after this frame
+                self.fg_S, self.fg_W = np.zeros((B_, 4), np.float32), np.zeros((B_, 10), np.float32)
+                self.fg_valid, self.fg_cand = np.zeros((B_, 4), bool), np.zeros(B_, np.int64)
+                self.fg_on, self.fg_gf = np.zeros(B_, bool), np.zeros((B_, 4), np.float32)
+            if self.k_r is not None and len(self.k_r) == B_ and self.k_r.any() and h2s is not None:
+                assert fx is not None and kf is not None and bst is not None, \
+                    "(2.2b) the fight network reads at a keep reading: give act() fx=fight22.reader_fx(env) (fight_due) and kf"
+                r_ = np.nonzero(self.k_r)[0]
+                si_f = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
+                kfa_ = np.asarray(kf, np.float32)
+                F_ = {k_: np.asarray(v_)[r_] for k_, v_ in fx.items() if k_ != "fk"}
+                o_f = self.fgt.reading(F_, np.asarray(bst[0].s, np.float32)[r_], xa[r_], logits[r_, si_f], h2s[r_, :int(self.h2["size"])],
+                                       hfast[r_, :self.H], kfa_[r_, 2], np.asarray(fx["fk"])[r_], kfa_[r_, 0])
+                self.fg_S[r_], self.fg_W[r_], self.fg_valid[r_], self.fg_cand[r_] = o_f["S"], o_f["W"], o_f["valid"], o_f["cand"]
+                self.fg_last = (r_, o_f)
+            if self.fight_w > 0:                             # (its weapon scores x FGT_W on the weapon key's, rounded to half precision as played)
+                logits = logits.copy()
+                w0_ = int(np.sum(self.dims[:6]))
+                logits[:, w0_:w0_ + 10] += (np.float32(self.fight_w) * self.fg_W).astype(np.float16).astype(np.float32)
         if hh is not None:                                   # (v0.4) the head ticks on its frames; its target and way join the hands'
             _, t_add, w_add, hh = self.hm.np_tick(self.headP, self.head, x, hfast, hh, events)
             logits[:, self.head_si] += t_add
@@ -359,7 +879,87 @@ class Policy:
         if bt is not None:
             hb = self.token_post(xa, pose, zmap, bst)
         kcol = None
-        if self.keep_on and kf is not None and h2s is not None:   # (1.4c) the keep choice: the head's state this frame's outputs read
+        te_ = hon_prev = self.held_pick = None
+        if kf is not None:                                   # (2.1c) keep rows with the trip-end column after them (head2.np_kf_end)
+            import head2 as head2_
+            kf = np.asarray(kf, np.float32)
+            if kf.shape[1] in (head2_.KEEP_FEAT + 1, head2_.KEEP_FEAT + head2_.KSIG + 1):
+                te_, kf = kf[:, -1] > 0, kf[:, :-1]
+        assert not self.out_on or (kf is not None and h2s is not None and (self.held_g > 0 or self.goal_on)),             "(2.1f) the outlook plays with the held draw's rows: give act() kf with the trip-end column (head2.np_kf_end(env))"
+        assert not self.pull_on or (kf is not None and h2s is not None and (self.held_g > 0 or self.goal_on)), \
+            "(2.1d) the pull plays with the held draw's rows: give act() kf with the trip-end column (head2.np_kf_end(env))"
+        if (self.held_g > 0 or self.goal_on) and kf is not None and h2s is not None:   # (2.1c) the held draw, as the trainer's rollout plays
+            assert self.keep_g <= 0 and self.cmb_g <= 0, "the held draw: not with a keep choice or an order at a share"   # it: a seat whose
+            assert te_ is not None, "the held draw: give act() the keep rows with the trip-end column (head2.np_kf_end(env))"   # target ended
+            si_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))      # (or is "nothing", once a second) gets new numbers
+            B_, first_ = len(logits), False                                            # and a new coin; under the coin its target is the
+            if self.hd_g is None or len(self.hd_g) != B_:                              # highest of its scores plus its numbers, read at
+                self.hd_g, self.hd_on, first_ = np.zeros((B_, si_.stop - si_.start), np.float32), np.zeros(B_, bool), True   # every keep
+            fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (self.hd_t % 40 == 0)) | first_     # reading (the column: d 1, c 1)
+            if self.sh_on:                                                             # (2.1e) the slow half's ticks (clock, the roll moment,
+                self.sh.step(kf[:, 2], fr_, self.k_r if (self.k_r is not None and len(self.k_r) == B_) else None, h2s,   # a change of mind),
+                             head2_.np_goal_u(self.h2, kf, self.hd_on))                # before the pull and the head's tick read it
+            if self.pull_on:                                                         # (2.1d) the pull on his target scores before the
+                logits = self._pull(logits, si_, h2s, fr_)                             # held draw's pick and the draw
+            if self.out_on:                                                          # (2.1f) the outlook's term after the pull, as the trainer's
+                logits = logits.copy()                                                 # rollout adds it (head2.np_out_vec: the plugin's sums)
+                if self.desc_on:                                                       # (2.2a) desc's term: made at a keep reading from the
+                    if self.k_r is not None and len(self.k_r) == B_ and self.k_r.any():   # simulator's description (ox, after the tick's frame),
+                        import btoken as btoken_d                                      # held to the next reading
+                        assert ox is not None and len(ox) >= 5 and bst is not None and self.maps is not None, \
+                            "(2.2a) desc's term plays: give act() ox=desc22.env_ox(env) at a keep reading (desc_due) and set_maps()"
+                        r_ = np.nonzero(self.k_r)[0]
+                        br_d, tk_d = bst
+                        sb_d = np.asarray(br_d.s, np.float32)[r_]
+                        mp_d = np.asarray([self.maps] * B_ if isinstance(self.maps, str) else self.maps)[r_]
+                        self.dsc22.reading(r_, h2s[r_], sb_d, xa[r_], np.asarray(tk_d.P, np.float32)[r_], np.asarray(tk_d.valid, bool)[r_],
+                                           np.asarray(tk_d.hand)[r_].argmax(1), btoken_d.np_mlp(self.brainP["trk"], sb_d),
+                                           tuple(np.asarray(v_)[r_] for v_ in ox[:5]), mp_d, self.out_g, self.out_pick, B_)
+                    logits[:, si_] += self.dsc22.term(B_)
+                else:
+                    logits[:, si_] += head2_.np_out_vec(self.outW, self.h2, h2s, self.out_g, self.out_pick)
+            if self.lever and self.fg_lev is not None and len(self.fg_lev) == B_:    # (2.2c) THE LEVER on "the enemy", after the pull and the
+                import fightnet as fightnet_g                                          # outlook's term, before the draw (as the trainer plays it)
+                logits = logits.copy()
+                logits[:, si_.start + fightnet_g.EN_INTENT] += fightnet_g.lever_add(self.fg_lev, self.lev_g)
+            self.last_target_logits = np.asarray(logits[:, si_], np.float32).copy()   # (2.2c, readouts) his target logits as drawn: the pull, the term, the lever in
+            li_ = logits[:, si_]
+            li_ = li_ - li_.max(1, keepdims=True)
+            lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
+            self.hd_t += 1
+            hon_prev = self.hd_on.copy()
+            if fr_.any():
+                gn_ = self.hrng.gumbel(size=lsm_.shape).astype(np.float32)
+                cn_ = self.hrng.random(B_) < self.held_g
+                self.hd_g = np.where(fr_[:, None], gn_, self.hd_g)
+                self.hd_on = np.where(fr_, cn_, self.hd_on)
+            self.held_pick = (self.hd_on.copy(), (lsm_ + self.hd_g).argmax(1))
+            self.fg_q = None
+            if self.fgt is not None and self.fight_g > 0:    # (2.2b) THE ONE LIST: at a new trip its coin (FGT_G) and the four's own numbers; under
+                if fr_.any():                                # it the items with "the enemy" and the places shut beside the four scores of the valid options
+                    gf_ = self.frng.gumbel(size=(B_, 4)).astype(np.float32)
+                    self.fg_gf = np.where(fr_[:, None], gf_, self.fg_gf)
+                    self.fg_on = np.where(fr_, self.frng.random(B_) < self.fight_g, self.fg_on)
+                jl_ = self.hd_on & self.fg_on
+                if jl_.any():
+                    import fightnet as fightnet_g
+                    raw_ = logits[:, si_]
+                    jz_ = np.concatenate([np.where(self.fg_shut[None, :], np.float32(fightnet_g.NEG), raw_),
+                                          fightnet_g.masked_scores(self.fg_S, self.fg_valid)], 1)
+                    jz_ = jz_ - jz_.max(1, keepdims=True)
+                    jz_ = jz_ - np.log(np.exp(jz_).sum(1, keepdims=True))
+                    jp_ = (jz_ + np.concatenate([self.hd_g, self.fg_gf], 1)).argmax(1)
+                    nt_ = raw_.shape[1]
+                    tg_ = np.where(jp_ >= nt_, fightnet_g.EN_INTENT, jp_)
+                    self.held_pick = (self.hd_on.copy(), np.where(jl_, tg_, self.held_pick[1]))
+                    fq_ = jl_ & (jp_ >= nt_)
+                    self.fg_q = np.where(fq_, fightnet_g.FG_ASK + fightnet_g.FG_KIND * np.maximum(jp_ - nt_, 0) + fightnet_g.FG_CAND * self.fg_cand, 0)
+            if self.k_r is None or len(self.k_r) != B_:
+                self.k_r = np.zeros(B_, bool)
+            kcol = 3 * self.hd_on.astype(np.int64) + 4 * self.k_r.astype(np.int64)
+            if self.fg_q is not None:
+                kcol = kcol + self.fg_q.astype(np.int64)
+        elif (self.keep_g > 0 or self.cmb_g > 0) and kf is not None and h2s is not None:   # (1.4c) the keep choice: the head's state this frame's outputs read
             import head2 as head2_                           # (before its tick), the hands' memory after the frame, its own numbers
             si_ = slice(int(np.sum(self.dims[:10])), int(np.sum(self.dims[:11])))
             li_ = logits[:, si_]
@@ -369,22 +969,77 @@ class Policy:
             kx_ = head2_.np_keep_x(kf, lsm_[np.arange(len(cur_)), cur_])
             kz_ = head2_.np_keep_logit(self.h2W, self.h2, h2s, hfast, kx_)
             kd_ = (self.krng.random(len(kz_)) < sig(kz_)).astype(np.int64)
-            kcol = np.where(self.krng.random(len(kz_)) < self.keep_g, kd_, -1)
+            kc_ = (self.krng.random(len(kz_)) < self.keep_g).astype(np.int64)
+            if self.k_r is None or len(self.k_r) != len(kz_):
+                self.k_r = np.zeros(len(kz_), bool)
+            kcol = kd_ + 2 * kc_ + 4 * self.k_r.astype(np.int64)     # (1.7a) the seats whose head ticked on the frame before: a keep reading
+            if ord_ is not None and self.cmb_g > 0:          # (1.7) the order's kind and candidate drawn at the reading (the keep choice's
+                r_, kl_, ps_, okc_ = ord_                    # stream), asked with its share where the head has a state: + 8 k + 32 c + 256
+
+                def pick_(z_):
+                    p_ = np.exp(z_ - z_.max(1, keepdims=True))
+                    p_ /= p_.sum(1, keepdims=True)
+                    return np.minimum((p_.cumsum(1) < self.krng.random((len(z_), 1))).sum(1), z_.shape[1] - 1).astype(np.int64)
+                ko_ = pick_(kl_)
+                co_ = np.zeros_like(ko_)
+                for k_ in range(1, head2_.CMB_NK):
+                    c0_, m_ = head2_.CMB_C0[k_], head2_.CMB_SLOTS[k_]
+                    co_ = np.where(ko_ == k_, pick_(ps_[:, c0_:c0_ + m_]), co_)
+                oq_ = ((self.krng.random(len(r_)) < self.cmb_g) & okc_).astype(np.int64)
+                kcol[r_] = kcol[r_] + (8 * ko_ + 32 * co_ + 256) * oq_
+            if self.kq_on and self.keepq_g > 0:              # (2.1) the quiet layer's draw and its coin (at share 0: 1.7a's column, no draw)
+                kcol = self.keepq_play(kf, kx_, h2s, hfast, bst, kcol)
+        self.ins_pick = None                                 # (2.1) this frame's picks of an instruction: (rows, c, w, who) or None
+        if self.i_at is not None and ix is not None and self.ins_g > 0 and h2s is not None and self.k_r is not None \
+                and len(self.k_r) == len(h2s) and self.k_r.any() and bst is not None:
+            import head2 as head2_                           # a reading (the frame after the head's tick): the rows filled with the brain's
+            S_ = int(self.h2["size"])                        # answers, scored on the head's state, a row, its weapon and quiet drawn
+            r_ = np.nonzero(self.k_r)[0]                     # (sim/head2.py np_ins_prep, np_ins_read: the trainer's rollout's sums, the
+            ixs_ = tuple(np.asarray(v_)[r_] for v_ in ix)    # one definition the plugin reads too)
+            ist = ist.copy()
+            sb_i, tk_i = np.asarray(bst[0].s, np.float32)[r_], bst[1]
+            X_, bq_ = head2_.np_ins_prep(ixs_, self.insFILL, self.insL, sb_i, hfast[r_, :self.H],
+                                         zone=np.asarray(tk_i.zone)[r_] if getattr(tk_i, "zone", None) is not None else None,
+                                         ah=head2_.np_mlp(self.h2_ah, sb_i) if self.h2_ah is not None else None, knP=self.knP, spP=self.spP,
+                                         ms=self._ins_ms(tk_i, r_))
+            sit_ = np.concatenate([sb_i, hfast[r_, :self.H], h2s[r_, :S_]], 1).astype(np.float32)
+            st_, pk_ = head2_.np_ins_read(self.insL, self.insW, self.aprL, self.aprP, self.ins_warm, self.ins_g, self.ins_none, self.h2["every"],
+                                          ist[r_], h2s[r_, :S_], sit_, X_, ixs_[1], ixs_[2], ixs_[3], ixs_[4], ixs_[5], ixs_[6],
+                                          (kd_[r_] > 0) if kcol is not None else np.ones(len(r_), bool), self.irng, bq_)
+            ist[r_] = st_
+            self.ins_pick = (r_,) + pk_
         if h2s is not None:                                  # (v0.4.3) the strategy head ticks with the brain, after the frame
+            self.k_r = np.zeros(len(h2s), bool)              # (1.7a) whose head ticks on this frame: the next frame is their keep reading
             if self.h2_live and self.h2_tick is not None:
                 import head2 as head2_
                 tk_, sb_, o1_, o2_ = self.h2_tick
+                self.k_r = np.asarray(tk_, bool).copy()
                 u_ = head2_.np_feats(self.h2, brain=sb_, trk=o1_, trz=o2_,
                                      ahead=head2_.np_mlp(self.h2_ah, sb_) if self.h2_ah is not None else None,
                                      ctrl=head2_.np_ctrl(self.h2_ct, sb_, hfast[tk_]),
-                                     obs=xa[tk_], hands=hfast[tk_])
+                                     fight=head2_.np_fight(self.h2_fo, sb_, hfast[tk_]),
+                                     wv=head2_.np_wv(getattr(self, "h2_wv", None), sb_, hfast[tk_]),
+                                     obs=xa[tk_], hands=hfast[tk_],
+                                     ins=(self._ins_u(ist[tk_]) if ist is not None else None),
+                                     goal=(head2_.np_goal_u(self.h2, np.asarray(kf)[tk_], hon_prev[tk_])    # (2.1c) the goal he holds
+                                           if (self.goal_on and kf is not None and hon_prev is not None) else None),
+                                     slowback=(np.float32(self.sh_back) * self.sh.s[tk_]     # (2.1e, channel 3) the read-back: the gate x the
+                                               if (self.sh_on and self.sh_back > 0 and self.sh.s is not None and len(self.sh.s) == len(tk_))
+                                               else None))                                   # picked half's state after this frame's ticks
                 h2s = h2s.copy()
                 h2s[tk_] = head2_.np_tick(self.h2W, self.h2, u_, h2s[tk_])
             h = np.concatenate([h, h2s.astype(np.float32)], 1)
+            if ohs is not None:                              # (1.7) the order's held numbers back after it
+                h = np.concatenate([h, ohs.astype(np.float32)], 1)
+            if ist is not None:                              # (2.1) the instruction's held numbers back after them
+                h = np.concatenate([h, ist.astype(np.float32)], 1)
         o_ = np.concatenate([[0], np.cumsum(self.dims)]).astype(int)
         if self.fade:                                        # (--switch-fade) off the switch's "legs" choice
             logits = logits.copy()
             logits[:, int(o_[11]) + 1] -= self.fade
+        if getattr(self, "wpush", None) is not None:        # (1.7c experiments, checks only) the fixed push toward the pros' weapon
+            logits = logits.copy()
+            logits[:, int(o_[6]) + 1:int(o_[6]) + 4] += self.wpush(obs)
         u_ = [self.rng.random((len(logits), 1)) for _ in self.dims]       # (one number a player and output, in the outputs' order)
         out = np.zeros((len(logits), len(self.dims)), np.int64)
 
@@ -400,6 +1055,15 @@ class Policy:
             one(int(c_), logits[:, o_[c_]:o_[c_ + 1]] + self.orderT[int(c_)][out[:, int(p_)]])
         if self.no_switch and out.shape[1] > 11:             # (NO_SWITCH) drawn as before, then off: his own network drives
             out[:, 11] = 0
+        if getattr(self, "wpush", None) is not None and self.wpush.form == "replace":     # (the dial's replace form, !weapons pros)
+            if getattr(self, "wrng", None) is None:          # the dial's own stream: every other output drawn exactly as with it off
+                self.wrng = np.random.default_rng(int(self.seed) + 101)
+            a_ = self.wpush.actions(obs, self.wrng)         # the table's weapon in place of the network's key (drawn as before, then set)
+            out[:, 6] = np.where(a_ >= 0, a_, out[:, 6])
+            t_ = self.wpush.targets(obs, self.wrng)         # the weapon he lacks as his target where the rule speaks (the simulator's
+            out[:, 10] = np.where(t_ >= 0, t_, out[:, 10])  # readings, hold and his keep choice as ever)
+        if self.held_pick is not None:                       # (2.1c) a seat on the held draw: its target is the held draw's
+            out[:, 10] = np.where(self.held_pick[0], self.held_pick[1], out[:, 10])
         if hb is not None:                                   # (v0.4.1) the brain's state back at the end of the array
             h = np.concatenate([h, hb.astype(np.float32)], 1)
         if kcol is not None:                                 # (1.4c) the keep column after the outputs (the simulator takes it off)
@@ -642,7 +1306,7 @@ def main():
     a = ap.parse_args()
     import importlib
     E = importlib.import_module(a.env)
-    path = a.policy or os.path.join(ROOT, "data", "sim_runs", a.run, "policy.pt")
+    path = a.policy or os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, "policy.pt")
     pol = Policy(path, seed=11)
     maps = a.maps.split(",")[:1] if a.quick else a.maps.split(",")
     if a.lab:
@@ -650,8 +1314,8 @@ def main():
     per_room = {}
     t0 = time.time()
     for mp in maps:
-        env = E.DuelEnv(os.path.join(ROOT, "data", "maps", mp + ".bsp"), n_matches=a.matches, seed=7,
-                        nav=os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(mp)), close_p=1.0, loadout="all")
+        env = E.DuelEnv(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", mp + ".bsp"), n_matches=a.matches, seed=7,
+                        nav=os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", "nav_{}_sim.json".format(mp)), close_p=1.0, loadout="all")
         dl_ = set_delays(E, env, [(np.arange(0, env.n, 2), pol.react_ms if a.react_ms is None else a.react_ms,       # (the subject is the
                                    pol.acquire_ms if a.acquire_ms is None else a.acquire_ms)])                    # even player of a match)
         if a.lab:
@@ -663,7 +1327,7 @@ def main():
         print("{} done ({:.0f} s)".format(mp, time.time() - t0), flush=True)
     card = dict(suite=SUITE_VERSION, run=a.run, minutes=int(pol.minutes), maps=maps, subject="policy", delays_ms=dl_,
                 rooms={k: merge(v) for k, v in per_room.items()})
-    out = os.path.join(ROOT, "data", "sim_runs", a.run, "suite")
+    out = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, "suite")
     os.makedirs(out, exist_ok=True)
     stem = os.path.join(out, "{}_{:04d}{}".format("lab" if a.lab else "card", int(pol.minutes), "_quick" if a.quick else ""))
     other = json.load(open(a.compare)) if a.compare else None

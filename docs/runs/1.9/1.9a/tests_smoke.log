@@ -1,0 +1,33 @@
+17:40:45 after update 1: live.json {'INS_GATE': -6.0, 'RAIL_FAR_PAY': 0.12}
+17:41:06 after update 2: live.json {'INS_GATE': 0.0, 'RAIL_FAR_PAY': 0.0, 'INS_G': 0.5, 'FOLLOW_PAY': 0.005}
+17:41:27 after update 3: live.json {'INS_G': 1.0, 'FOLLOW_PAY': 0.01, 'H2_INS_PG': 0.5}
+17:41:51 after update 4: live.json {'H2_INS_PG': 1.0, 'INS_COPY': 0.5}
+17:42:09 after update 5: live.json {'INS_COPY': 0.0}
+17:42:33 after update 6: live.json {'SFADE': 0.5}
+17:42:54 after update 7: live.json {'SFADE': 1.0}
+17:43:15 after update 8: live.json {'FOLLOW_PAY': 0.005}
+17:43:36 after update 9: live.json {'FOLLOW_PAY': 0.0}
+17:45:21 PASS ov: fourteen updates ran (14 in metrics)
+17:45:21 PASS ov: no NaN in his step (kl by update [0.012, 0.0066, 0.0093, 0.0149, 0.0158, 0.0124, 0.0092, 0.0105, 0.0122, 0.0117, 0.0118, 0.0121, 0.014, 0.0108])
+17:45:21 PASS ov: no REFUSED live file; ignored: ['BRAIN_FADE'] (BRAIN_FADE alone: the command has --brain-fade 0)
+17:45:21    update 14 ins: {"g": 1.0, "teach": 0.0, "pg": 1.0, "temp": 0.05, "warm": false, "rows": 2304, "own": 2249, "taught": 0, "entropy": 3.2724, "offered": 25.9, "kl_to_appraisals": 0.0, "best_row_agrees": 0.0, "verbs": [0.0, 0.2468, 0.1161, 0.2806, 0.0925, 0.0373, 0.0, 0.1227, 0.104], "weapons": [0.1952, 0.0796, 0.201, 0.1925, 0.0325, 0.044, 0.0382, 0.0, 0.217], "picks": 2249, "row_blocks": {"go": 0.2468, "contest": 0.1161, "hold": 0.2806, "spam": 0.0925, "push": 0.0373, "cut": 0.0, "out": 0.1227, "none": 0.0, "spare": 0.0, "check": 0.104, "spush": 0.0, "sspam": 0.0}, "changes_a_second": 4.8806, "seen": 0, "secs": 0.0, "long_w": 0.0, "tick": {"played": {"ticks": 2249, "changes_a_second": 4.806, "best_changes_a_
+17:45:21    update 14 ins_bind: {"bound": 0.7447, "not_his_pick": 0.5533, "weapon_changes_min": 143.539}
+17:45:21    update 14 pay_of: {"hands": "the pay table + the win part as today", "head_old": "his whole pay (the table + the win part)", "head_ins": "win chance only", "win_gain": 1.0, "win_abs": 0.011805, "full_abs": 0.002168, "v_win": -0.1748, "v_win_loss": 0.213364}
+17:45:21    update 14 follow: {"seat_secs": 295.9, "doing": 0.1084, "pay_per_seat_min": 0.0}
+17:45:21    update 14 judge_items: {"head_abs": 0.0118047, "judge_abs": 0.0028923, "items_abs": 0.0108089}
+17:45:21 PASS ov: the instruction's records are there at the end (ins, ins_bind, pay_of, follow, judge_items, fight)
+17:45:21    the fight odds' record at the end: {"w": 1.0, "outs": ["win", "lose"], "frames": [370, 370], "pos": [76, 76], "neg": [294, 294], "brier_half": [0.25, 0.25], "brier_const": [0.1632, 0.1632], "ring_gb": 0.007, "both": {"brier": [0.1622, 0.161], "skill": [0.0063, 0.0134], "auc": [0.6126, 0.631], "bce": 0.5034}, "secs": 0.003}
+17:45:21 PASS ov: the copy lesson was taught while INS_COPY was on (its term by update [4.50612, 4.61795, 4.56724, 4.48845, 4.55116, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), its agreement [0.3057, 0.2132, 0.2419, 0.2079, 0.2034, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+17:45:21 PASS ov: the instruction's choice: KL played-to-before small on every update that has it ([0.0, 0.0, 0.0, 0.0, 0.005927, 0.004745, -0.001115, -0.000872, 0.000612, 0.000113, 8.6e-05, 0.000609, 1.4e-05, 0.000244]; the rollouts run one update behind)
+17:45:21    update 14 the tick readouts: {"played": {"ticks": 2249, "changes_a_second": 4.806, "best_changes_a_second": 1.084, "cont": 0.0388, "stands_secs": 0.208, "entropy": 3.2725, "under_none": 0.0, "best_agrees": null}, "shadow": {"ticks": 0, "changes_a_second": 0.0, "best_changes_a_second": 0.0, "cont": 0.0, "stands_secs": 0.2, "entropy": 0.0, "under_none": 0.0, "best_agrees": null}}
+17:45:21    update 14 ins_norow: {"readings": 3018, "no_real_row": 0.000331, "n": 1, "on_a_map_without_tables": 0, "no_none": true}
+17:45:21 PASS ov: the head's share at 1, 'none' not offered: played seats' ticks under none 0.0 (only where no real row was valid: 1 of 3018 readings)
+17:45:21 PASS ov: the head re-decides at every tick: the played seats' orders stand 0.208 s on average, continue 0.0388
+17:45:21 PASS ov: the last dials were applied (SFADE 1.0, INS_G 1.0, H2_INS_PG 1.0, INS_COPY 0.0, FOLLOW_PAY 0.0, RAIL_FAR_PAY 0.0; the switch cost 0.0)
+17:45:21    the follow record's share doing by update: [None, None, None, None, 0.0999, 0.1172, 0.1117, 0.1034, 0.1031, 0.1033, 0.1049, 0.0961, 0.0969, 0.1084]
+17:45:21    the target-switch cost a player-minute by update: [None, None, None, None, None, None, None, None, None, None, None, None, None, None]
+17:46:26 scratch_19a_smoke_ovb: done in 1.1 min; the log ends: exit 0
+17:46:26 PASS ov: the resume from the save ran 2 more updates (14 -> 16), the optimizer's group 'ins' loaded by name
+17:46:26    optimizer: its state loaded from opt.pt (--learn-nosync: 0 step counts moved to the host)
+17:46:26    optimizer: its state loaded from opt.pt (--learn-nosync: 0 step counts moved to the host)
+17:46:26 ALL PASSED (10 checks)

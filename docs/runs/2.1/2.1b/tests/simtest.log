@@ -1,0 +1,19 @@
+played 3000 frames of duel_env_ffa from C:/Users/dacla/Documents/gh/BobbyBones
+played 3000 frames of duel_env_ffa from C:\Users\dacla\Documents\gh\BobbyBones-21
+1b. target changes on a frame his target was NOT read (not the reading's doing): the reference tree 18 of 1867, this tree 18 of 1867
+1. OFF against C:/Users/dacla/Documents/gh/BobbyBones: IDENTICAL over 3000 frames (16 seats)
+played 3000 frames of duel_env from C:\Users\dacla\Documents\gh\BobbyBones-21
+played 3000 frames of duel_env_ffa from C:\Users\dacla\Documents\gh\BobbyBones-21
+2. TWO PLAYERS, switches on: duel_env against duel_env_ffa: IDENTICAL (pay, ends, target, keep_live, keep_feat)
+3a. keep_feat 12 columns (7 + KSIG 5): ok
+3b. signals in their ranges: ok; share of seat-frames on: item there 0.548, an item 0.564, belief moved 0.373 (mean 0.108), pain 0.002, stack fell 0.534
+3c. keep_live 1 (zone layer) 1912 times, all in contact or arrived: True; keep_live 2 (quiet layer) 1257 times, all in quiet: True
+3d. stats keep3: zone seat-frames 22029, readings 1993, changed 688; quiet seat-frames 25971, readings 1627, changed 535; zone layer decided 1912 re-decided 726; quiet layer decided 1257 re-decided 507
+3e. keep3 adds up (zone + quiet seat-frames = all, the layers' decisions = keep_live's): True
+played 3000 frames of duel_env_ffa from C:\Users\dacla\Documents\gh\BobbyBones-21
+4. no quiet coin: quiet layer decisions 0 (want 0); quiet target changes 127: forced 34, let by the lock rule 85, NEITHER 0 (want 0)
+5a. quiet changes on a frame with no reading at all (outside the reading; see 1b): 2
+5. with the quiet coin: quiet changes neither forced, nor the lock rule's, nor the quiet layer's: 0 (want 0)
+ALL PASSED
+
+[lowrun] exit code 0

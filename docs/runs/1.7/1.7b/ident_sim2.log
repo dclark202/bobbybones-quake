@@ -1,0 +1,24 @@
+settings read once from 1.7a's command and its live files: C:\Users\dacla\AppData\Local\Temp\i17b_ident_9puhem7_\settings.json
+PASS bloodrun HEAD against now: {'rew': True, 'done': True, 'rl': True, 'ch': True, "obs (HEAD's 990 columns)": True, 'counters': True}
+PASS bloodrun HEAD against fight: {'rew': True, 'done': True, 'rl': True, 'ch': True, "obs (HEAD's 990 columns)": True, 'counters': True}
+PASS bloodrun HEAD against cmbq0: {'rew': True, 'done': True, 'rl': True, 'ch': True, "obs (HEAD's 990 columns)": True, 'counters': True}
+bloodrun the yellow timers: 4 columns, known-taken share 0.297 / 0.327, values in [0.000, 2.000]
+PASS bloodrun the yellow timers: 4 columns in [0, 2], known some of the time
+bloodrun the fight labels: frames with a label 0.0032 of all; of them win 0.000, lose 0.000, both 0.000, neither 1.000
+PASS bloodrun the fight labels: some frames labelled, every label 0 or 1, unlabelled -1 on both
+bloodrun cmb: the order asked 2801; chosen [767, 685, 634, 715]; frames [17839, 18502, 15873, 19366]; arrivals [0, 61, 146, 21]
+bloodrun cmbout: the order asked 2800; chosen [767, 685, 634, 714]; frames [17839, 18502, 15873, 19366]; arrivals [0, 61, 146, 648]
+bloodrun OUT_LIVE: the frames differ (an arrival changes what the keep choice reads, not the frames, while the keep column is drawn as here)
+PASS bloodrun OUT_LIVE: break off arrived by living through it, more often than at its ways out (arrivals 21 -> 648); the other kinds' as before
+PASS aerowalk HEAD against now: {'rew': True, 'done': True, 'rl': True, 'ch': True, "obs (HEAD's 990 columns)": True, 'counters': True}
+PASS aerowalk HEAD against fight: {'rew': True, 'done': True, 'rl': True, 'ch': True, "obs (HEAD's 990 columns)": True, 'counters': True}
+PASS aerowalk HEAD against cmbq0: {'rew': True, 'done': True, 'rl': True, 'ch': True, "obs (HEAD's 990 columns)": True, 'counters': True}
+aerowalk the yellow timers: 4 columns, known-taken share 0.271 / 0.000, values in [0.000, 2.000]
+PASS aerowalk the yellow timers: 4 columns in [0, 2], known some of the time
+aerowalk the fight labels: frames with a label 0.0152 of all; of them win 0.001, lose 0.001, both 0.000, neither 0.998
+PASS aerowalk the fight labels: some frames labelled, every label 0 or 1, unlabelled -1 on both
+aerowalk cmb: the order asked 2792; chosen [752, 676, 651, 713]; frames [17894, 18086, 16352, 19248]; arrivals [0, 90, 223, 37]
+aerowalk cmbout: the order asked 2792; chosen [752, 676, 651, 713]; frames [17894, 18086, 16352, 19248]; arrivals [0, 90, 223, 596]
+aerowalk OUT_LIVE: the frames the same (an arrival changes what the keep choice reads, not the frames, while the keep column is drawn as here)
+PASS aerowalk OUT_LIVE: break off arrived by living through it, more often than at its ways out (arrivals 37 -> 596); the other kinds' as before
+ALL PASSED

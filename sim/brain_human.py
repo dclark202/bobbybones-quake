@@ -29,7 +29,8 @@ def track_loss(o, y, weights, mask, pm):
 
 
 class HumanLesson:
-    def __init__(self, path, obs_mean, obs_var, hid, dev, piece=384, lanes=0):
+    def __init__(self, path, obs_mean, obs_var, hid, dev, piece=384, lanes=0, cols=None):
+        self.cols = None if cols is None else np.asarray(cols, np.int64)   # (1.8, a cleaned list) the pack's columns the brain reads, in its order
         import torch
         self.path = path
         self.meta = json.load(open(os.path.join(path, "meta.json")))
@@ -44,8 +45,10 @@ class HumanLesson:
         assert piece % K == 0 and L >= piece
         self.L, self.P = L - L % piece, int(piece)
         self.dev = dev
-        self.mean = torch.as_tensor(np.asarray(obs_mean, np.float32), device=dev)
-        self.sd = torch.as_tensor(np.sqrt(np.asarray(obs_var, np.float64) + 1e-8).astype(np.float32), device=dev)
+        import obs_half as OH                                # (owner, 2026-11-15) the trainer's norm(), bit for bit: double precision,
+        m_, s_ = OH.stats(obs_mean, obs_var)                 # one rounding to half precision (torch's .half() of a double rounds twice)
+        self.mean = torch.as_tensor(m_, device=dev)
+        self.sd = torch.as_tensor(s_, device=dev)
         self.s = torch.zeros(self.G * self.B, int(hid), device=dev)      # (every lane's own state, carried)
         self.p0s = [0] * self.G
         self.g = 0
@@ -74,8 +77,9 @@ class HumanLesson:
             self.s = s_
         p0, P, B = self.p0s[g], self.P, self.B
         self.p0 = p0
-        x = torch.from_numpy(np.ascontiguousarray(self.obs[p0:p0 + P, ln])).to(self.dev)
-        x = torch.clamp((x.float() - self.mean) / self.sd, -10, 10).half().float()
+        x = torch.from_numpy(np.ascontiguousarray(self.obs[p0:p0 + P, ln] if self.cols is None else np.asarray(self.obs[p0:p0 + P, ln])[..., self.cols])).to(self.dev)
+        import obs_half as OH_
+        x = OH_.norm_t(x, self.mean, self.sd)                # (the trainer's norm(), bit for bit: sim/obs_half.py)
         d = torch.from_numpy(self.done[p0:p0 + P, ln].astype(np.float32)).to(self.dev)
         sl = slice(p0 // K, (p0 + P) // K)
         bs = belief_.seq(pol.belief, x, d, self.s[ln], K)

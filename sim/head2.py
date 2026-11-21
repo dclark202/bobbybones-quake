@@ -54,12 +54,15 @@ How it learns (the trainer; the routing of its gradient)
   The head's sequence is re-run in the learning step from the stored u of the rollout's ticks and the state at its start
   (truncated there: 48 ticks, 9.6 s, of backpropagation through time; its state itself is carried across rollouts).
 
-The keep choice (1.4c; the layout's "keep", absent before): at each reading of his target, keep it or re-decide (the
-simulator's keep column, sim/duel_env.py). z = keep(cat[s, hands' memory (a number), f]) -> 1, the logit of re-deciding;
-f = keep_x(): his target's age out of contact (s / 10, at most 2), contact (0 or 1), the held target's log-probability under
-the present scores (clipped to -10, / 5; a number). Its start (tools/keep_init.py): the lock made soft, the weights on s and
-the hands' memory zero. keep_g (a buffer, 0 for a save without it): the share of the readings it decides (the rest: the lock
-rule). Learnt in the head's own term with the target (the trainer).
+The keep choice (1.4c; 1.7a: the layout's "keep" 2, KEEP_F 7; 1.4c's "keep" 1 with three numbers is retired, never run): at
+each keep reading of his target (five a second: the frame after the head's tick), keep it or re-decide (the simulator's keep
+column, sim/duel_env.py). z = keep(cat[s, hands' memory (a number), f]) -> 1, the logit of re-deciding; f = keep_x(): his
+target's age out of contact and arrival (s / 10, at most 2), contact (0 or 1), the held target's log-probability under the
+present scores (clipped to -10, / 5; a number), arrived out of contact (0 or 1), the seconds since the arrival out of contact
+(/ 10, at most 2), a sound heard and a hit taken with the enemy out of view (each exp(-seconds / KEEP_RECENT): 1 just now).
+Its start (tools/keep_init.py): the lock made soft, the weights on s, the hands' memory and the last three numbers zero.
+keep_g (a buffer, 0 for a save without it): the share of his seconds it decides (the coin at each lock-rule reading; the rest:
+the lock rule). Learnt in the head's own term with the target (the trainer).
 
 The weapon part (1.5a; the layout's "weapon", absent before; tools/weapon_init.py): the head informs his weapon choice. wsc(s)
 -> one score per choice of the weapon key (no press and the nine weapons), held from tick to tick as the target's scores; wadd
@@ -68,6 +71,19 @@ the checks): one set of weapon-key scores, as the target's since 1.3b. Its own i
 columns of W_OBS: the weapon in his hand and whether he can fire, the enemy's weapon in view and since his last death, the hums
 heard, the enemy in view and his last known place), read by a layer of their own, winp, added to inp's: tanh(inp(u before
 wobs) + winp(wobs)). winp and wsc start at exactly zero: a network given the part answers exactly as it did.
+
+The combat order (1.7, docs/runs/1.7/README.md and BUILD.md; the layout's "cmb", absent before; tools/order_init.py): a kind, then
+a candidate by a pointer, then the way. At each keep reading (the frame after its tick) the head reads every candidate's numbers
+(the simulator's order_feat: CMB_ROWS rows of CMB_F) and the situation's (ctx). The kind (CMB_KINDS: the target as chosen by the
+hands and the head, cut off, spam, break off): ok_s(s) + ok_c(ctx), a kind with no valid candidate shut. The candidate: one scorer
+for every candidate (AlphaStar's pointer), g(s, x) = op_v(tanh(op_s(s) + op_x(x))), softmax over the kind's valid candidates. The
+same scorer on the 17 targets' rows and the three ways' rows: padd x those scores added to the head's target scores and to the
+way's (S5: the hands' rows stay; the head's part). All held to the next keep reading. cmb_g (a buffer): the share of his readings
+the order is asked at; padd (a buffer): the adds' share. Learnt in the head's own term with the target and the keep choice. At the
+start ok_s, op_s and op_v are zero (the pointer's scores 0, the kind by its context's layer alone); tools/order_init.py fits ok_c,
+op_x and op_v to the pros (BUILD.md part 9).
+The fire push (1.7; the layout's "fire"): fsc(s) -> 2 scores held so, fadd (a buffer) x them added to the fire key's logits where the
+head has a state; learnt by the hands' term on the head's state as a number (s detached). Both start at exactly zero effect.
 
 Numpy only at the top level (the game server imports this file); torch inside the torch functions.
 """
@@ -78,20 +94,47 @@ import os
 import numpy as np
 
 VERSION = 1
-PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "obs", "hands", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide)
-KEEP_F = 3                                                   # (1.4c) the keep choice's own numbers: age out of contact, contact, log p held
-KEEP_AGE_MAX, KEEP_LP_MIN = 20.0, -10.0
+PARTS = ("brain", "trk", "trz", "ahead", "ctrl", "fight", "wv", "obs", "hands", "ins", "goal", "slowback", "wobs")   # (1.5a) wobs: the weapon part's inputs (a layout without: 0 wide);
+#                                                          (2.1e) slowback: the read-back, slow_back x the picked slow half's state (sim/slowhalf.py;
+#                                                          without: 0 wide), after "goal": the end of what inp reads
+#                                                          (1.7b) fight: the brain's fight odds, two chances - 0.5 (sim/fightodds.py; without: 0 wide)
+#                                                          (1.9a) wv: his own reading of his chance of winning beyond what the score and the clock say
+#                                                          (the shadow win value, sim/win_value.py, on the brain's state and his hands' memory; one
+#                                                          number, in frags; without: 0 wide)
+KEEP_F = 7                                                   # (1.7a) the keep choice's own numbers: age, contact, log p held, arrived, since arrival, sound, hit unseen
+KEEP_FEAT = 7                                                # (1.7a) the simulator's keep_feat() columns (duel_env.KEEP_FEAT)
+KEEP_AGE_MAX, KEEP_LP_MIN, KEEP_RECENT = 20.0, -10.0, 2.0
+KSIG = 5                                                     # (2.1, KEEP_SIG) the target's change signals after keep_feat's seven (duel_env.KSIG)
+KEEPQ_F = 2 + KSIG                                           # (2.1) the quiet layer's numbers: the stay value, the age, the change signals
+KEEPQ_SV = 3.0                                               # (2.1) the stay value as the quiet layer reads it: clipped to +- this
+CMB_KINDS = ("target", "cut", "spam", "out")              # (1.7) the combat order's kinds (sim/duel_env.py COMBAT: the same numbers)
+CMB_NK = len(CMB_KINDS)
+CMB_SLOTS = (0, 3, 8, 8)                                   # ... each kind's candidates, and the first of each among the new ones
+CMB_C0 = (0, 0, 3, 11)
+CMB_NEW, CMB_T, CMB_W = 19, 17, 3                          # ... the new kinds' rows, the targets', the ways'
+CMB_ROWS = CMB_T + CMB_NEW + CMB_W
+CMB_F, CMB_NCTX, CMB_HID = 34, 14, 64                      # ... a row's numbers, the situation's, the pointer's width
+CMB_VALID = 8                                              # ... a row's "valid" column
+CMB_PASS0 = 31                                             # ... the brain's odds of his passing it within 1, 2, 4 s (three columns)
+CMB_HELD = CMB_NK + CMB_NEW + CMB_T + CMB_W                # (numpy, the checks) the order's held numbers a seat: kinds, new, targets', ways' adds
 CTRL_SRCS = ("none", "belief", "both")                     # (the ctrl slot's source: sim/control.py's readouts by name)
 CLIP = 10.0
 # (group, input) of docs/INPUTS.csv; an input of None: every row of the group
 OBS_SEL = (("self", "health"), ("self", "armor"), ("weapons", "owns "), ("weapons", "ammo: "),
            ("items", "nearest mega health: "), ("items", "nearest red armor: "),
-           ("clock and score", None), ("v02 game", None), ("v02 items", None), ("intention", None))
+           ("clock and score", None), ("v02 game", None), ("v02 items", None), ("intention", None),
+           ("b17 order", None))                             # (1.7) the order he follows and its point (a layout before: tools/order_init.py adds them)
+# (1.8, owner 2026-11-11, docs/design/INPUTS_CLEANUP.md: the head at its birth) the head's own columns on a cleaned list: its job is the
+# strategy, so it is given the game's state by name: as OBS_SEL without the order's ten (cut), with the weapon in his hand, the enemy
+# noticed in view, and the timers of the mega, the red armor and both yellow armors
+OBS_SEL_18 = tuple(x for x in OBS_SEL if x[0] != "b17 order") + (("weapons", "holding "), ("enemy", "noticed in view"),
+                                                                ("memory", "mega health: "), ("memory", "red armor: "), ("b17b timers", None),
+                                                                ("memory", "enemy has the mega health"), ("memory", "enemy has the red armor"))
 # (1.5a) the weapon part's own inputs ("wobs"): what he holds and whether he can fire it, the enemy's weapon (in view, since his last
 # death, the hums heard), the enemy in view and his last known place (exact while in view)
 W_OBS = (("weapons", "holding "), ("self", "weapon not ready"), ("enemy", "enemy holds "), ("memory", "enemy seen with "),
          ("hearing", "railgun hum"), ("hearing", "lightning gun hum"), ("enemy", "noticed in view"), ("enemy", "seen or heard recently"),
-         ("enemy", "last known position: "))
+         ("enemy", "last known position: "), ("b17 order", None))      # (1.7: his weapon follows the order)
 
 
 def obs_cols(inputs_csv=None, sel=OBS_SEL):
@@ -112,13 +155,15 @@ def obs_cols(inputs_csv=None, sel=OBS_SEL):
 
 
 def layout(brain=256, trk=27, trz=28, ahead=0, ctrl=4, obs=None, hands=512, enc=256, size=256, inp=256, plan=64,
-           n_target=17, every=8, gamma=0.9998, chrono=300, on=None, ctrl_src="none", chrono_lo=0.0):
+           n_target=17, every=8, gamma=0.9998, chrono=300, on=None, ctrl_src="none", chrono_lo=0.0, fight=0):
     """the part's shape; kept in a checkpoint as "head2" (the gate is the state dict's head2.gate). obs: the input columns
     (obs_cols()); on: {part: 0 or 1} (default all on; a part off reads zeros)"""
     obs = [int(c) for c in (obs if obs is not None else obs_cols())]
     on_ = {p: 1 for p in PARTS}
     on_.update({str(k): int(v) for k, v in (on or {}).items()})
     w = dict(brain=int(brain), trk=int(trk), trz=int(trz), ahead=int(ahead), ctrl=int(ctrl), obs=len(obs), hands=int(hands))
+    if fight:
+        w["fight"] = int(fight)
     assert ctrl_src in CTRL_SRCS, "ctrl_src: one of {}".format(CTRL_SRCS)
     return dict(version=VERSION, widths=w, on=on_, obs_cols=obs, enc=int(enc), size=int(size), inp=int(inp), plan=int(plan),
                 n_target=int(n_target), every=int(every), gamma=float(gamma), chrono=int(chrono), ctrl_src=str(ctrl_src),
@@ -129,6 +174,243 @@ def add_weapon(L, wobs, n):
     """(1.5a) a layout with the weapon part: n scores (the weapon key's choices), its inputs the columns wobs"""
     wobs = [int(c) for c in wobs]
     return dict(L, widths=dict(L["widths"], wobs=len(wobs)), on=dict(L["on"], wobs=1), wobs_cols=wobs, weapon=int(n))
+
+
+GOAL_X = 2                                                   # (2.1c) the part "goal" after its one-hot: the target's age, on the held draw
+GOAL_AGE = (20.0, 2.0)                                       # ... the age cut at 20 s and counted in twos of seconds (0 .. 10): measured on 2.0e's
+#                                                              end (tools/run/held_playtest.py, 4,800 rows, Aerowalk): average 0.99, spread 1.04
+
+
+def add_goal(L):
+    """(2.1c, the held draw's learned comparison) a layout with the part "goal": the target he holds (one of n_target, "nothing"
+    too), its age and whether this trip is on the held draw: what lets his scores favour the goal he is on. After "ins", before
+    "wobs": at the end of what the head's first layer reads (zero weights at the start: tools/held_init.py)"""
+    assert not has_goal(L), "the head has the part 'goal' already"
+    return dict(L, widths=dict(L["widths"], goal=int(L["n_target"]) + GOAL_X), on=dict(L["on"], goal=1))
+
+
+def has_goal(L):
+    return bool(L is not None and int(L["widths"].get("goal", 0)) > 0)
+
+
+def goal_u(L, kf, on):
+    """(2.1c) the part "goal" [B, n_target + GOAL_X] from the simulator's keep_feat rows kf [B, >= 3] (column 0 the target's age in
+    seconds, column 2 the target) and on [B] (the trip is on the held draw); torch"""
+    import torch
+    n = int(L["n_target"])
+    out = torch.zeros(kf.shape[0], n + GOAL_X, device=kf.device)
+    out.scatter_(1, kf[:, 2].long().clamp(0, n - 1)[:, None], 1.0)
+    out[:, n] = kf[:, 0].float().clamp(0.0, GOAL_AGE[0]) / GOAL_AGE[1]
+    out[:, n + 1] = on.float()
+    return out
+
+
+def np_goal_u(L, kf, on):
+    """goal_u() in numpy"""
+    n = int(L["n_target"])
+    kf = np.asarray(kf, np.float32)
+    out = np.zeros((len(kf), n + GOAL_X), np.float32)
+    out[np.arange(len(kf)), np.clip(kf[:, 2].astype(np.int64), 0, n - 1)] = 1.0
+    out[:, n] = np.clip(kf[:, 0], 0.0, GOAL_AGE[0]) / GOAL_AGE[1]
+    out[:, n + 1] = np.asarray(on, np.float32)
+    return out
+
+
+PULL_FLOOR = 0.01                                            # (2.1d) the plan's odds are floored here before the pull's log
+
+
+def add_slowplan(L, horizons=(10, 25), every=5, hid=128, floor=PULL_FLOOR):
+    """(2.1d, the pull; docs/runs/2.1/2.1d) a layout with the slow plan INSIDE the head: its layers head2.plan.* (sim/slowplan.py's module:
+    the head's state -> hid -> hid -> horizons x n_target), the buffers pull_g (the pull's strength) and pull_h (which horizon pulls), and its
+    settings under the key "slowplan" (the layout's "plan" is the hands' plan width since v0.4.3): the horizons in head ticks, the refresh
+    every `every` keep readings, the hidden width, the floor of its odds before the log"""
+    assert not has_slowplan(L), "the head has the slow plan already"
+    hz = [int(h_) for h_ in horizons]
+    assert len(hz) >= 1 and all(h_ >= 1 for h_ in hz), "the slow plan: horizons of at least one head tick"
+    return dict(L, slowplan=dict(horizons=hz, every=int(every), hid=int(hid), floor=float(floor)))
+
+
+def has_slowplan(L):
+    """(2.1d) the layout has the slow plan inside the head"""
+    return bool(L is not None and L.get("slowplan"))
+
+
+def slowplan_layout(L):
+    """(2.1d) sim/slowplan.py's layout of the head's plan"""
+    import slowplan as slowplan_
+    P = L["slowplan"]
+    return slowplan_.layout(head=int(L["size"]), n_target=int(L["n_target"]), hid=int(P["hid"]), horizons=tuple(P["horizons"]), every=int(P["every"]))
+
+
+def has_plan(mod):
+    """(2.1d) the module has the slow plan inside (head2.plan.*, the buffers pull_g and pull_h)"""
+    return mod is not None and hasattr(mod, "pull_g") and hasattr(mod, "plan")
+
+
+def plan_odds(mod, s):
+    """(2.1d) the plan's odds [B, horizons, n_target] from the head's state s [B, size] (no gradient)"""
+    import torch
+    with torch.no_grad():
+        return torch.softmax(mod.plan(s.detach().float()), -1)
+
+
+def pull_vec(odds_h, g, floor):
+    """(2.1d) the pull on the target's logits [B, n_target]: g x log(max(odds of the pull's horizon, floor)), rounded to half precision (the
+    trainer keeps it so a frame and adds it again in the learner to the bit; the checks' player and the plugin round it the same way). g: a
+    number or [B, 1]"""
+    import torch
+    return (g * torch.log(odds_h.float().clamp(min=float(floor)))).half().float()
+
+
+def np_plan_params(W):
+    """(2.1d) the plan's arrays (l1, l2, l3: weight, bias) from the head's weights (params_np), None without them"""
+    ks = ("plan.l1.weight", "plan.l1.bias", "plan.l2.weight", "plan.l2.bias", "plan.l3.weight", "plan.l3.bias")
+    if not all(k_ in W for k_ in ks):
+        return None
+    return tuple(np.asarray(W[k_], np.float32) for k_ in ks)
+
+
+def np_plan_odds(PW, L, hs):
+    """(2.1d) plan_odds() in numpy: PW from np_plan_params, hs [B, np_state_width] (the state's first `size` columns) -> [B, horizons,
+    n_target] float32"""
+    S = int(L["size"])
+    s = np.asarray(hs, np.float32)[:, :S]
+    h = np.maximum(s @ PW[0].T + PW[1], 0.0)
+    h = np.maximum(h @ PW[2].T + PW[3], 0.0)
+    z = (h @ PW[4].T + PW[5]).astype(np.float64).reshape(len(s), len(L["slowplan"]["horizons"]), int(L["n_target"]))
+    z = np.exp(z - z.max(-1, keepdims=True))
+    return (z / z.sum(-1, keepdims=True)).astype(np.float32)
+
+
+def np_pull(odds_h, g, floor):
+    """(2.1d) pull_vec() in numpy: [B, n_target], rounded to half precision"""
+    return (np.float32(g) * np.log(np.maximum(np.asarray(odds_h, np.float32), np.float32(floor)))).astype(np.float16).astype(np.float32)
+
+
+def add_slowhalf(L, clocks=(5, 10, 20), hid=128, horizons=None):
+    """(2.1e, the slow halves; docs/runs/2.1/2.1e) a layout with the slow halves inside the head (sim/slowhalf.py: head2.slow.<k>.*, one per
+    clock, in head ticks) and the read-back part "slowback" (hid columns at the end of what inp reads: zero weights at the start,
+    tools/slow_init.py add). Needs the part "goal" (their input) and the slow plan inside (their horizons, its floor)"""
+    assert not has_slowhalf(L), "the head has the slow halves already"
+    assert has_goal(L) and has_slowplan(L), "the slow halves read the part 'goal' and forecast at the slow plan's horizons: a 2.1d network"
+    hz = [int(h_) for h_ in (horizons if horizons is not None else L["slowplan"]["horizons"])]
+    ck = [int(c_) for c_ in clocks]
+    assert 1 <= len(ck) <= 3 and all(c_ >= 1 for c_ in ck), "the slow halves: one to three clocks of at least one head tick"
+    return dict(L, widths=dict(L["widths"], slowback=int(hid)), on=dict(L["on"], slowback=1),
+                slowhalf=dict(version=1, clocks=ck, hid=int(hid), horizons=hz))
+
+
+def has_slowhalf(L):
+    """(2.1e) the layout has the slow halves inside the head"""
+    return bool(L is not None and L.get("slowhalf"))
+
+
+def slowhalf_layout(L):
+    """(2.1e) sim/slowhalf.py's layout of the head's slow halves"""
+    import slowhalf as slowhalf_
+    P = L["slowhalf"]
+    return slowhalf_.layout(head=int(L["size"]), goal=int(L["widths"]["goal"]), n_target=int(L["n_target"]), hid=int(P["hid"]),
+                            horizons=tuple(P["horizons"]), clocks=tuple(P["clocks"]))
+
+
+def has_slow(mod):
+    """(2.1e) the module has the slow halves (head2.slow.*, the buffers slow_mix, slow_back, slow_pick)"""
+    return mod is not None and hasattr(mod, "slow") and hasattr(mod, "slow_mix")
+
+
+def slow_dials(mod):
+    """(2.1e) (mix, back, pick) of a module with the slow halves (python numbers), (0, 0, 1) without"""
+    if not has_slow(mod):
+        return 0.0, 0.0, 1
+    return float(mod.slow_mix), float(mod.slow_back), int(round(float(mod.slow_pick)))
+
+
+def add_outlook(L, kinds=("seg", "ret", "all8", "win8", "win5"), hid=128, facts=False):
+    """(2.1f, the outlook; docs/runs/2.1/2.1f) a layout with the outlook INSIDE the head (sim/outlook.py: head2.out.*, from the head's state to
+    kinds x (n_target + 1): an outlook per target and one goal-blind, per label kind; its last layer at zero), the buffers out_g (its term's
+    strength on his target scores) and out_pick (which kind plays: 0, the first: "seg" by default), its settings under the key "outlook". Needs the slow plan inside (its term rides on the pull's place in every reader)"""
+    assert not has_outlook(L), "the head has the outlook already"
+    assert has_slowplan(L), "the outlook plays where the pull plays: a 2.1d network (the slow plan inside the head)"
+    import outlook as outlook_
+    ol_ = outlook_.layout(head=int(L["size"]), n_target=int(L["n_target"]), kinds=kinds, hid=int(hid), facts=facts)
+    return dict(L, outlook=dict(version=ol_["version"], kinds=list(ol_["kinds"]), hid=int(ol_["hid"]), clip=float(ol_["clip"]),
+                                **({"facts": list(ol_["facts"])} if ol_.get("facts") else {})))
+
+
+def has_outlook(L):
+    """(2.1f) the layout has the outlook inside the head"""
+    return bool(L is not None and L.get("outlook"))
+
+
+def outlook_layout(L):
+    """(2.1f) sim/outlook.py's layout of the head's outlook"""
+    import outlook as outlook_
+    P = L["outlook"]
+    return outlook_.layout(head=int(L["size"]), n_target=int(L["n_target"]), kinds=tuple(P["kinds"]), hid=int(P["hid"]),
+                           clip=float(P.get("clip", outlook_.CLIP)), facts=bool(P.get("facts")))
+
+
+def has_out(mod):
+    """(2.1f) the module has the outlook inside (head2.out.*, the buffers out_g, out_pick)"""
+    return mod is not None and hasattr(mod, "out") and hasattr(mod, "out_g")
+
+
+def out_dials(mod):
+    """(2.1f) (g, pick) of a module with the outlook (python numbers), (0, 0) without"""
+    if not has_out(mod):
+        return 0.0, 0
+    return float(mod.out_g), int(round(float(mod.out_pick)))
+
+
+def out_vec(mod, s, L):
+    """(2.1f) the outlook's term on the target's logits [B, n_target] from the head's states s [B, size] (no gradient): out_g x clip(the picked
+    kind's outlook per target - their mean, +-clip) in the label's standardised units, rounded to half precision (sim/outlook.py term)"""
+    import torch
+    import outlook as outlook_
+    g_, k_ = out_dials(mod)
+    with torch.no_grad():
+        return outlook_.term(outlook_.outlook(mod.out, s)[:, k_], g_, float(L["outlook"]["clip"]))
+
+
+NONFINITE = [0]                                             # (the readers' count of seats whose built outlook was not finite)
+
+
+def np_out_vec(PW, L, hs, g, pick):
+    """(2.1f) out_vec() in numpy: PW from outlook.np_params(the head's weights), L the head's layout, hs [B, np_state_width] -> [B, n_target]"""
+    import outlook as outlook_
+    o_ = outlook_.np_outlook(PW, outlook_layout(L), hs)[:, int(pick)]
+    bad_ = int((~np.isfinite(o_[:, :-1]).all(-1)).sum())    # (2.2a, the review: a non-finite outlook gives no term, counted and loud)
+    if bad_:
+        NONFINITE[0] += bad_
+        print("MAJOR PROBLEM: the outlook's term is not finite on {} seats (counted {}): 0 for them".format(bad_, NONFINITE[0]), flush=True)
+    return outlook_.np_term(o_, g, float(L["outlook"]["clip"]))
+
+
+def add_parts22(L, trk, desc, vw_hid=128):
+    """(2.2a, docs/runs/2.2/DESIGN.md) a layout with 2.2a's silent parts INSIDE the head (every reader of a network file has them): the tracker
+    (sim/tracker.py: head2.trk.*, its layout under "trk22"), the outlook that scores a description of a play (sim/desc22.py: head2.dsc.<sibling>.*,
+    "desc22"; the buffer out_src: which outlook's term plays, 0 the built one, 1 "desc") and the head's silent second value of the win chance with
+    the items (sim/outlook.py value_module: head2.vw.*, "vw"). Needs the built outlook inside (its term's place)"""
+    assert has_outlook(L), "2.2a's parts sit beside the outlook (tools/out22_init.py add)"
+    assert not L.get("trk22") and not L.get("desc22") and not L.get("vw"), "the head has 2.2a's parts already"
+    return dict(L, trk22=dict(trk), desc22=dict(desc), vw=dict(hid=int(vw_hid)))
+
+
+def has_parts22(L):
+    return bool(L is not None and L.get("trk22") and L.get("desc22"))
+
+
+def out_src(mod):
+    """(2.2a) which outlook's term plays: 0 the built one, 1 "desc" (a module without the buffer: 0)"""
+    return int(round(float(mod.out_src))) if (mod is not None and hasattr(mod, "out_src")) else 0
+
+
+def np_kf_end(env):
+    """(2.1c) the simulator's keep_feat() rows with one more column: his target ended (reached and not an arrival, gone, a spawn):
+    what the held draw's players read (test_suite.Policy.act, plugins/netpass.py)"""
+    n = env.n
+    te = (env.intent_done[:n] & ~env.intent_arr[:n]) | env.intent_gone[:n] | env.intent_new[:n]
+    return np.concatenate([env.keep_feat(), te.astype(np.float32)[:, None]], 1)
 
 
 def ctrl_src(L):
@@ -149,7 +431,17 @@ def n_weights(L):
     U, I, S, P, E, N, Hh = u0_width(L), L["inp"], L["size"], L["plan"], L["enc"], L["n_target"], L["widths"]["hands"]
     Wo, Nw = int(L["widths"].get("wobs", 0)), int(L.get("weapon", 0) or 0)
     return (U * I + I) + 3 * S * (I + S) + 6 * S + (S * P + P) + (P * E + E) + (S * N + N) + (S + Hh + 1) + \
-        ((S + Hh + KEEP_F + 1) if L.get("keep") else 0) + ((Wo * I + I) + (S * Nw + Nw) if Nw else 0)
+        ((S + Hh + KEEP_F + 1) if L.get("keep") else 0) + ((KEEPQ_F + 1) if L.get("keepq") else 0) + ((Wo * I + I) + (S * Nw + Nw) if Nw else 0) + \
+        ((S * CMB_NK + CMB_NCTX * CMB_NK + CMB_NK + S * CMB_HID + CMB_F * CMB_HID + 2 * CMB_HID + 1) if L.get("cmb") else 0) + \
+        ((S * 2 + 2) if L.get("fire") else 0) + \
+        ((lambda I_: 2 * (S + int(I_["xf"]) + 2) * int(I_["hid"]) + (int(I_["a"]) + 1) * int(I_["hid"]) + int(I_["hid"]) + 1
+          + (int(I_["hid"]) + 1) * int(I_["nw"]) + ((int(I_["hid"]) + 1) if I_.get("quiet") else 0))(L["ins"]) if L.get("ins") else 0) + \
+        ((lambda Hs_, In_, Out_: len(L["slowhalf"]["clocks"]) * ((In_ + 1) * Hs_ + 6 * Hs_ * Hs_ + 6 * Hs_ + (Hs_ + 1) * Hs_ + (Hs_ + 1) * Out_))(
+            int(L["slowhalf"]["hid"]), S + int(L["widths"]["goal"]), len(L["slowhalf"]["horizons"]) * N) if L.get("slowhalf") else 0) + \
+        ((lambda Ho_, Oo_: (S + 1) * Ho_ + (Ho_ + 1) * Ho_ + (Ho_ + 1) * Oo_)(int(L["outlook"]["hid"]), (len(L["outlook"]["kinds"])
+          + len(L["outlook"].get("facts") or ())) * (N + 1)) if L.get("outlook") else 0) +         ((lambda T_: (int(T_["width"]) + 1) * int(T_["hid"]) + (int(T_["hid"]) + 1) * int(T_["hid"]) + (int(T_["hid"]) + 1) * len(T_["outs"]))(L["trk22"])
+         if L.get("trk22") else 0) +         ((lambda D_: len(D_["sibs"]) * ((S + len(D_["sit"]) + 1) * int(D_["hid"]) + len(D_["tgt"]) * int(D_["hid"]) + (int(D_["hid"]) + 1) * int(D_["hid"])
+                                        + (int(D_["hid"]) + 1) * (len(D_["kinds"]) + len(D_["facts"]))))(L["desc22"]) if L.get("desc22") else 0) +         (((S + 1) * int(L["vw"]["hid"]) + int(L["vw"]["hid"]) + 1) if L.get("vw") else 0)
 
 
 def describe(L):
@@ -159,7 +451,22 @@ def describe(L):
         " + ".join("{} {}{}".format(p, L["widths"].get(p, 0), "" if L["on"].get(p, 1) else " (off)") for p in PARTS if L["widths"].get(p, 0)),
         L["plan"], L["n_target"], L["gamma"], 0.025 / max(1e-9, 1.0 - L["gamma"]), n_weights(L)) + \
         ("; its weapon part: {} scores added to the weapon key's, its {} inputs read by winp".format(L["weapon"], L["widths"].get("wobs", 0))
-         if L.get("weapon") else "")
+         if L.get("weapon") else "") + \
+        ("; the combat order: {} kinds ({}), a pointer of {} over {} candidates of {} numbers".format(
+            CMB_NK, ", ".join(CMB_KINDS), CMB_HID, CMB_ROWS, CMB_F) if L.get("cmb") else "") + \
+        ("; the fire push: 2 scores added to the fire key's" if L.get("fire") else "") +         ("; the keep choice (1.7a's) and its quiet layer on the stay value and {} change signals (2.1)".format(KSIG) if L.get("keepq") else
+         ("; the keep choice (1.7a's)" if L.get("keep") else "")) + \
+        ("; the slow plan inside (2.1d): {} -> {} -> {} -> {} horizons {} x {} targets, refreshed every {} keep readings, the pull's floor {}".format(
+            L["size"], L["slowplan"]["hid"], L["slowplan"]["hid"], len(L["slowplan"]["horizons"]), L["slowplan"]["horizons"], L["n_target"],
+            L["slowplan"]["every"], L["slowplan"]["floor"]) if has_slowplan(L) else "") + \
+        ("; the slow halves inside (2.1e): {} of {} (head state + goal -> {} -> GRU {} -> {} -> horizons {} x {}), clocks {} head ticks, the "
+         "read-back {} columns".format(len(L["slowhalf"]["clocks"]), L["slowhalf"]["hid"], L["slowhalf"]["hid"], L["slowhalf"]["hid"],
+                                       L["slowhalf"]["hid"], L["slowhalf"]["horizons"], L["n_target"], L["slowhalf"]["clocks"],
+                                       L["widths"].get("slowback", 0)) if has_slowhalf(L) else "") + \
+        ("; the outlook inside (2.1f): {} -> {} -> {} -> kinds {} x ({} targets + goal-blind)".format(
+            L["size"], L["outlook"]["hid"], L["outlook"]["hid"], L["outlook"]["kinds"], L["n_target"]) if has_outlook(L) else "") +         ("; its facts {}".format(L["outlook"]["facts"]) if (has_outlook(L) and L["outlook"].get("facts")) else "") +         ("; (2.2a) the tracker {} -> {} -> {} -> {} outputs; the desc outlooks {} ({} situation + {} per target numbers -> {}); the second "
+         "value {} -> 1".format(L["trk22"]["width"], L["trk22"]["hid"], L["trk22"]["hid"], len(L["trk22"]["outs"]), L["desc22"]["sibs"],
+                                len(L["desc22"]["sit"]), len(L["desc22"]["tgt"]), L["desc22"]["hid"], L["vw"]["hid"]) if has_parts22(L) else "")
 
 
 def _offs(L):
@@ -188,11 +495,18 @@ def make_module(L, seed=4044):
             self.target = nn.Linear(S, int(L["n_target"]))
             self.v = nn.Linear(S + int(L["widths"]["hands"]), 1)
             if L.get("keep"):                                # (1.4c) the keep choice: zeros here, its start from tools/keep_init.py
+                assert int(L["keep"]) == 2, "1.4c's keep choice (three numbers, once a second) is retired: tools/keep_init.py add gives 1.7a's"
                 self.keep = nn.Linear(S + int(L["widths"]["hands"]) + KEEP_F, 1)
                 nn.init.zeros_(self.keep.weight)
                 nn.init.zeros_(self.keep.bias)
                 self.register_buffer("keep_g", torch.zeros(()))
             self.register_buffer("gate", torch.zeros(()))
+            self.register_buffer("held_g", torch.zeros(()))  # (2.1c) the share of his trips on the held draw (0: the lock rule; a file without it: 0)
+            if L.get("keepq"):                               # (2.1) the keep choice's quiet layer: zeros (no draw: every stream as before)
+                self.keepq = nn.Linear(KEEPQ_F, 1)
+                nn.init.zeros_(self.keepq.weight)
+                nn.init.zeros_(self.keepq.bias)
+                self.register_buffer("keepq_g", torch.zeros(()))
             self.register_buffer("mix", torch.zeros(()))     # (b1.4a) his target choice moved from the hands' to the head's
             self.register_buffer("add", torch.zeros(()))     # (1.3b) the head's own scores added to the hands'
             for l_ in (self.plan_in, self.target, self.v):
@@ -215,16 +529,103 @@ def make_module(L, seed=4044):
                     nn.init.zeros_(l_.weight)
                     nn.init.zeros_(l_.bias)
                 self.register_buffer("wadd", torch.zeros(()))
+            if L.get("cmb"):                                 # (1.7) the combat order: its start from tools/order_init.py (the pros' fit)
+                self.ok_s = nn.Linear(S, CMB_NK)             # the kind: on his state (zero at the start) and the situation's numbers
+                self.ok_c = nn.Linear(CMB_NCTX, CMB_NK)
+                self.op_s = nn.Linear(S, CMB_HID)            # the pointer: g(s, x) = op_v(tanh(op_s(s) + op_x(x)))
+                self.op_x = nn.Linear(CMB_F, CMB_HID)
+                self.op_v = nn.Linear(CMB_HID, 1)
+                for l_ in (self.ok_s, self.ok_c, self.op_s, self.op_v):
+                    nn.init.zeros_(l_.weight)
+                    nn.init.zeros_(l_.bias)
+                self.register_buffer("cmb_g", torch.zeros(()))
+                self.register_buffer("padd", torch.zeros(()))
+            if L.get("fire"):                                # (1.7) the fire push: zeros
+                self.fsc = nn.Linear(S, 2)
+                nn.init.zeros_(self.fsc.weight)
+                nn.init.zeros_(self.fsc.bias)
+                self.register_buffer("fadd", torch.zeros(()))
+            if L.get("ins"):                                 # (2.1; inside the head on the owner's word, 2026-11-11) the instruction's choice:
+                I = L["ins"]                                 # the rows' scorer, the weapon's scores, the quiet logit (see "2.1: the instruction"
+                Hi, Fi, Ai = int(I["hid"]), int(I["xf"]), int(I["a"])    # below). After every older draw: their stream as before.
+                self.ins_is = nn.Linear(S, Hi)
+                self.ins_ix = nn.Linear(Fi, Hi)
+                self.ins_ia = nn.Linear(Ai, Hi)
+                self.ins_iv = nn.Linear(Hi, 1)
+                self.ins_ws = nn.Linear(S, Hi)
+                self.ins_wx = nn.Linear(Fi, Hi)
+                self.ins_wv = nn.Linear(Hi, int(I["nw"]))
+                for l_ in (self.ins_iv, self.ins_wv):        # its last layers at zero: every offered row alike, every usable weapon alike
+                    nn.init.zeros_(l_.weight)
+                    nn.init.zeros_(l_.bias)
+                if I.get("quiet"):                           # (quiet movement) one logit on the weapon's hidden layer; at the start: never
+                    self.ins_qv = nn.Linear(Hi, 1)           # asked (a bias of INS_Q0, weights zero)
+                    nn.init.zeros_(self.ins_qv.weight)
+                    nn.init.constant_(self.ins_qv.bias, INS_Q0)
+                self.ins_vv = nn.Linear(S + int(L["widths"]["hands"]), 1)    # (the owner, 2026-11-11: the head is paid by the win chance only) the head's
+                nn.init.zeros_(self.ins_vv.weight)           # value of the WIN-CHANCE pay alone (no entry of the pay table), on the state its
+                nn.init.zeros_(self.ins_vv.bias)             # older value reads; made last: every older layer's draw as before. At zero.
+                self.register_buffer("ins_g", torch.zeros(()))    # the share of seats whose instruction is the head's
+            if L.get("slowplan"):                            # (2.1d, the pull) the slow plan inside the head: sim/slowplan.py's module (its
+                import slowplan as slowplan_                 # own random stream: every older layer's draw as before; its last layer at zero),
+                self.plan = slowplan_.make_module(slowplan_layout(L))    # the pull's strength and its horizon (an index)
+                self.register_buffer("pull_g", torch.zeros(()))
+                self.register_buffer("pull_h", torch.zeros(()))
+            if L.get("slowhalf"):                            # (2.1e) the slow halves: sim/slowhalf.py's (each its own random stream: every older
+                import slowhalf as slowhalf_                 # layer's draw as before; its plan's last layer at zero); the pull's source mix, the
+                self.slow = slowhalf_.make_halves(slowhalf_layout(L))    # read-back's gate, the half that plays (0, 0, 1)
+            if int(L["widths"].get("slowback", 0)):          # (2.1e) where the read-back's columns are in u (pre(): their own term)
+                self.sb_at = tuple(int(x_) for x_ in _offs(L)["slowback"])
+                self.register_buffer("slow_mix", torch.zeros(()))
+                self.register_buffer("slow_back", torch.zeros(()))
+                self.register_buffer("slow_pick", torch.ones(()))
+            if L.get("outlook"):                             # (2.1f) the outlook inside the head: sim/outlook.py's module (its own random stream:
+                import outlook as outlook_                   # every older layer's draw as before; its last layer at zero), its term's strength,
+                self.out = outlook_.make_module(outlook_layout(L))     # the kind that plays
+                self.register_buffer("out_g", torch.zeros(()))
+                self.register_buffer("out_pick", torch.zeros(()))
+            if L.get("trk22"):                               # (2.2a) the tracker, the desc outlooks, the second value (each its own random stream:
+                import tracker as tracker_                   # every older layer's draw as before; their last layers at zero) and which outlook's
+                self.trk = tracker_.make_module(L["trk22"])  # term plays (out_src: 0 the built one). (2.2b: the tracker alone, its pass odds in
+            if L.get("trk22") and L.get("desc22"):           # it, where the desc outlooks and the second value were taken out: tools/fight22_init.py)
+                import desc22 as desc22_
+                import outlook as outlook_
+                self.dsc = desc22_.make_module(L["desc22"])
+                self.vw = outlook_.value_module(int(L["size"]), int(L["vw"]["hid"]))
+                self.register_buffer("out_src", torch.zeros(()))
 
         def _load_from_state_dict(self, state_dict, prefix, *args, **kw):
+            if L.get("trk22") and L.get("desc22") and prefix + "out_src" not in state_dict:     # (2.2a) no dial in the file: the built outlook
+                state_dict[prefix + "out_src"] = torch.zeros(())
+            if L.get("outlook"):                             # (2.1f) no dials in the file: strength 0, the first kind
+                for k_, v_ in (("out_g", torch.zeros(())), ("out_pick", torch.zeros(()))):
+                    if prefix + k_ not in state_dict:
+                        state_dict[prefix + k_] = v_
+            if L.get("slowhalf"):                            # (2.1e) no dials in the file: mix 0, back 0, the second half
+                for k_, v_ in (("slow_mix", 0.0), ("slow_back", 0.0), ("slow_pick", 1.0)):
+                    if prefix + k_ not in state_dict:
+                        state_dict[prefix + k_] = torch.tensor(v_)
+            if L.get("slowplan"):                            # (2.1d) no pull in the file: strength 0, the first horizon
+                for k_ in ("pull_g", "pull_h"):
+                    if prefix + k_ not in state_dict:
+                        state_dict[prefix + k_] = torch.zeros(())
             if prefix + "mix" not in state_dict:             # (a save from before b1.4a: no mix, 0)
                 state_dict[prefix + "mix"] = torch.zeros(())
             if prefix + "add" not in state_dict:             # (a save from before 1.3b: no add, 0)
                 state_dict[prefix + "add"] = torch.zeros(())
+            if prefix + "held_g" not in state_dict:          # (2.1c) no held-draw share in the file: 0 (the lock rule)
+                state_dict[prefix + "held_g"] = torch.zeros(())
             if L.get("keep") and prefix + "keep_g" not in state_dict:     # (1.4c) no share in the file: 0
                 state_dict[prefix + "keep_g"] = torch.zeros(())
+            if L.get("keepq") and prefix + "keepq_g" not in state_dict:   # (2.1) no quiet share in the file: 0
+                state_dict[prefix + "keepq_g"] = torch.zeros(())
             if L.get("weapon") and prefix + "wadd" not in state_dict:     # (1.5a) no add in the file: 0
                 state_dict[prefix + "wadd"] = torch.zeros(())
+            for k_, on_ in (("cmb_g", L.get("cmb")), ("padd", L.get("cmb")), ("fadd", L.get("fire"))):    # (1.7) no share, no add in the file: 0
+                if on_ and prefix + k_ not in state_dict:
+                    state_dict[prefix + k_] = torch.zeros(())
+            if L.get("ins") and prefix + "ins_g" not in state_dict:       # (2.1) no share in the file: 0
+                state_dict[prefix + "ins_g"] = torch.zeros(())
             super()._load_from_state_dict(state_dict, prefix, *args, **kw)
 
     with torch.random.fork_rng(devices=[]):
@@ -232,11 +633,13 @@ def make_module(L, seed=4044):
         return Head2()
 
 
-def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None):
+def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None, goal=None, slowback=None):
     """u [B, u_width] (float32 holding half-precision numbers) from the parts (a part None or off: zeros). obs: his
-    normalised inputs [B, all inputs] (the columns are taken here)"""
+    normalised inputs [B, all inputs] (the columns are taken here). (2.1) ins: the instruction he is on (ins_u; before wobs: what
+    inp reads; a layout without the part: 0 wide)"""
     import torch
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv, goal=goal,
+               slowback=slowback)                            # (2.1e: the read-back, slow_back x the picked half's state; None: zeros)
     ref = next(v for v in src.values() if v is not None)
     B = ref.shape[0]
     cols = []
@@ -253,7 +656,7 @@ def feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, ha
             v = v[:, torch.as_tensor(L[p + "_cols"], dtype=torch.long, device=v.device)]
         if v.shape[1] != w:                                  # (ctrl: the readout's first columns, zeros past its end)
             v = v[:, :w] if v.shape[1] > w else torch.cat([v, v.new_zeros(B, w - v.shape[1])], 1)
-        if p in ("trk", "trz", "ahead", "ctrl"):
+        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins", "wv", "goal"):
             v = v.clamp(-CLIP, CLIP)
         cols.append(v)
     return torch.cat(cols, 1).half().float()
@@ -267,6 +670,15 @@ def has_weapon(mod):
 def pre(mod, u):
     """the GRU's input from u: tanh(inp(u)); (1.5a) with the weapon part tanh(inp(u before wobs) + winp(wobs))"""
     import torch
+    sb = getattr(mod, "sb_at", None)
+    if sb is not None:                                       # (2.1e) the read-back's columns as a term of their own: the other columns' product is
+        F_ = torch.nn.functional                             # the sum it was before the widening, and the read-back's term is exactly 0 at back 0
+        a_, b_ = sb                                          # or with its weights at zero: the head answers to the bit as before
+        W_ = mod.inp.weight
+        z_ = F_.linear(u[..., :a_].contiguous(), W_[:, :a_].contiguous(), mod.inp.bias) + F_.linear(u[..., a_:b_].contiguous(), W_[:, a_:b_].contiguous())
+        if has_weapon(mod):
+            z_ = z_ + mod.winp(u[..., int(mod.inp.in_features):].contiguous())
+        return torch.tanh(z_)
     if not has_weapon(mod):
         return torch.tanh(mod.inp(u))
     n0 = int(mod.inp.in_features)
@@ -283,6 +695,12 @@ def outs(mod, s):
 def value(mod, s, h):
     import torch
     return mod.v(torch.cat([s, h], -1)).squeeze(-1)
+
+
+def value_w(mod, s, h):
+    """(2.1, --ins-pay-win) the head's value of the win-chance pay alone (ins_vv): what 2.1's parts learn from"""
+    import torch
+    return mod.ins_vv(torch.cat([s, h], -1)).squeeze(-1)
 
 
 def control_t(net, s_brain, hands=None, src="none"):
@@ -303,6 +721,56 @@ def control_t(net, s_brain, hands=None, src="none"):
         return (torch.sigmoid(c[src](x.half().float()).float()) - 0.5).detach()
 
 
+def fight_t(net, s_brain, hands, L=None):
+    """(1.7b, the part fight) the network's fight odds readout (sim/fightodds.py; a ModuleDict `fight`, "both": the brain's state and the
+    hands' memory) -> [B, 2] its chances minus 0.5, a number (no_grad, detached); None (zeros in the part) for a layout without the
+    part or a network without the readout"""
+    import torch
+    if L is not None and not int(L["widths"].get("fight", 0)):
+        return None
+    f = getattr(net, "fight", None)
+    if f is None or not hasattr(f, "keys") or "both" not in f.keys():
+        return None
+    with torch.no_grad():
+        x = s_brain.detach().float()
+        m = int(f["both"][0].in_features) - x.shape[1]
+        x = torch.cat([x, hands.detach()[:, :m].float()], 1)
+        return (torch.sigmoid(f["both"](x.half().float()).float()) - 0.5).detach()
+
+
+def wv_t(mod, s_brain, hands, L=None):
+    """(1.9a, the part wv) his shadow win value (sim/win_value.py's module beside the network: the brain's state and the hands' memory,
+    at half precision) -> [B, 1] (no_grad, detached); None (zeros in the part) for a layout without the part or no module"""
+    import torch
+    if mod is None or (L is not None and not int(L["widths"].get("wv", 0))):
+        return None
+    with torch.no_grad():
+        x = s_brain.detach().float()
+        m = int(mod[0].in_features) - x.shape[1]
+        x = torch.cat([x, hands.detach()[:, :m].float()], 1)
+        return mod(x.half().float()).float().detach()
+
+
+def np_wv_params(ck, L):
+    """(1.9a, the part wv, numpy) the shadow win value's arrays from a checkpoint's top-level "win_value", None for a layout without
+    the part or a file without it"""
+    if not int(L["widths"].get("wv", 0)) or not ck.get("win_value"):
+        return None
+    sd = ck["win_value"]["model"]
+    g = lambda k: np.asarray(sd[k].float().numpy() if hasattr(sd[k], "numpy") else sd[k], np.float32)    # noqa: E731
+    return (g("0.weight"), g("0.bias"), g("2.weight"), g("2.bias"))
+
+
+def np_wv(P, s_brain, hands):
+    """(1.9a) wv_t() in numpy: P from np_wv_params (None: None)"""
+    if P is None:
+        return None
+    x = np.asarray(s_brain, np.float32)
+    m = int(P[0].shape[1]) - x.shape[1]
+    x = np.concatenate([x, np.asarray(hands, np.float32)[:, :m]], 1).astype(np.float16).astype(np.float32)
+    return (np.maximum(x @ P[0].T + P[1], 0.0) @ P[2].T + P[3]).astype(np.float32)
+
+
 class State:
     """the head's live state for n seats (the trainer's rollout): s, valid (outputs held: no reset since the last tick), the
     held plan and bias"""
@@ -316,6 +784,12 @@ class State:
         self.bias = torch.zeros(n, int(L["n_target"]), device=dev)
         self.raw = torch.zeros(n, int(L["n_target"]), device=dev)     # (b1.4a) its own target choice, held as the bias is
         self.wraw = torch.zeros(n, int(L["weapon"]), device=dev) if L.get("weapon") else None   # (1.5a) its weapon scores, held so
+        cm_ = L.get("cmb")                                  # (1.7) the order's held numbers: the kind's logits, the new candidates'
+        self.okl = torch.zeros(n, CMB_NK, device=dev) if cm_ else None    # scores (invalid: -inf), the targets' and the ways' adds
+        self.ops = torch.zeros(n, CMB_NEW, device=dev) if cm_ else None
+        self.tadd = torch.zeros(n, CMB_T, device=dev) if cm_ else None
+        self.yadd = torch.zeros(n, CMB_W, device=dev) if cm_ else None
+        self.fraw = torch.zeros(n, 2, device=dev) if L.get("fire") else None      # (1.7) its fire scores, held so
 
     def refresh(self, mod):
         """before a rollout: the held outputs made again from the state with the weights and gate it is played at (the
@@ -327,13 +801,37 @@ class State:
             self.raw = mod.target(self.s) * self.valid[:, None]
             if self.wraw is not None and has_weapon(mod):
                 self.wraw = mod.wsc(self.s) * self.valid[:, None]
+            if self.fraw is not None and has_fire(mod):
+                self.fraw = mod.fsc(self.s) * self.valid[:, None]
+
+    def order_tick(self, mod, x, ctx):
+        """(1.7) at a keep reading: the order's numbers from the state and the candidates' x [n, CMB_ROWS, CMB_F], ctx [n, CMB_NCTX];
+        held to the next"""
+        import torch
+        if self.okl is None or not has_cmb(mod):
+            return
+        with torch.no_grad():
+            kl, ps, ta, ya = order_scores(mod, self.s, x, ctx)
+            self.okl, self.ops = kl, ps
+            self.tadd, self.yadd = ta * self.valid[:, None], ya * self.valid[:, None]
+
+    def order(self, mod):
+        """(1.7) the held order: the kind's logits [n, CMB_NK] and the new candidates' scores [n, CMB_NEW] (shut: -inf), where it has a
+        state [n]; (None, None, None) without the part"""
+        if self.okl is None or not has_cmb(mod):
+            return None, None, None
+        return self.okl, self.ops, self.valid > 0
 
     def adds(self, mod):
         """(what the hands' fast GRU input gets, what the intention's logits get, the mix k [n, 1], the head's own choice, the
-        add [n, 1], (1.5a) what the weapon key's logits get [n, weapon] or None) on this frame"""
+        add [n, 1], (1.5a) what the weapon key's logits get [n, weapon] or None, (1.7) what the fire key's logits get [n, 2] or None)
+        on this frame"""
         return (mod.gate * mod.plan_in(self.plan) * self.valid[:, None], self.bias, mod.mix * self.valid[:, None], self.raw,
                 mod.add * self.valid[:, None],
-                mod.wadd * self.valid[:, None] * self.wraw if (self.wraw is not None and has_weapon(mod)) else None)
+                mod.wadd * self.valid[:, None] * self.wraw if (self.wraw is not None and has_weapon(mod)) else None,
+                mod.fadd * self.valid[:, None] * self.fraw if (self.fraw is not None and has_fire(mod)) else None,
+                mod.padd * self.tadd if (self.tadd is not None and has_cmb(mod)) else None,
+                mod.padd * self.yadd if (self.yadd is not None and has_cmb(mod)) else None)
 
     def tick(self, mod, u):
         import torch
@@ -343,6 +841,8 @@ class State:
         self.raw = mod.target(self.s)
         if self.wraw is not None and has_weapon(mod):
             self.wraw = mod.wsc(self.s)
+        if self.fraw is not None and has_fire(mod):
+            self.fraw = mod.fsc(self.s)
 
     def reset(self, d):
         k = 1.0 - d
@@ -353,6 +853,11 @@ class State:
         self.raw = self.raw * k[:, None]
         if self.wraw is not None:
             self.wraw = self.wraw * k[:, None]
+        if self.tadd is not None:                            # (1.7: a reset clears the order's adds; its kind and scores wait for the next reading)
+            self.tadd = self.tadd * k[:, None]
+            self.yadd = self.yadd * k[:, None]
+        if self.fraw is not None:
+            self.fraw = self.fraw * k[:, None]
 
     def snap(self):
         return self.s.clone(), self.valid.clone()
@@ -366,7 +871,9 @@ def seq(mod, L, U, dn, s0, v0, plan_grad=0.0):
     -> dict gin [T, B, enc] (into the fast GRU's input), bias [T, B, n_target], s_held [T, B, size] (the state each frame's
     outputs read; zeros after a reset), alive [T, B], s [J, B, size], plan [J + 1, B, plan] (the held plans: the rollout's
     own first), raw [T, B, n_target] (b1.4a: its own target choice), k [T, B, 1] (the mix where it has a state), a [T, B, 1]
-    (1.3b: the add where it has a state), w [T, B, weapon] (1.5a: wadd x its weapon scores where it has a state; None without)"""
+    (1.3b: the add where it has a state), w [T, B, weapon] (1.5a: wadd x its weapon scores where it has a state; None without),
+    f [T, B, 2] (1.7: fadd x its fire scores on the state as a number). (1.7) The order's numbers per frame come from
+    order_seq() with the stored candidates."""
     import torch
     T, B = dn.shape
     K = int(L["every"])
@@ -395,7 +902,91 @@ def seq(mod, L, U, dn, s0, v0, plan_grad=0.0):
     gin = mod.gate * mod.plan_in(Pf) * am
     Sh = St[idx] * am
     return dict(gin=gin, bias=Bi[idx] * am, s_held=Sh, alive=alive, s=St[1:], plan=P, raw=mod.target(Sh) * am, k=mod.mix * am,
-                a=mod.add * am, w=(mod.wadd * am * mod.wsc(Sh)) if has_weapon(mod) else None)
+                a=mod.add * am, w=(mod.wadd * am * mod.wsc(Sh)) if has_weapon(mod) else None,
+                f=(mod.fadd * am * mod.fsc(Sh.detach())) if has_fire(mod) else None)
+
+
+def order_scores(mod, s, x, ctx):
+    """(1.7) the order's numbers from the state s [..., size], the candidates x [..., CMB_ROWS, CMB_F] and the situation ctx [...,
+    CMB_NCTX] -> the kind's logits [..., CMB_NK] (a kind without a valid candidate: -inf; the target as chosen always there), the new
+    candidates' scores [..., CMB_NEW] (invalid: -inf), the targets' adds [..., CMB_T] and the ways' [..., CMB_W] (invalid: 0)"""
+    import torch
+    x = x.float()
+    val = x[..., CMB_VALID] > 0.5
+    g = mod.op_v(torch.tanh(mod.op_s(s.float())[..., None, :] + mod.op_x(x))).squeeze(-1)      # [..., CMB_ROWS]
+    neg = torch.finfo(g.dtype).min / 4
+    t0, n0 = CMB_T, CMB_T + CMB_NEW
+    ps = torch.where(val[..., t0:n0], g[..., t0:n0], torch.full_like(g[..., t0:n0], neg))
+    kl = mod.ok_s(s.float()) + mod.ok_c(ctx.float())
+    has = [torch.ones_like(val[..., 0])] + [val[..., t0 + c0:t0 + c0 + k].any(-1) for c0, k in zip(CMB_C0[1:], CMB_SLOTS[1:])]
+    kl = torch.where(torch.stack(has, -1), kl, torch.full_like(kl, neg))
+    ta = torch.where(val[..., :t0], g[..., :t0], torch.zeros_like(g[..., :t0]))
+    ya = torch.where(val[..., n0:], g[..., n0:], torch.zeros_like(g[..., n0:]))
+    return kl, ps, ta, ya
+
+
+def order_scores_fixed(R, x, ctx):
+    """(1.7b, --ord-kl) the order's kind logits and new candidates' scores of a fixed reference R (a dict of tensors: ok_c.weight, ok_c.bias,
+    op_x.weight, op_x.bias, op_v.weight, op_v.bias; its state's layers ok_s, op_s at zero, as the pros' fit starts them), from the candidates
+    x [..., CMB_ROWS, CMB_F] and the situation ctx [..., CMB_NCTX], with order_scores' masks"""
+    import torch
+    import torch.nn.functional as F_
+    x = x.float()
+    val = x[..., CMB_VALID] > 0.5
+    g = F_.linear(torch.tanh(F_.linear(x, R["op_x.weight"], R["op_x.bias"])), R["op_v.weight"], R["op_v.bias"]).squeeze(-1)
+    neg = torch.finfo(g.dtype).min / 4
+    t0, n0 = CMB_T, CMB_T + CMB_NEW
+    ps = torch.where(val[..., t0:n0], g[..., t0:n0], torch.full_like(g[..., t0:n0], neg))
+    kl = F_.linear(ctx.float(), R["ok_c.weight"], R["ok_c.bias"])
+    has = [torch.ones_like(val[..., 0])] + [val[..., t0 + c0:t0 + c0 + k].any(-1) for c0, k in zip(CMB_C0[1:], CMB_SLOTS[1:])]
+    kl = torch.where(torch.stack(has, -1), kl, torch.full_like(kl, neg))
+    return kl, ps
+
+
+def order_kl(R, kl, ps, x, ctx, seg):
+    """(1.7b, --ord-kl; AlphaStar's KL to the human policy) KL(reference || the head's) of the order: over the kinds, and within each new
+    kind over its candidates weighted by the reference's chance of that kind -> [T, n]. kl, ps: the head's (order_scores, held per frame);
+    x, ctx: the candidates and the situation per segment, seg [T] each frame's segment. The reference is a number (no gradient)"""
+    import torch
+    with torch.no_grad():
+        kr, pr = order_scores_fixed(R, x, ctx)
+        kr, pr = kr[seg], pr[seg]
+        lkr = torch.log_softmax(kr, -1)
+        pkr = lkr.exp()
+    lk = torch.log_softmax(kl, -1)
+    out = (pkr * (lkr - lk)).sum(-1)
+    for k_ in range(1, CMB_NK):
+        c0, m = CMB_C0[k_], CMB_SLOTS[k_]
+        lc = torch.log_softmax(ps[..., c0:c0 + m], -1)
+        with torch.no_grad():
+            lcr = torch.log_softmax(pr[..., c0:c0 + m], -1)
+            pcr = lcr.exp()
+        out = out + pkr[..., k_] * (pcr * (lcr - lc)).sum(-1)
+    return out
+
+
+def order_logp(kl, ps, kind, cand):
+    """(1.7) the order's log-probability [...] of the kind [...] and (for a new kind) its candidate [...] (within the kind) under the
+    kind's logits kl and the new candidates' scores ps; and the log-probabilities of the kinds [..., CMB_NK]"""
+    import torch
+    lk = torch.log_softmax(kl, -1)
+    out = lk.gather(-1, kind[..., None]).squeeze(-1)
+    for k_ in range(1, CMB_NK):
+        c0, m = CMB_C0[k_], CMB_SLOTS[k_]
+        lc = torch.log_softmax(ps[..., c0:c0 + m], -1)
+        pick = lc.gather(-1, cand.clamp(0, m - 1)[..., None]).squeeze(-1)
+        out = out + torch.where(kind == k_, pick, torch.zeros_like(pick))
+    return out, lk
+
+
+def has_cmb(mod):
+    """(1.7) the module has the combat order"""
+    return mod is not None and hasattr(mod, "op_v")
+
+
+def has_fire(mod):
+    """(1.7) the module has the fire push"""
+    return mod is not None and hasattr(mod, "fsc")
 
 
 def has_keep(mod):
@@ -404,18 +995,42 @@ def has_keep(mod):
 
 
 def keep_x(feat, lp_held):
-    """(1.4c) the keep choice's own numbers [..., KEEP_F] from the simulator's keep_feat [..., 3] (age s, contact, target) and
-    the held target's log-probability [...] (numbers: no gradient)"""
+    """(1.4c, 1.7a) the keep choice's own numbers [..., KEEP_F] from the simulator's keep_feat [..., KEEP_FEAT] (age s, contact,
+    target, arrived, since arrival s, since a sound s, since a hit unseen s) and the held target's log-probability [...]
+    (numbers: no gradient)"""
     import torch
-    c = feat[..., 1].float()
-    age = (1.0 - c) * feat[..., 0].float().clamp(0.0, KEEP_AGE_MAX) / 10.0
-    return torch.stack([age, c, lp_held.float().clamp(min=KEEP_LP_MIN) / 5.0], -1).detach()
+    feat = feat.float()
+    c, ar = feat[..., 1], feat[..., 3] * (1.0 - feat[..., 1])
+    age = (1.0 - c) * (1.0 - ar) * feat[..., 0].clamp(0.0, KEEP_AGE_MAX) / 10.0
+    sa = ar * feat[..., 4].clamp(0.0, KEEP_AGE_MAX) / 10.0
+    return torch.stack([age, c, lp_held.float().clamp(min=KEEP_LP_MIN) / 5.0, ar, sa, torch.exp(-feat[..., 5].clamp(min=0.0) / KEEP_RECENT),
+                        torch.exp(-feat[..., 6].clamp(min=0.0) / KEEP_RECENT)], -1).detach()
 
 
 def keep_logit(mod, s, h, f):
     """(1.4c) the logit of re-deciding [...] from the head's held state s, the hands' memory h (a number) and f (keep_x)"""
     import torch
     return mod.keep(torch.cat([s, h.detach().float(), f], -1)).squeeze(-1)
+
+
+def has_keepq(mod):
+    """(2.1) the module has the keep choice's quiet layer"""
+    return mod is not None and hasattr(mod, "keepq")
+
+
+def keepq_x(feat, sv):
+    """(2.1) the quiet layer's numbers [..., KEEPQ_F] from the simulator's keep_feat with KEEP_SIG [..., KEEP_FEAT + KSIG] and the stay
+    value [...] (keeping beats a new draw by this much, sim/stay.py; clipped to +- KEEPQ_SV): the stay value, his target's age (s / 10, at
+    most 2), the KSIG change signals (numbers: no gradient). In quiet only it decides: there the age is the whole age"""
+    import torch
+    feat = feat.float()
+    return torch.cat([sv.float().clamp(-KEEPQ_SV, KEEPQ_SV)[..., None], feat[..., 0:1].clamp(0.0, KEEP_AGE_MAX) / 10.0,
+                      feat[..., KEEP_FEAT:KEEP_FEAT + KSIG]], -1).detach()
+
+
+def keepq_logit(mod, x):
+    """(2.1) the quiet layer's logit of re-deciding [...] from keepq_x"""
+    return mod.keepq(x.float()).squeeze(-1)
 
 
 def gae(rew, val, done, gamma, lam):
@@ -472,6 +1087,11 @@ def np_open(W):
     tg_ = np.abs(W["target.weight"]).sum() + np.abs(W["target.bias"]).sum()
     if np_wadd_on(W):                                        # (1.5a) its weapon scores added and not all zero
         return True
+    if "op_v.weight" in W and float(np.asarray(W.get("padd", 0.0))) > 0 and float(np.abs(W["op_v.weight"]).sum()) > 0:
+        return True                                          # (1.7) the pointer's scores added to the targets' and the way's
+    if "fsc.weight" in W and float(np.asarray(W.get("fadd", 0.0))) > 0 and \
+            float(np.abs(W["fsc.weight"]).sum() + np.abs(W["fsc.bias"]).sum()) > 0:
+        return True                                          # (1.7) its fire scores added
     if (float(np.asarray(W.get("mix", 0.0))) > 0 or float(np.asarray(W.get("add", 0.0))) > 0) and tg_ > 0:
         return True
     return float(np.asarray(W.get("gate", 0.0))) > 0 and (np.abs(W["plan_in.weight"]).sum() + np.abs(W["plan_in.bias"]).sum() + tg_) > 0
@@ -508,6 +1128,38 @@ def np_wadd(W, L, hs):
     return (np.float32(np.asarray(W["wadd"])) * ok * (s @ W["wsc.weight"].T + W["wsc.bias"])).astype(np.float32)
 
 
+def np_fadd(W, L, hs):
+    """(1.7) what the fire key's logits get [B, 2] from the state hs: fadd x its fire scores where it has a state; None without the
+    part or at fadd 0"""
+    if "fsc.weight" not in W or not float(np.asarray(W.get("fadd", 0.0))) > 0:
+        return None
+    S = int(L["size"])
+    s, ok = hs[:, :S], hs[:, S:S + 1]
+    return (np.float32(np.asarray(W["fadd"])) * ok * (s @ W["fsc.weight"].T + W["fsc.bias"])).astype(np.float32)
+
+
+def np_order_scores(W, L, hs, x, ctx):
+    """(1.7) order_scores() in numpy from the state hs [B, np_state_width], x [B, CMB_ROWS, CMB_F], ctx [B, CMB_NCTX] -> kind logits,
+    new candidates' scores, targets' adds, ways' adds, where it has a state [B]; Nones without the part"""
+    if "op_v.weight" not in W:
+        return None, None, None, None, None
+    S = int(L["size"])
+    s, ok = hs[:, :S].astype(np.float32), hs[:, S] > 0
+    x = np.asarray(x, np.float32)
+    val = x[..., CMB_VALID] > 0.5
+    hid = np.tanh((s @ W["op_s.weight"].T + W["op_s.bias"])[:, None, :] + x @ W["op_x.weight"].T + W["op_x.bias"])
+    g = (hid @ W["op_v.weight"].T)[..., 0] + W["op_v.bias"][0]
+    neg = np.float32(-1e30)
+    t0, n0 = CMB_T, CMB_T + CMB_NEW
+    ps = np.where(val[:, t0:n0], g[:, t0:n0], neg).astype(np.float32)
+    kl = s @ W["ok_s.weight"].T + W["ok_s.bias"] + np.asarray(ctx, np.float32) @ W["ok_c.weight"].T + W["ok_c.bias"]
+    has = np.stack([np.ones(len(s), bool)] + [val[:, t0 + c0:t0 + c0 + k].any(1) for c0, k in zip(CMB_C0[1:], CMB_SLOTS[1:])], 1)
+    kl = np.where(has, kl, neg).astype(np.float32)
+    ta = np.where(val[:, :t0], g[:, :t0], 0.0).astype(np.float32)
+    ya = np.where(val[:, n0:], g[:, n0:], 0.0).astype(np.float32)
+    return kl, ps, ta, ya, ok
+
+
 def np_has_keep(W):
     """(1.4c) the arrays have the keep choice"""
     return "keep.weight" in W
@@ -516,9 +1168,11 @@ def np_has_keep(W):
 def np_keep_x(feat, lp_held):
     """keep_x() in numpy"""
     feat = np.asarray(feat, np.float32)
-    c = feat[:, 1]
-    age = (1.0 - c) * np.clip(feat[:, 0], 0.0, KEEP_AGE_MAX) / 10.0
-    return np.stack([age, c, np.maximum(np.asarray(lp_held, np.float32), KEEP_LP_MIN) / 5.0], 1).astype(np.float32)
+    c, ar = feat[:, 1], feat[:, 3] * (1.0 - feat[:, 1])
+    age = (1.0 - c) * (1.0 - ar) * np.clip(feat[:, 0], 0.0, KEEP_AGE_MAX) / 10.0
+    sa = ar * np.clip(feat[:, 4], 0.0, KEEP_AGE_MAX) / 10.0
+    return np.stack([age, c, np.maximum(np.asarray(lp_held, np.float32), KEEP_LP_MIN) / 5.0, ar, sa,
+                     np.exp(-np.maximum(feat[:, 5], 0.0) / KEEP_RECENT), np.exp(-np.maximum(feat[:, 6], 0.0) / KEEP_RECENT)], 1).astype(np.float32)
 
 
 def np_keep_logit(W, L, hs, h, f):
@@ -526,6 +1180,23 @@ def np_keep_logit(W, L, hs, h, f):
     S = int(L["size"])
     x = np.concatenate([hs[:, :S], np.asarray(h, np.float32), f], 1)
     return (x @ W["keep.weight"].T + W["keep.bias"])[:, 0].astype(np.float32)
+
+
+def np_has_keepq(W):
+    """(2.1) the arrays have the keep choice's quiet layer"""
+    return "keepq.weight" in W
+
+
+def np_keepq_x(feat, sv):
+    """keepq_x() in numpy"""
+    feat = np.asarray(feat, np.float32)
+    return np.concatenate([np.clip(np.asarray(sv, np.float32), -KEEPQ_SV, KEEPQ_SV)[:, None], np.clip(feat[:, 0:1], 0.0, KEEP_AGE_MAX) / 10.0,
+                           feat[:, KEEP_FEAT:KEEP_FEAT + KSIG]], 1).astype(np.float32)
+
+
+def np_keepq_logit(W, x):
+    """keepq_logit() in numpy"""
+    return (np.asarray(x, np.float32) @ W["keepq.weight"].T + W["keepq.bias"])[:, 0].astype(np.float32)
 
 
 def np_adds(W, L, hs):
@@ -576,9 +1247,31 @@ def np_ctrl(P, s_brain, hands=None):
     return (1.0 / (1.0 + np.exp(-np_mlp(P, x))) - 0.5).astype(np.float32)
 
 
-def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None):
+def np_fight_params(sd, L):
+    """(1.7b, the part fight, numpy) the fight odds readout's arrays (sim/fightodds.py's "fight.both"), None for a layout without the
+    part or a network without the readout"""
+    if not int(L["widths"].get("fight", 0)):
+        return None
+    try:
+        return mlp_of(sd, "fight.both")
+    except KeyError:
+        return None
+
+
+def np_fight(P, s_brain, hands):
+    """(1.7b) fight_t() in numpy: P from np_fight_params (None: None)"""
+    if P is None:
+        return None
+    x = np.asarray(s_brain, np.float32)
+    m = int(P[0].shape[1]) - x.shape[1]
+    x = np.concatenate([x, np.asarray(hands, np.float32)[:, :m]], 1).astype(np.float16).astype(np.float32)
+    return (1.0 / (1.0 + np.exp(-np_mlp(P, x))) - 0.5).astype(np.float32)
+
+
+def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None, hands=None, fight=None, ins=None, wv=None, goal=None, slowback=None):
     """feats() in numpy"""
-    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs)
+    src = dict(brain=brain, trk=trk, trz=trz, ahead=ahead, ctrl=ctrl, obs=obs, hands=hands, wobs=obs, fight=fight, ins=ins, wv=wv, goal=goal,
+               slowback=slowback)
     B = len(next(v for v in src.values() if v is not None))
     cols = []
     for p in PARTS:
@@ -594,7 +1287,7 @@ def np_feats(L, brain=None, trk=None, trz=None, ahead=None, ctrl=None, obs=None,
             v = v[:, np.asarray(L[p + "_cols"], np.int64)]
         if v.shape[1] != w:
             v = v[:, :w] if v.shape[1] > w else np.concatenate([v, np.zeros((B, w - v.shape[1]), np.float32)], 1)
-        if p in ("trk", "trz", "ahead", "ctrl"):
+        if p in ("trk", "trz", "ahead", "ctrl", "fight", "ins", "wv", "goal"):
             v = np.clip(v, -CLIP, CLIP)
         cols.append(v)
     return np.concatenate(cols, 1).astype(np.float16).astype(np.float32)
@@ -605,7 +1298,18 @@ def np_tick(W, L, u, hs):
     S = int(L["size"])
     s = hs[:, :S]
     n0 = int(W["inp.weight"].shape[1])                      # (1.5a) with the weapon part: inp on u before wobs, winp on wobs
-    if "winp.weight" in W and u.shape[1] > n0:
+    sb_ = _offs(L)["slowback"] if int(L["widths"].get("slowback", 0)) else None
+    if sb_ is not None:                                      # (2.1e) the read-back's columns as a term of their own (pre()'s sums: the head answers
+        a_, b_ = sb_                                         # to the bit as before at back 0 or with its weights at zero); the weights' two parts
+        if "_inp_a" not in W or W["_inp_a"].shape[1] != a_ or W.get("_inp_src") is not W["inp.weight"]:   # kept contiguous beside the arrays
+            W["_inp_a"] = np.ascontiguousarray(W["inp.weight"][:, :a_])
+            W["_inp_sb"] = np.ascontiguousarray(W["inp.weight"][:, a_:b_])
+            W["_inp_src"] = W["inp.weight"]
+        z_ = (np.ascontiguousarray(u[:, :a_]) @ W["_inp_a"].T + W["inp.bias"]) + np.ascontiguousarray(u[:, a_:b_]) @ W["_inp_sb"].T
+        if "winp.weight" in W and u.shape[1] > n0:
+            z_ = z_ + (np.ascontiguousarray(u[:, n0:]) @ W["winp.weight"].T + W["winp.bias"])
+        p = np.tanh(z_)
+    elif "winp.weight" in W and u.shape[1] > n0:
         p = np.tanh(np.ascontiguousarray(u[:, :n0]) @ W["inp.weight"].T + W["inp.bias"] +
                     (np.ascontiguousarray(u[:, n0:]) @ W["winp.weight"].T + W["winp.bias"]))
     else:
@@ -625,3 +1329,558 @@ def np_clear(L, hs, rows=None):
     r = slice(None) if rows is None else rows
     hs[r] = 0.0
     return hs
+
+# ------------------------------------------------------------------------------------------------------- 2.1: the instruction
+# (docs/runs/2.1/DESIGN.md, TRAINER_PARTS.md; owner, 2026-11-10: "It decides between a suite of questions, recurrently, with
+# instructions that feed to hand for execution") The head's choice of an instruction: every tick the simulator gives each seat
+# INS_C candidate rows (sim/duel_env.py instr_feat: a verb, a place, a point, what it depends on; xf numbers a row), the appraisals
+# (sim/appraise.py) forecast what each would bring (6 numbers a row), and a scorer over the rows reads the head's state, a row's
+# numbers and its forecast:  g(s, x, a) = iv(tanh(is(s) + ix(x) + ia(a))),  one score a row, a row the map does not offer: never.
+# The weapon of the chosen row:  gw(s, x) = wv(tanh(ws(s) + wx(x))),  one score a weapon, a weapon he cannot use: never.
+# ONE learned output decides (the scorer's); the appraisals' forecast is an input of it and the target of its lesson, not a logit
+# added to it (CLAUDE.md rule 11: no sum of two learned outputs here).
+# Where it lives (the owner, 2026-11-11: "of course that should be moved inside. the point is that the head learns how to make
+# decisions ... It has to learn from its decisions what works and doesn't work"): INSIDE the head. The scorer's layers are layers of
+# the head's module (ins_is, ins_ix, ins_ia, ins_iv; ins_ws, ins_wx, ins_wv; ins_qv; the share ins_g), in the network's state dict
+# and the optimizer (a group "ins" at the head's rate). The learning step re-runs the head over the rollout (seq) and scores the kept
+# readings again from the re-run state: the lesson toward the appraisals' order, the game's pay on his own readings and the entropy
+# bonus are terms of the head's loss, so their gradient goes into the scorer AND through the state into the head's memory and its
+# input layer (ins_loss). The appraisals, the map sense and the brain's readouts stay beside the network: they are inputs, not the head.
+# ONE definition of the masked log-probabilities (ins_row_logp, ins_wq_logp, ins_joint_logp) is what the rollout draws from and
+# stores, and what the learning step recomputes (1.7c's false start was a reference log-probability without a mask the play used);
+# the checks' player and the plugin use its numpy twin (np_ins_row_logp, np_ins_wq_logp), proved equal by tools/run/test_21_parts.py.
+INS_A = 7                                                    # a row's forecast: sim/appraise.py OUTS (dv the sixth, dv over the long window the seventh)
+INS_DV, INS_DVL = 5, 6
+INS_SIG = 8                                                  # the simulator's instr_state(): doing, done, failed, three change signals, and (third pass)
+INS_SIG_WAKE = 6                                             # THE WAKE (the enemy's pain sound heard, or his believed stack fallen by a band: sim/duel_env.py
+#                                                              INS_WAKE_DROP) and how far that stack has fallen since the instruction was given. A wake ends
+#                                                              the keep as "done" and "failed" do: the head draws anew at that reading (ins_end)
+INS_SEED = 4066
+INS_Q0 = -6.0                                                # the quiet logit's start: asked about once in 400 picks
+INS_BQ = 3                                                   # (the brain's questions among the head's inputs, for every seat, under an instruction or
+#                                                              not: the chance the enemy knows where he is, minus 0.5 (sim/knownodds.py); how
+#                                                              spread the brain's zone odds are (0 .. 1); how far apart its places 1, 2, 4 s ahead)
+INS_MS = 8                                                   # (the map sense at a candidate's place: sim/mapsense.py's eight numbers, after the row's own)
+
+
+def ins_redo(age, every):
+    """(2.1a; the owner, 2026-11-12: "the head makes a decision every 200ms, that's its design and what should be built"; "The head is
+    forced to redecide on a new thing to do every 200ms, which will often be 'continue what I was doing'") THE one rule, torch or numpy
+    (the trainer's rollout, the checks' player, the plugin): a seat under the head's instruction draws anew at EVERY reading (every
+    head tick, 0.2 s). "Continue" is drawing the row he is on (it is among the rows, marked on_now). Nothing holds an instruction
+    between two ticks: not the 8-second lock, not 1.7a's keep choice, not a timer. ins_end() (done, failed, a wake) is then only a
+    record. age, every: kept for the callers; every reading is True"""
+    return age > -1.0
+
+
+def bound_mask(m, wd):
+    """(1.7c, --wrule; 2.1a, INS_BIND) the weapon key's frames that count: m [...] where the key's action was his own (wd [...] under
+    0: neither the pros' table nor an instruction's binding set it), zero elsewhere. THE ONE DEFINITION: the rollout's stored
+    log-probability and every pass of the learning step (the reference pass, the learner's, the entropy bonus) go through it, or
+    the ratio lies (1.7c's false start: the reference pass without it)"""
+    return m * (wd < 0).to(m.dtype)
+
+
+def ins_end(sg):
+    """THE one rule of what ends a keep whatever the keep choice says (the trainer's rollout, the checks' player, the plugin): the
+    instruction is done, has failed, or a wake came (sg [..., INS_SIG]: the simulator's instr_state(); torch or numpy)"""
+    return (sg[..., 1] > 0.5) | (sg[..., 2] > 0.5) | (sg[..., INS_SIG_WAKE] > 0.5)
+
+
+def ins_u_width(xf, bq=0):
+    """the part "ins" of the head's input: the row he is on (xf), its forecast when he took it (INS_A) and now (INS_A), the simulator's
+    change signals (INS_SIG), how long he has been on it and whether he is on one (2); then the brain's questions (bq: INS_BQ or 0)"""
+    return int(xf) + 2 * INS_A + INS_SIG + 2 + int(bq)
+
+
+def add_ins(L, xf, nw, c, hid=128, quiet=0, ms=0, bq=0):
+    """a layout with the instruction: the head's input gets the part "ins"; the scorer's shape under "ins". xf: the numbers of a row
+    as the SIMULATOR gives them; ms: the map sense at the row's place is read after them (INS_MS more: the scorer's and the appraisals'
+    rows are xf + ms wide, "xf" in the layout; the simulator's own count is kept as "fx"); bq: the brain's questions among the head's
+    inputs (INS_BQ). quiet: the third choice (the instruction asks for quiet movement: one logit beside the weapon's)"""
+    ms, bq = (INS_MS if ms else 0), (INS_BQ if bq else 0)
+    return dict(L, widths=dict(L["widths"], ins=ins_u_width(int(xf) + ms, bq)), on=dict(L["on"], ins=1),
+                ins=dict(xf=int(xf) + ms, fx=int(xf), ms=ms, bq=bq, nw=int(nw), c=int(c), hid=int(hid), a=INS_A, size=int(L["size"]),
+                         quiet=int(bool(quiet))))
+
+
+def has_ins(L):
+    return bool(L is not None and L.get("ins")) and int(L["widths"].get("ins", 0)) > 0
+
+
+INS_LAYERS = ("ins_is", "ins_ix", "ins_ia", "ins_iv", "ins_ws", "ins_wx", "ins_wv", "ins_qv", "ins_vv")
+
+
+def has_ins_layers(mod):
+    """the head's module has the instruction's scorer (a layout with "ins")"""
+    return mod is not None and hasattr(mod, "ins_iv")
+
+
+def ins_params(mod):
+    """the scorer's own parameters (the optimizer's group "ins")"""
+    return [p_ for n_, p_ in mod.named_parameters() if n_.startswith("ins_")]
+
+
+def _neg(x):
+    import torch
+    return torch.finfo(x.dtype).min / 4
+
+
+def ins_scores(m, s, X, A, ok):
+    """the rows' scores [..., C] from the head's state s [..., size] AS GIVEN (a number in the rollout; the re-run state with its
+    gradient in the learning step), the rows X [..., C, xf], their forecasts A [..., C, INS_A] and which the map offers ok [..., C]
+    (not offered: never). m: the head's module"""
+    import torch
+    g = m.ins_iv(torch.tanh(m.ins_is(s.float())[..., None, :] + m.ins_ix(X.float()) + m.ins_ia(A.float()))).squeeze(-1)
+    return torch.where(ok, g, torch.full_like(g, _neg(g)))
+
+
+def ins_wscores(m, s, x, wok):
+    """the weapons' scores [..., nw] for the chosen row x [..., xf] (a weapon he cannot use: never)"""
+    import torch
+    g = m.ins_wv(torch.tanh(m.ins_ws(s.float()) + m.ins_wx(x.float())))
+    return torch.where(wok, g, torch.full_like(g, _neg(g)))
+
+
+def has_quiet(m):
+    return m is not None and hasattr(m, "ins_qv")
+
+
+def ins_qlogit(m, s, x):
+    """the logit of asking for quiet movement [...] with the chosen row x [..., xf]"""
+    import torch
+    return m.ins_qv(torch.tanh(m.ins_ws(s.float()) + m.ins_wx(x.float()))).squeeze(-1)
+
+
+def ins_live(ok, wok):
+    """a seat's reading can be a choice: a row is offered and a weapon usable [...]"""
+    return ok.any(-1) & wok.any(-1)
+
+
+def ins_row_logp(m, s, X, A, ok, live):
+    """THE rows' log-probabilities [..., C] (the rollout draws from them and stores the drawn row's; the learning step recomputes
+    them here): log-softmax of the scores over the offered rows; a seat that is not live: every row alike (it is never his own)"""
+    import torch
+    z = ins_scores(m, s, X, A, ok).float()
+    return torch.log_softmax(torch.where(live[..., None], z, torch.zeros_like(z)), -1)
+
+
+def ins_wq_logp(m, s, x, wok, live):
+    """THE weapon's log-probabilities [..., nw] for the chosen row x, and the quiet logit [...] (None for a head without it)"""
+    import torch
+    z = ins_wscores(m, s, x, wok).float()
+    lw = torch.log_softmax(torch.where(live[..., None], z, torch.zeros_like(z)), -1)
+    return lw, (ins_qlogit(m, s, x).float() if has_quiet(m) else None)
+
+
+def ins_joint_logp(lr, lw, qz, c, w, q=None):
+    """THE log-probability [...] of what was drawn: the row c, its weapon w and, where quiet is a choice (q given, qz the logit),
+    quiet asked or not"""
+    import torch
+    lp = lr.gather(-1, c[..., None]).squeeze(-1) + lw.gather(-1, w[..., None]).squeeze(-1)
+    if q is not None and qz is not None:
+        lp = lp + torch.nn.functional.logsigmoid(torch.where(q > 0, qz, -qz))
+    return lp
+
+
+def ins_dv(A, long_w):
+    """the lesson's number of a forecast [..., INS_A]: (1 - long_w) x dV over 8 s + long_w x dV over the long window"""
+    return (1.0 - float(long_w)) * A[..., INS_DV] + float(long_w) * A[..., INS_DVL]
+
+
+def ins_target(dv, ok, temp):
+    """the lesson's target over the rows: softmax(the appraisals' dV / temp) over the offered rows [..., C] (a number); a seat with
+    no row offered: zeros"""
+    import torch
+    z = torch.where(ok, dv.float() / max(1e-6, float(temp)), torch.full_like(dv.float(), _neg(dv.float())))
+    p = torch.softmax(z, -1)
+    return (p * ok.float()).detach() * ok.any(-1, keepdim=True).float()
+
+
+def ins_u(xsel, a_then, a_now, sig, age, has, bq=None):
+    """the part "ins" of the head's input [n, ins_u_width]: zeros for a seat under none; then the brain's questions bq [n, INS_BQ]
+    (a layout with them), read by every seat"""
+    import torch
+    f = has.float()[:, None]
+    u = torch.cat([xsel.float(), a_then.float(), a_now.float(), sig.float(), (age.float() / 10.0).clamp(max=2.0)[:, None],
+                   torch.ones_like(f)], 1) * f
+    return u if bq is None else torch.cat([u, bq.float()], 1)
+
+
+def np_brain_unsure(zone=None, ah=None, n=None):
+    """how sure the brain is (piece 2), from its own readouts at a tick, no lesson of its own: zone [n, Z] the odds over the map's
+    zones (zeros past the map's count; None: none) -> their entropy over its largest (0: one zone holds it all, 1: every zone alike);
+    ah [n, 15 or more] the readout ahead's outputs (5 numbers a horizon, the first three his place in thousands of units; None:
+    none) -> the mean distance between its places 1, 2 and 4 s ahead, in thousands of units, at most 2 -> (uz [n], us [n])"""
+    m = len(zone) if zone is not None else (len(ah) if ah is not None else int(n or 0))
+    uz, us = np.zeros(m, np.float32), np.zeros(m, np.float32)
+    if zone is not None:
+        p = np.asarray(zone, np.float64)
+        k = (p > 0).sum(1)
+        h = -(np.where(p > 0, p * np.log(np.maximum(p, 1e-300)), 0.0)).sum(1)
+        uz = np.where(k > 1, h / np.log(np.maximum(k, 2)), 0.0).astype(np.float32)
+    if ah is not None:
+        f = np.asarray(ah, np.float64)[:, :15].reshape(-1, 3, 5)[:, :, :3]
+        d = (np.linalg.norm(f[:, 0] - f[:, 1], axis=1) + np.linalg.norm(f[:, 0] - f[:, 2], axis=1) + np.linalg.norm(f[:, 1] - f[:, 2], axis=1)) / 3.0
+        us = np.minimum(d, 2.0).astype(np.float32)
+    return uz, us
+
+
+def np_ins_fill(X, ok, fill, known=None, unsure=None, spodds=None, cspawn=None, ms=None):
+    """the candidates' rows as the scorer and the appraisals read them: X [n, C, fx] as the simulator gives them (its columns
+    fill["known"], fill["unsure"], fill["spawn_odds"] left at zero), ok [n, C] the rows the map offers. Written into every offered
+    row: known [n] the chance the enemy knows where he is; unsure [n] the spread of the brain's zone odds; into the spawn rows
+    (cspawn [n, C] their spawn point, -1: not one) spodds [n, smax] the brain's odds of that point. ms [n, C, 8]: the map sense at
+    each row's place, appended after the row's own numbers. A part None: left as it is (zeros). -> [n, C, fx (+ 8)] float16"""
+    X = np.array(X, np.float32, copy=True)
+    okf = np.asarray(ok, bool)
+    if known is not None and "known" in fill:
+        X[:, :, int(fill["known"])] = np.asarray(known, np.float32)[:, None] * okf
+    if unsure is not None and "unsure" in fill:
+        X[:, :, int(fill["unsure"])] = np.asarray(unsure, np.float32)[:, None] * okf
+    if spodds is not None and cspawn is not None and "spawn_odds" in fill:
+        cs = np.asarray(cspawn, np.int64)
+        m = (cs >= 0) & okf & (cs < np.asarray(spodds).shape[1])
+        r, c = np.nonzero(m)
+        X[r, c, int(fill["spawn_odds"])] = np.asarray(spodds, np.float32)[r, cs[r, c]]
+    if ms is not None:
+        X = np.concatenate([X, np.asarray(ms, np.float32) * okf[:, :, None]], 2)
+    return X.astype(np.float16)
+
+
+def ins_loss(m, s, B, teach_w, pg_w, ent_w, clip=0.2, copy_w=0.0):
+    """the head's instruction terms at kept readings, from the head's state s [..., size] AS GIVEN: the learning step gives the
+    re-run state (seq's s_held at the readings' frames) with its gradient, so the terms reach the scorer AND the head's memory and
+    input layer. B (tensors with s's leading shape):
+      X [..., C, xf], A [..., C, INS_A], ok [..., C], wok [..., nw], xw [..., xf] (the drawn row), c, w [...], q [...] (where quiet
+      is a choice), lp [...] the log-probability as played
+      ref [...]  (optional) the ratio's reference (decoupled PPO: the learner's own before the update; default: lp) and isw [...]
+                 (optional) its capped importance weights
+      own [...]  the reading's choice was the head's own and was played (not a drill's, not a forced branch's, not kept from before)
+      adv [...]  the head's advantage at the reading's frame (a number; normalised here over his own readings)
+      tq [..., C], tm [...]   the lesson's target over the rows (ins_target) and where it may teach (the appraisals warm, a live
+                 seat, not a drill's nor a forced one); tw [..., nw], twm [...] the same for the weapon of the drawn row;
+                 tqq [...] the chance quiet should be asked (with q)
+      em [...]   (optional) where the entropy bonus counts (default: the live seats)
+      cq [..., C], cw [...]   (1.9a, the copy lesson; optional) the rows of the target his own network chose (uniform over them)
+                 and the weapon in his hand; taught where tm_c [...] (live, not a drill's nor a forced one, a copy row offered)
+    teach_w x the cross-entropies toward the targets + pg_w x the PPO-clipped surrogate on his own readings (the second clip as
+    the target's: a bad choice's ratio counts at most 3) - ent_w x the rows' entropy + copy_w x the cross-entropies toward the
+    copy targets (1.9a: the scorer opens as the choice it stands in for, his old head's target and the weapon in his hand).
+    -> (the loss: a plain zero without a gradient where nothing counts, a dict: lp (now, a number), lr (the rows' log-probabilities,
+    a number), live, and the three terms' values)"""
+    import torch
+    F_ = torch.nn.functional
+    ok, wok = B["ok"], B["wok"]
+    live = ins_live(ok, wok)
+    lr = ins_row_logp(m, s, B["X"], B["A"], ok, live)
+    lw, qz = ins_wq_logp(m, s, B["xw"], wok, live)
+    q = B.get("q")
+    lp = ins_joint_logp(lr, lw, qz, B["c"], B["w"], q)
+    lr0, lw0 = torch.where(ok, lr, torch.zeros_like(lr)), torch.where(wok, lw, torch.zeros_like(lw))
+    tm, twm, own = B["tm"].float(), B["twm"].float(), B["own"].float()
+    loss = lr.new_zeros(())
+    out = dict(lp=lp.detach(), lr=lr.detach(), live=live, teach=0.0, pg=0.0, ent=0.0, copy=0.0, copy_agree=0.0)
+    if copy_w > 0 and "cq" in B and float(B["tm_c"].float().sum()) > 0:      # (1.9a) the copy lesson
+        cq_ = (B["cq"] & ok).float()
+        tmc_ = B["tm_c"].float() * (cq_.sum(-1) > 0).float()
+        if float(tmc_.sum()) > 0:
+            tq_ = cq_ / cq_.sum(-1, keepdim=True).clamp(min=1.0)
+            cw_ = B["cw"].long().clamp(min=0, max=lw0.shape[-1] - 1)
+            okw_ = wok.gather(-1, cw_[..., None]).squeeze(-1) & (B["cw"] >= 0)
+            twc_ = tmc_ * okw_.float()
+            c_ = (-(tq_ * lr0).sum(-1) * tmc_).sum() / tmc_.sum().clamp(min=1.0)                 + (-lw0.gather(-1, cw_[..., None]).squeeze(-1) * twc_).sum() / twc_.sum().clamp(min=1.0)
+            loss = loss + float(copy_w) * c_
+            out["copy"] = float(c_.detach())
+            with torch.no_grad():
+                hit_ = cq_.gather(-1, lr.argmax(-1, keepdim=True)).squeeze(-1)
+                out["copy_agree"] = float((hit_ * tmc_).sum() / tmc_.sum().clamp(min=1.0))
+    if teach_w > 0 and float(tm.sum() + twm.sum()) > 0:
+        t_ = (-(B["tq"] * lr0).sum(-1) * tm).sum() / tm.sum().clamp(min=1.0) + (-(B["tw"] * lw0).sum(-1) * twm).sum() / twm.sum().clamp(min=1.0)
+        if qz is not None and q is not None and "tqq" in B:  # quiet: toward the chance the appraisals' two forecasts (asked, not asked) give
+            t_ = t_ + (F_.binary_cross_entropy_with_logits(qz, B["tqq"].float(), reduction="none") * twm).sum() / twm.sum().clamp(min=1.0)
+        loss = loss + float(teach_w) * t_
+        out["teach"] = float(t_.detach())
+    if pg_w > 0 and float(own.sum()) > 0:
+        n_ = own.sum().clamp(min=1.0)
+        ad = B["adv"].float()
+        mu = (ad * own).sum() / n_
+        ad = (ad - mu) / (((ad - mu).pow(2) * own).sum() / n_).sqrt().clamp(min=1e-8)
+        ratio = torch.exp((lp - B.get("ref", B["lp"]).float()).clamp(-20.0, 20.0))
+        sur = torch.min(ratio * ad, ratio.clamp(1.0 - clip, 1.0 + clip) * ad)
+        sur = torch.where(ad < 0, torch.max(sur, 3.0 * ad), sur)
+        p_ = -((B["isw"].float() if "isw" in B else 1.0) * sur * own).sum() / n_
+        loss = loss + float(pg_w) * p_
+        out["pg"] = float(p_.detach())
+    em = B["em"].float() if "em" in B else live.float()
+    if ent_w > 0 and float(em.sum()) > 0:
+        e_ = ((-(lr0.exp() * lr0).sum(-1)) * em).sum() / em.sum().clamp(min=1.0)
+        loss = loss - float(ent_w) * e_
+        out["ent"] = float(e_.detach())
+    return loss, out
+
+
+def ins_counts(B, out, teachable=None):
+    """the record's counters of a batch of kept readings (numbers; before a step): rows, his own, taught, the rows' entropy summed
+    over the live seats and their count, the distance to the appraisals' order (KL summed, how often the best row agrees), rows offered"""
+    import torch
+    lr, ok = out["lr"], B["ok"]
+    lr0 = torch.where(ok, lr, torch.zeros_like(lr))
+    live = out["live"].float()
+    tm = (B["tm"] if teachable is None else teachable).float()
+    ent = -(lr0.exp() * lr0).sum(-1)
+    ce = -(B["tq"] * lr0).sum(-1)
+    ent_t = -(B["tq"] * torch.log(B["tq"].clamp(min=1e-12))).sum(-1)
+    return dict(rows=float(live.numel()), own=float(B["own"].float().sum()), teach=float(tm.sum()), ent=float((ent * live).sum()),
+                n_ok=float(live.sum()), kl=float(((ce - ent_t) * tm).sum()), agree=float(((lr.argmax(-1) == B["tq"].argmax(-1)).float() * tm).sum()),
+                offered=float(ok.float().sum()))
+
+
+def ins_learn(m, opt, B, lr, dev, gen, teach_w, pg_w, ent_w, clip=0.2, mb=8192, epochs=2):
+    """(the unit tests and offline fits; the TRAINER does not use this: its lesson is ins_loss inside the head's own terms) the same
+    terms on a flat batch B of kept readings whose head states are given as numbers B["s"] [R, size]: steps of opt on m's
+    parameters. -> ins_counts() before any step"""
+    import torch
+    n = 0 if B is None else len(B["c"])
+    if not n:
+        return {}
+    keys = [k_ for k_ in ("X", "A", "ok", "wok", "xw", "c", "w", "q", "lp", "ref", "isw", "own", "adv", "tq", "tm", "tw", "twm", "tqq", "em") if k_ in B]
+    sub = lambda i_: {k_: B[k_][i_].to(dev) for k_ in keys}    # noqa: E731
+    with torch.no_grad():
+        acc = None
+        for b in range(0, n, mb):
+            i_ = torch.arange(b, min(n, b + mb))
+            Bi = sub(i_)
+            c_ = ins_counts(Bi, ins_loss(m, B["s"][i_].to(dev).float(), Bi, 0.0, 0.0, 0.0)[1])
+            acc = c_ if acc is None else {k_: acc[k_] + c_[k_] for k_ in acc}
+    if lr <= 0 or (teach_w <= 0 and pg_w <= 0):
+        return acc
+    for g_ in opt.param_groups:
+        g_["lr"] = float(lr)
+    for _ in range(int(epochs)):
+        pm = torch.randperm(n, generator=gen)
+        for b in range(0, n, mb):
+            i_ = pm[b:b + mb]
+            loss, _o = ins_loss(m, B["s"][i_].to(dev).float(), sub(i_), teach_w, pg_w, ent_w, clip)
+            if not loss.requires_grad:
+                continue
+            opt.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)
+            opt.step()
+    return acc
+
+
+def ins_record(acc, play, L, g, teach_w, pg_w, temp, warm):
+    """-> metrics.jsonl's "ins": the share played; the lesson's counters (before the step): the rows' entropy, the distance to the
+    appraisals' order (KL, and how often the best row is the same); what was played, by verb and by weapon (`play`: counters of
+    the rollout: ticks by verb [8], by weapon [nw], picks, re-decisions, seat-seconds, the chosen rows' forecast dV and what the
+    head's value then said they brought)"""
+    rec = dict(g=round(float(g), 4), teach=round(float(teach_w), 4), pg=round(float(pg_w), 4), temp=round(float(temp), 4), warm=bool(warm))
+    if acc and acc.get("rows"):
+        r_, t_, k_ = float(acc["rows"]), max(1.0, float(acc["teach"])), max(1.0, float(acc["n_ok"]))
+        rec.update(rows=int(r_), own=int(acc["own"]), taught=int(acc["teach"]), entropy=round(float(acc["ent"]) / k_, 4),
+                   offered=round(float(acc["offered"]) / r_, 2), kl_to_appraisals=round(float(acc["kl"]) / t_, 4),
+                   best_row_agrees=round(float(acc["agree"]) / t_, 4))
+    if play:
+        v_, w_ = np.asarray(play["verb"], np.float64), np.asarray(play["weapon"], np.float64)
+        rec["verbs"] = [round(float(x), 4) for x in (v_ / max(1.0, v_.sum()))]
+        rec["weapons"] = [round(float(x), 4) for x in (w_ / max(1.0, w_.sum()))]
+        rec["picks"] = int(play["picks"])
+        if play.get("block") is not None:                      # by the simulator's row blocks (the spawn rows apart from push and spam)
+            b_ = np.asarray(play["block"], np.float64)
+            rec["row_blocks"] = {str(k_): round(float(x_) / max(1.0, b_.sum()), 4) for k_, x_ in zip(play["block_names"], b_)}
+        if play.get("quiet") is not None:                      # quiet asked: the share of the picks, by verb
+            q_ = np.asarray(play["quiet"], np.float64)
+            rec["quiet"] = round(float(q_.sum()) / max(1.0, float(play["picks"])), 4)
+            rec["quiet_by_verb"] = [round(float(a_) / max(1.0, float(b_)), 4) for a_, b_ in zip(q_, v_)]
+        rec["changes_a_second"] = round(float(play["picks"]) / max(1e-9, float(play["secs"])), 4)
+        if play.get("cal_n", 0) > 1:                           # the chosen rows' forecast against what they brought
+            n_ = float(play["cal_n"])
+            mf, mg = play["cal_f"] / n_, play["cal_g"] / n_
+            cov = play["cal_fg"] / n_ - mf * mg
+            vf, vg = play["cal_ff"] / n_ - mf * mf, play["cal_gg"] / n_ - mg * mg
+            rec["forecast_dv"], rec["brought_dv"] = round(mf, 4), round(mg, 4)
+            rec["forecast_corr"] = round(cov / math.sqrt(vf * vg), 4) if vf > 0 and vg > 0 else None
+    return rec
+
+
+def np_ins_params(sd):
+    """the scorer's weights as numpy under their short names (is_.weight, ix.weight, ia.weight, iv.weight, ws, wx, wv, qv, ins_g),
+    from the head's module's state dict (ins_is.weight ...), the whole network's (head2.ins_is.weight ...) or a dict that has the
+    short names already (an export's "ins.*" arrays)"""
+    out = {}
+    for k, v in sd.items():
+        k = str(k)
+        if k.startswith("head2."):
+            k = k[len("head2."):]
+        if k.startswith("ins_"):
+            k = "ins_g" if k == "ins_g" else ("is_." + k[len("ins_is."):] if k.startswith("ins_is.") else k[len("ins_"):])
+        elif not k.startswith(("is_.", "ix.", "ia.", "iv.", "ws.", "wx.", "wv.", "qv.")):
+            continue
+        out[k] = (v.detach().cpu().numpy() if hasattr(v, "detach") else np.asarray(v)).astype(np.float32)
+    return out
+
+
+def _np_log_softmax(z):
+    z = np.asarray(z, np.float64)
+    z = z - z.max(-1, keepdims=True)
+    return z - np.log(np.exp(z).sum(-1, keepdims=True))
+
+
+def np_ins_row_logp(W, s, X, A, ok, live):
+    """ins_row_logp in numpy -> [m, C] float64 (the checks' player and the plugin draw from exp of it)"""
+    z = np_ins_scores(W, s, X, A, ok).astype(np.float64)
+    return _np_log_softmax(np.where(np.asarray(live, bool)[:, None], z, 0.0))
+
+
+def np_ins_wq_logp(W, s, x, wok, live):
+    """ins_wq_logp in numpy -> (the weapon's log-probabilities [m, nw] float64, the quiet logit [m] or None)"""
+    z = np_ins_wscores(W, s, x, wok).astype(np.float64)
+    qz = None
+    if "qv.weight" in W:
+        qz = (np.tanh(s @ W["ws.weight"].T + W["ws.bias"] + x @ W["wx.weight"].T + W["wx.bias"]) @ W["qv.weight"].T + W["qv.bias"])[:, 0]
+    return _np_log_softmax(np.where(np.asarray(live, bool)[:, None], z, 0.0)), qz
+
+
+def np_ins_scores(W, s, X, A, ok):
+    """ins_scores in numpy -> [m, C] (not offered: a large negative number)"""
+    g = (np.tanh((s @ W["is_.weight"].T + W["is_.bias"])[:, None, :] + X @ W["ix.weight"].T + W["ix.bias"] + A @ W["ia.weight"].T + W["ia.bias"])
+         @ W["iv.weight"].T + W["iv.bias"])[..., 0]
+    return np.where(ok, g, np.float32(-1e30)).astype(np.float32)
+
+
+def np_ins_wscores(W, s, x, wok):
+    g = np.tanh(s @ W["ws.weight"].T + W["ws.bias"] + x @ W["wx.weight"].T + W["wx.bias"]) @ W["wv.weight"].T + W["wv.bias"]
+    return np.where(wok, g, np.float32(-1e30)).astype(np.float32)
+
+
+def np_ins_u(xsel, a_then, a_now, sig, age, has, bq=None):
+    f = np.asarray(has, np.float32)[:, None]
+    u = (np.concatenate([xsel, a_then, a_now, sig, np.minimum(np.asarray(age, np.float32) / 10.0, 2.0)[:, None], np.ones_like(f)], 1) * f).astype(np.float32)
+    return u if bq is None else np.concatenate([u, np.asarray(bq, np.float32)], 1)
+
+
+def ins_held_width(I):
+    """a seat's held numbers of his instruction (the checks' player, the plugin): the row (xf), its forecast then and now, the six
+    change signals, the weapon, how long, on one, the coin; then the brain's questions (a layout with them)"""
+    return int(I["xf"]) + 2 * INS_A + INS_SIG + 4 + int(I.get("bq", 0) or 0)
+
+
+def np_ins_held_u(I, st):
+    """the part "ins" of the head's input from the held numbers st [m, ins_held_width] (np_ins_u)"""
+    F_ = int(I["xf"])
+    o = F_ + 2 * INS_A + INS_SIG
+    nb = int(I.get("bq", 0) or 0)
+    return np_ins_u(st[:, :F_], st[:, F_:F_ + INS_A], st[:, F_ + INS_A:F_ + 2 * INS_A], st[:, F_ + 2 * INS_A:o], st[:, o + 1], st[:, o + 2] > 0.5,
+                    st[:, o + 4:o + 4 + nb] if nb else None)
+
+
+def np_ins_prep(ixs, fill, I, sb, hh, zone=None, ah=None, knP=None, spP=None, ms=None):
+    """(the checks' player, the plugin: the trainer's ins_prep in numpy) the candidates of these seats as the scorer and the
+    appraisals read them. ixs: sim/branch.py worker_feat's fields for these seats (X, ok, wok, sig, drill, row, forced, each row's
+    spawn point, its place, has one, the weapon in his hand, the map's spawn points' count); sb [m, bel] the brain's state, hh
+    [m, mem] the hands' memory; zone [m, Z] the brain's zone odds and ah [m, 15+] its readout ahead (None: none); knP / spP the
+    readouts' arrays (sim/knownodds.py, sim/spawnodds.py np_params; None: the network has none); ms: None, or a function
+    (P [m, C, 3], pk [m, C], weapon [m]) -> [m, C, 8] the map sense at the rows' places (a layout with it and no function: zeros)
+    -> (X [m, C, xf] float32, bq [m, INS_BQ])"""
+    ok = np.asarray(ixs[1], bool)
+    m = len(ok)
+    known = spo = msr = None
+    bq = np.zeros((m, INS_BQ), np.float32)
+    if knP is not None:
+        import knownodds as knownodds_
+        known = knownodds_.np_chance(knP, sb, hh)[:, 0]
+        bq[:, 0] = known - 0.5
+    uz, us = np_brain_unsure(zone, ah, m)
+    bq[:, 1], bq[:, 2] = uz, us
+    if spP is not None and len(ixs) > 11:
+        import spawnodds as spawnodds_
+        spo = spawnodds_.np_odds(spP, sb, hh, np.asarray(ixs[11], np.int64))
+    if int(I.get("ms", 0) or 0):
+        msr = np.zeros(ok.shape + (INS_MS,), np.float32)
+        if ms is not None and len(ixs) > 10:
+            msr = np.asarray(ms(np.asarray(ixs[8], np.float32), np.asarray(ixs[9], bool) & ok, np.asarray(ixs[10], np.int64)), np.float32)
+    X = np_ins_fill(ixs[0], ok, fill or {}, known=known, unsure=uz, spodds=spo, cspawn=ixs[7] if len(ixs) > 7 else None, ms=msr)
+    return X.astype(np.float32), bq
+
+
+def np_ins_read(I, Wi, aprL, aprP, warm, g, none_row, every, st, s_head, sit, X, ok, wok, sg, dr, cur, frc, redo, rng, bq=None):
+    """a reading of these seats in numpy (the trainer's rollout's sums; one definition for the checks' player and the plugin):
+    st [m, ins_held_width] their held numbers, s_head [m, size] the head's state this frame's outputs read, sit [m, bel + mem +
+    size] the appraisals' situation, X [m, C, xf] the rows (np_ins_prep), ok, wok, sg [m, 6+], dr (in a drill), cur (the row he is
+    on), frc (forced), redo [m] (the keep choice says re-decide; all True without one), rng: the scorer's own stream (the draws in
+    this order: the row, the weapon, quiet, the coin), bq [m, INS_BQ] or None.
+    -> (the new held numbers, (c, w, who, q): the picks for env.instr_pick: c and w -1 where he is cleared or keeps his own)"""
+    import appraise as appraise_
+    F_, NA_ = int(I["xf"]), INS_A
+    o_i = F_ + 2 * NA_ + INS_SIG
+    m = len(st)
+    ar_ = np.arange(m)
+    X = np.asarray(X, np.float32)
+    xh, ath = st[:, :F_], st[:, F_:F_ + NA_]
+    wh, age, has, own = st[:, o_i].astype(np.int64), st[:, o_i + 1], st[:, o_i + 2] > 0.5, st[:, o_i + 3] > 0.5
+    any_ = ok.any(1) & wok.any(1)
+    A_ = appraise_.np_forecast_rows(aprP, aprL, sit, X) if warm else np.zeros(X.shape[:2] + (NA_,), np.float32)
+    A_ = np.asarray(A_, np.float32).astype(np.float16).astype(np.float32)    # (read at half precision, as the trainer keeps them for its lesson)
+
+    def pick_i(lp_):                                         # a draw from the one definition's log-probabilities
+        p_ = np.exp(lp_)
+        return np.minimum((p_.cumsum(1) < rng.random((len(p_), 1))).sum(1), p_.shape[1] - 1).astype(np.int64)
+    cn_ = pick_i(np_ins_row_logp(Wi, s_head, X, A_, ok, any_))
+    xs_ = X[ar_, cn_]
+    lw_, qz_ = np_ins_wq_logp(Wi, s_head, xs_, wok, any_)
+    wn_ = pick_i(lw_)
+    qn_ = np.zeros(m, np.int64)                              # (quiet movement: the third draw, where the head has the logit)
+    if qz_ is not None:
+        qn_ = (rng.random(m) < 1.0 / (1.0 + np.exp(-qz_))).astype(np.int64)
+    own = np.where(has, own, rng.random(m) < float(g))       # (the coin of a seat under none: anew at the share)
+    on_ = (cur >= 0) & (cur != int(none_row))
+    end_ = ins_end(sg)                                       # done, failed, or a wake (the pain sound, the believed stack fallen)
+    rd_ = ~on_ | end_ | np.asarray(ins_redo(age, every), bool)     # (2.1a) drawn anew a second after its last draw (ins_redo; `redo`, the keep
+    #                                                          choice's draw, is no longer read: see there)
+    pk_ = own & any_ & rd_ & ~dr & ~frc
+    cl_ = on_ & ~own & ~dr & ~frc
+    xh, wh = np.where(pk_[:, None], xs_, xh), np.where(pk_, wn_, wh)
+    ath = np.where(pk_[:, None], A_[ar_, cn_], ath)
+    age = np.where(pk_, 0.0, age + float(every) * 0.025)
+    has = ((pk_ & (cn_ != int(none_row))) | (has & on_ & ~pk_)) & ~cl_
+    anow = np.zeros((m, NA_), np.float32)
+    if warm and has.any():
+        anow[has] = appraise_.np_forecast_rows(aprP, aprL, sit[has], xh[has][:, None, :], wh[has][:, None])[:, 0]
+    out = [xh, ath, anow, sg[:, :INS_SIG], wh[:, None], age[:, None], has[:, None], own[:, None]]
+    if int(I.get("bq", 0) or 0):
+        out.append(np.zeros((m, INS_BQ), np.float32) if bq is None else np.asarray(bq, np.float32))
+    return np.concatenate(out, 1).astype(np.float32), (np.where(pk_, cn_, -1), np.where(pk_, wn_, -1), pk_ | cl_, np.where(pk_, qn_, 0))
+
+
+class InsState:
+    """(2.1) the trainer's rollout: every seat's instruction as the head last gave it (the row's numbers, its weapon, its forecast
+    then and now, how long), the simulator's change signals, and the coin (the seat's instruction is the head's)"""
+
+    def __init__(self, n, I, dev):
+        import torch
+        F_ = int(I["xf"])
+        self.xh = torch.zeros(n, F_, device=dev)
+        self.wh = torch.zeros(n, dtype=torch.long, device=dev)
+        self.qh = torch.zeros(n, dtype=torch.long, device=dev)   # (quiet movement asked with it)
+        self.ath = torch.zeros(n, INS_A, device=dev)
+        self.anow = torch.zeros(n, INS_A, device=dev)
+        self.sig = torch.zeros(n, INS_SIG, device=dev)
+        self.age = torch.zeros(n, device=dev)
+        self.has = torch.zeros(n, dtype=torch.bool, device=dev)
+        self.own = torch.zeros(n, dtype=torch.bool, device=dev)
+        self.bq = torch.zeros(n, INS_BQ, device=dev) if int(I.get("bq", 0) or 0) else None    # (the brain's questions, as last asked)
+
+    def u(self):
+        return ins_u(self.xh, self.ath, self.anow, self.sig, self.age, self.has, self.bq)
+
+    def reset(self, d, g, gen):
+        """a round's end (d [n], 1: ended): no instruction; the seat's coin drawn anew at the share g"""
+        import torch
+        e = d > 0.5
+        if bool(e.any()):
+            self.has = self.has & ~e
+            self.age = torch.where(e, torch.zeros_like(self.age), self.age)
+            coin = torch.rand(len(d), generator=gen, device=d.device) < float(g)
+            self.own = torch.where(e, coin, self.own)

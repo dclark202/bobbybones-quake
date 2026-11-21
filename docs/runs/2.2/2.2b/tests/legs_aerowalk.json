@@ -1,0 +1,151 @@
+{
+ "maps": {
+  "aerowalk": {
+   "him": {
+    "trips": 114,
+    "arrived": 0,
+    "met": 93,
+    "timeout": 19,
+    "died": 0,
+    "passed": 0,
+    "sec": 192.30000000002659,
+    "dealt": 61.0,
+    "taken": 130.94581604003906,
+    "applied_frames": 7692
+   },
+   "cut": {
+    "trips": 120,
+    "arrived": 93,
+    "met": 23,
+    "timeout": 1,
+    "died": 0,
+    "passed": 4,
+    "sec": 83.17500000000179,
+    "dealt": 0.0,
+    "taken": 47.071861267089844,
+    "applied_frames": 2855
+   },
+   "angle": {
+    "trips": 120,
+    "arrived": 88,
+    "met": 24,
+    "timeout": 5,
+    "died": 0,
+    "passed": 2,
+    "sec": 73.0999999999995,
+    "dealt": 0.0,
+    "taken": 116.19829559326172,
+    "applied_frames": 2393
+   },
+   "away": {
+    "trips": 361,
+    "arrived": 187,
+    "met": 147,
+    "timeout": 3,
+    "died": 16,
+    "passed": 0,
+    "sec": 478.2749999998389,
+    "dealt": 3788.0,
+    "taken": 4465.086357116699,
+    "applied_frames": 19118
+   },
+   "own": {
+    "sec": 2373.150000000002,
+    "dealt": 12791.0,
+    "taken": 15647.220802307129
+   },
+   "valid": {
+    "readings": 15397,
+    "him": 10374,
+    "cut": 10292,
+    "angle": 10290,
+    "away": 15397
+   }
+  }
+ },
+ "total": {
+  "him": {
+   "trips": 114,
+   "arrived": 0,
+   "met": 93,
+   "timeout": 19,
+   "died": 0,
+   "passed": 0,
+   "sec": 192.30000000002659,
+   "dealt": 61.0,
+   "taken": 130.94581604003906,
+   "applied_frames": 7692,
+   "reached_or_met": 0.816,
+   "dealt_per_s": 0.32,
+   "taken_per_s": 0.68
+  },
+  "cut": {
+   "trips": 120,
+   "arrived": 93,
+   "met": 23,
+   "timeout": 1,
+   "died": 0,
+   "passed": 4,
+   "sec": 83.17500000000179,
+   "dealt": 0.0,
+   "taken": 47.071861267089844,
+   "applied_frames": 2855,
+   "reached_or_met": 0.967,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 0.57
+  },
+  "angle": {
+   "trips": 120,
+   "arrived": 88,
+   "met": 24,
+   "timeout": 5,
+   "died": 0,
+   "passed": 2,
+   "sec": 73.0999999999995,
+   "dealt": 0.0,
+   "taken": 116.19829559326172,
+   "applied_frames": 2393,
+   "reached_or_met": 0.933,
+   "dealt_per_s": 0.0,
+   "taken_per_s": 1.59
+  },
+  "away": {
+   "trips": 361,
+   "arrived": 187,
+   "met": 147,
+   "timeout": 3,
+   "died": 16,
+   "passed": 0,
+   "sec": 478.2749999998389,
+   "dealt": 3788.0,
+   "taken": 4465.086357116699,
+   "applied_frames": 19118,
+   "reached_or_met": 0.925,
+   "dealt_per_s": 7.92,
+   "taken_per_s": 9.34
+  },
+  "own": {
+   "sec": 2373.150000000002,
+   "dealt": 12791.0,
+   "taken": 15647.220802307129,
+   "dealt_per_s": 5.39,
+   "taken_per_s": 6.59
+  },
+  "valid": {
+   "readings": 15397,
+   "him": 10374,
+   "cut": 10292,
+   "angle": 10290,
+   "away": 15397
+  }
+ },
+ "args": {
+  "policy": "data/sim_runs/duel_gru_2_2a/keep/policy_90.pt",
+  "out": "C:/Users/dacla/AppData/Local/Temp/claude/6307b5bbac0eb38b/20913c0b-bcc1-41cf-b2ff-37a8c1cf9369/scratchpad/legs_aerowalk.json",
+  "maps": "aerowalk",
+  "frames": 4000,
+  "matches": 16,
+  "p": 0.06,
+  "seed": 21
+ }
+}

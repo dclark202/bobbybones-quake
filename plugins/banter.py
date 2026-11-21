@@ -329,7 +329,12 @@ class banter(minqlx.Plugin):
                 delay += 0.8 + self.rng.random()
                 lv = aim_level() if voice(p) == 0 else None  # (!aim, owner, 2026-10-21) BobbyBones says his aim level
                 if lv:
-                    self.say(p.id, "Aim ^2{}^7 (^2!aim worse|default|better|max^7 to change)".format(lv), delay)
+                    pl_ = minqlx.Plugin._loaded_plugins.get("duelbot")      # (2.2e, aim4: the settings on this server)
+                    try:
+                        here_ = pl_.aim_here() if pl_ is not None and hasattr(pl_, "aim_here") else list(AIM_ORDER)
+                    except Exception:                                        # noqa: BLE001
+                        here_ = list(AIM_ORDER)
+                    self.say(p.id, "Aim ^2{}^7 (^2!aim {}^7 to change)".format(lv, "|".join(here_)), delay)
                     delay += 0.8 + self.rng.random()
 
     # ------------------------------------------------------------------ a game's start and end

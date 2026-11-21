@@ -56,9 +56,10 @@ def main():
         while todo and len(run_) < a.par:
             mp = todo.pop(0)
             js = os.path.join(out, "eval_{}.json".format(mp))
+            dl_ = [str(int(float(x_))) for x_ in (os.environ.get("CHECK_DELAYS") or "125,225").split(",")]   # (2.2e: the run's delays; unset: 125, 225)
             cmd = [PY, os.path.join(HERE, "ws_eval.py"), "--run", a.run, "--policy", a.policy, "--opp", "policy:" + a.opp, "--opp-inputs",
                    os.path.join(CODE, "docs", "INPUTS.csv"), "--map", mp, "--games", str(a.games), "--minutes", str(a.minutes), "--procs", str(a.procs),
-                   "--swap", "--json", js, "--react-ms", "125", "--acquire-ms", "225", "--opp-react-ms", "125", "--opp-acquire-ms", "225",
+                   "--swap", "--json", js, "--react-ms", dl_[0], "--acquire-ms", dl_[1], "--opp-react-ms", dl_[0], "--opp-acquire-ms", dl_[1],
                    "--round", "600", "--opp-round", "600", "--seed", str(a.seed), "--ws-out", out]
             cmd += [x for s_ in sets for x in ("--set", s_)]
             print(time.strftime("%H:%M:%S"), "start", mp, flush=True)

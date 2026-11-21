@@ -37,6 +37,13 @@ def names(path):
     return [(r["group"], r["input"]) for r in csv.DictReader(open(path, encoding="utf-8"))]
 
 
+def fit_list(lst, n):
+    """(1.7) a network made before the order's inputs (group "b17 order", appended at the end of the list): the list's first n"""
+    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets", "b21 instruction", "b20d dodge") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
+        return lst[:n]
+    return lst
+
+
 GAME_SECS = 600.0     # a seat whose round is this long or longer is a whole-games seat (the simulator's GAME_LEN)
 
 
@@ -148,6 +155,9 @@ class SeatClock:
 # state (256) and the hands' fast memory (512), rounded to half precision, through Linear-ReLU-Linear
 WS_COLS = ("seed", "match", "t", "my_score", "op_score", "my_hp", "my_ar", "op_hp", "op_ar", "my_dead", "op_dead",
            "my_rl", "my_lg", "my_rg", "op_rl", "op_lg", "op_rg", "v_raw", "frags_d")
+WS_ITEMS = (os.environ.get("WS_ITEMS") or "") == "1"       # (1.9a, tools/run/fit_items.py) the next mega's and red armor's race, the truth (env.item_race)
+if WS_ITEMS:
+    WS_COLS = WS_COLS + tuple("{}_{}".format(it_, c_) for it_ in ("mh", "ra") for c_ in ("present", "tsp", "my_walk", "op_walk", "my_took", "op_took"))
 
 
 def ws_attach(pol, path):
@@ -178,6 +188,10 @@ def ws_row(E, env, t, ev, h, pol, score, seed):
     v = ws_value(pol, h)
     cols = [np.full(len(ev), seed), ev // 2, np.full(len(ev), t), score[ev], score[op], env.hp[ev], env.armor[ev], env.hp[op], env.armor[op],
             dead[ev], dead[op]] + [env.has[s_, w_] for s_ in (ev, op) for w_ in (E.RL, E.LG, E.RG)] + [v, env.frags_r[ev] - env.frags_r[op]]
+    if WS_ITEMS:                                             # (1.9a) the items' race of each row's two seats
+        ra_, rb_ = env.item_race(ev), env.item_race(op)
+        for j_ in range(2):
+            cols += [ra_["present"][:, j_], ra_["tsp"][:, j_], ra_["walk"][:, j_], rb_["walk"][:, j_], ra_["took"][:, j_], rb_["took"][:, j_]]
     return np.stack([np.asarray(c, np.float64) for c in cols], 1).astype(np.float32)
 
 
@@ -294,7 +308,21 @@ def play(job):
         kf_ = None
         if kp_:
             a[:, -1] = -1
-            kf_ = env.keep_feat()
+            kf_ = __import__("head2").np_kf_end(env)                             # (2.1c: with the trip-end column, for the held draw)
+        ox_ = None                                                              # (1.7) the combat order's candidates after the frame before
+        dd_ = getattr(pol, "desc_due", False) or getattr(opp_pol, "desc_due", False)   # (2.2a) a network whose desc term plays reads the description
+        if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False) or dd_):
+            ox_ = env.order_feat()                                              # (a keep reading of some seat: its head ticked on that frame)
+            if dd_:                                                             # (2.2a: + his weapons and the weapon in his hand, sim/desc22.py env_ox;
+                __import__("desc22").need_om(env)                               # (no map numbers: raise, never zeros)
+                ox_ = tuple(ox_) + (np.asarray(env.has[:env.n, :9], bool).copy(), np.asarray(env.weapon[:env.n], np.int64).copy())   # the map's name
+                for p_m in (pol, opp_pol):                                      # for the map sense's table)
+                    if p_m is not None and hasattr(p_m, "set_maps"):
+                        p_m.set_maps(mp)
+        fx_ = None                                                              # (2.2b) the fight options' numbers after the frame before (a 2.2b network
+        if hasattr(env, "fight_feat") and (getattr(pol, "fight_due", False) or getattr(opp_pol, "fight_due", False)):   # at a keep reading)
+            import fight22 as fight22_e
+            fx_ = fight22_e.reader_fx(env)
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -307,24 +335,40 @@ def play(job):
             pz_, zz_ = btoken_.pose_from_env(env, mp)
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
                         **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
-                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}))
+                        **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}),
+                        **({"ox": (tuple(v_[ev] for v_ in ox_) if getattr(pol, "desc_due", False) else (ox_[0][ev], ox_[1][ev]))}
+                           if (ox_ is not None and (pol.order_due or getattr(pol, "desc_due", False))) else {}),
+                        **({"fx": {k_: v_[ev] for k_, v_ in fx_.items()}} if (fx_ is not None and getattr(pol, "fight_due", False)) else {}))
         a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]
         if kp_ and pol.keep_on:
             a[ev, -1] = al[:, -1]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
         if opp_pol is not None:
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
-                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}))
+                                 **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}),
+                                 **({"ox": (tuple(v_[od] for v_ in ox_) if getattr(opp_pol, "desc_due", False) else (ox_[0][od], ox_[1][od]))}
+                                    if (ox_ is not None and (opp_pol.order_due or getattr(opp_pol, "desc_due", False))) else {}),
+                                 **({"fx": {k_: v_[od] for k_, v_ in fx_.items()}} if (fx_ is not None and getattr(opp_pol, "fight_due", False)) else {}))
             a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
             if kp_ and opp_pol.keep_on:
                 a[od, -1] = ao[:, -1]
+        if hasattr(env, "fg_score") and (getattr(pol, "fgt", None) is not None or getattr(opp_pol, "fgt", None) is not None):
+            fs_ = np.zeros((n, 4), np.float32)                                  # (2.2b) each side's four scores: the hands' inputs
+            for m_, p_ in ((ev, pol),) + (((od, opp_pol),) if opp_pol is not None else ()):
+                fsc_ = p_.fight_scores() if getattr(p_, "fgt", None) is not None else None
+                if fsc_ is not None:
+                    fs_[m_] = fsc_
+            env.fg_score = fs_
         if BR_:                                                                 # (v0.4.2a) the brain's answer of this frame, each side's own
             ans_ = dict(bel=np.zeros((n, 3), np.float32), ok=np.zeros(n, bool), band=np.zeros((n, 4), np.float32), ztop=np.full(n, -1, np.int16))
+            if getattr(E, "COMBAT", False) or getattr(E, "AHEAD_IN", False):    # (1.7; 2.2c AHEAD_IN: the hands' inputs) the brain's places ahead: the combat order's
+                ans_["fut"] = np.zeros((n, 3, 3), np.float32)
             for m_, p_, hs_ in ((ev, pol, h),) + (((od, opp_pol, h2),) if opp_pol is not None else ()):
                 an_ = p_.brain_answer(hs_) if hasattr(p_, "brain_answer") else None
                 if an_ is not None:
                     for k_ in ans_:
-                        ans_[k_][m_] = an_[k_]
+                        if k_ in an_:
+                            ans_[k_][m_] = an_[k_]
             env.brain_in(ans_)
         if t % WS_EVERY == 0:                                                     # (winsense) once a second
             WS_ROWS.append(ws_row(E, env, t, ev, h, pol, score, seed))
@@ -505,7 +549,7 @@ def main():
     if getattr(pol, "btok", None) is not None:
         print("brain token: gate {:g} ({})".format(pol.bgate, "shut: the network without it" if pol.bgate <= 0 else "the brain stepped as in training"), flush=True)
     now = names(os.path.join(ROOT, "docs", "INPUTS.csv"))
-    old = names(a.inputs)
+    old = pol.names if getattr(pol, "names", None) else fit_list(names(a.inputs), len(pol.mean))   # (1.8: a network of a cleaned list carries its own)
     assert len(old) == len(pol.mean), "the network has {} inputs, {} lists {}".format(len(pol.mean), a.inputs, len(old))
     idx = np.array([now.index(x) for x in old])
     opp_pol, opp_idx, kind = None, None, a.opp
@@ -517,7 +561,7 @@ def main():
             opp_pol.set_rule_fade(a.opp_rule_fade_g)
         if a.opp_head2_gate is not None:
             opp_pol.set_head2_gate(a.opp_head2_gate)
-        oo = names(a.opp_inputs)
+        oo = opp_pol.names if getattr(opp_pol, "names", None) else fit_list(names(a.opp_inputs), len(opp_pol.mean))
         assert len(oo) == len(opp_pol.mean), "the opponent has {} inputs, {} lists {}".format(len(opp_pol.mean), a.opp_inputs, len(oo))
         opp_idx = np.array([now.index(x) for x in oo])
         kind = "policy"
@@ -528,6 +572,8 @@ def main():
         envvars["SEAT_AIM_OPP"] = a.aim_opp
     if any(getattr(p_, "rf_read", False) and p_.rfg > 0 for p_ in (pol, opp_pol) if p_ is not None) and "BRAIN_READ" not in envvars:
         envvars["BRAIN_READ"] = "1"                              # (v0.4.2a) a network trained with the readers on the brain plays so
+    if any(getattr(p_, "ahead_in", False) for p_ in (pol, opp_pol) if p_ is not None) and "AHEAD_IN" not in envvars:
+        envvars["AHEAD_IN"] = "1"                                # (2.2c) a network that reads the brain's places ahead: the simulator makes them
     delays = (pol.react_ms if a.react_ms is None else a.react_ms, pol.acquire_ms if a.acquire_ms is None else a.acquire_ms,
               None if opp_pol is None else (opp_pol.react_ms if a.opp_react_ms is None else a.opp_react_ms),
               None if opp_pol is None else (opp_pol.acquire_ms if a.opp_acquire_ms is None else a.opp_acquire_ms))

@@ -1,0 +1,36 @@
+the first layers' sums on 38421 rows of real play, the largest difference: the hands' encoder 8.53e-14, the brain's input layer 1.14e-13, the attention tokens 2.13e-14
+columns: 679 plain, 18 two-valued at the old clip (exact), 41 left with their old statistics (at the old clip, not two-valued), 62 constant in the sample (kept); 6 shared features left as they were; rows at the new clip 0.0140%
+the size of the live columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.7%, 4.6%; after 1.00, 8.4%, 1.5%
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_18a_clean3\c.pt: list 18 (876 inputs; the brain the first 691, the hands the first 796, the tail 80); 177 columns cut and folded
+the optimizer's moments converted C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_b1_2d\keep\opt_end_b12d.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_18a_clean3\c_opt.pt: enc.0.weight (256, 980) -> (256, 796); belief.inp.weight (256, 868) -> (256, 691); 20 token kinds' first layers
+
+same: 400 frames x 8 seats: largest |h a - h b| = 2.82e-05; actions that differ: 0
+ALL PASSED
+
+11:27:19 PASS b1.2d's end widened to the simulator's 1,053 inputs answers as b1.2d's end: 0 actions differ
+same (as played: the brain's inputs at half precision): 400 real rows x 8 seats, each network through its own list: largest |h a - h b| = 0.211; actions that differ: 18 of 44800
+same (the brain's rounding off): 400 real rows x 8 seats, each network through its own list: largest |h a - h b| = 0.000343; actions that differ: 1 of 44800
+ALL PASSED
+
+11:27:27 PASS the cleaned list: the network cut, routed and resized answers as before on real rows, each through its own list: at most 5 of 44,800 choices differ with the brain's half-precision rounding off (single-precision rounding of the rescaled sums; with the rounding on the two read their inputs on different grids)
+11:27:27 PASS every first layer's sums unchanged on the sample (the largest differences: {'enc': 8.526512829121202e-14, 'brain': 1.1368683772161603e-13, 'tokens': 2.1316282072803006e-14})
+11:27:27 PASS the start is of list 18: 876 inputs, the brain the first 691, the hands the first 796 ((256, 796))
+11:27:27 PASS nothing of the cut groups is in the list; the ways, the heavy machine gun, the gauntlet, the grenade arc, the pre-fire and the emergence are
+11:27:27 PASS the tail (80 columns the first layers do not read): the 76 rule-made columns and the yellows' four timers
+11:27:27 PASS the strategy inputs' fade is in the start, shut: 29 columns of the hands' (['clock and score', 'memory', 'v02 game', 'v02 items']), every one also among the head's own
+11:27:27 PASS the head: its add 1, its gate 0, its target layer zero, the keep choice (2) at share 0, no weapon part, no order; its own columns (89) have the weapon in his hand, the enemy in view and the four items' timers, and not the order's
+same: 400 frames x 8 seats: largest |h a - h b| = 0; actions that differ: 0
+  (b's strategy head ran: its state's mean |s| 0.1845, valid 1.00)
+ALL PASSED
+
+11:27:32 PASS the head and the keep choice at zero effect: the start answers as the cleaned network without them (0 actions differ, the head's whole path run)
+, 6): re-decided 0.047 of 233 (the start at the band's middle, held log p aside: 0.052)
+  share 1, ('age', 8): re-decided 0.165 of 206 (the start at the band's middle, held log p aside: 0.177)
+  share 1, ('arrived',): re-decided 0.346 of 439 (the start at the band's middle, held log p aside: 0.369)
+  share 1, ('contact',): re-decided 0.352 of 982 (the start at the band's middle, held log p aside: 0.369)
+share 1: young targets kept 0.996 a reading, old ones re-decided 0.802 a reading
+share 0.5: the coin 0.512 of frames; keep readings 0.122 of frames (the head ticks every few frames)
+ALL PASSED
+
+11:27:40 PASS keep_init same: share 0 answers as without the keep choice; at share 1 the start is the lock made soft
+11:27:40 ALL PASSED

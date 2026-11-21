@@ -31,9 +31,9 @@ def rep(a, b, count=1):
 
 
 # ---- constants
-rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS",
+rep("OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS + N_DG + N_FG + N_AH",
     "N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players\n"
-    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS")
+    "OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS + N_DG + N_FG + N_AH")
 rep("        return (np.arange(self.n) ^ 1)[:, None]", "        return self.others")
 rep("        return [i ^ 1]", "        return [int(x) for x in self.others[i]]")
 rep("        return j % 2", "        return j % self.G")
@@ -237,7 +237,11 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
-                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot)], 1)
+                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot),
+                              self._ord(pos, eye, yaw, pit), self._yt(), self._sp(pos, c, si, known, visible, opp),
+                              self._ins(pos, eye, yaw, pit, rot),
+                              self._dodge(pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick if self.focus_on else None),
+                              self._fgo(pos, eye, yaw, pit), self._ahi(eye, yaw)], 1)
         return obs.astype(np.float32)''', '''                              self._fight(pos, eye, rot, visible), self._mem(opp), self._routes(pos, rot),
                               self._ffa(pos, eye, rot, yaw, pit), self._pad_ear(yaw),   # the group block keeps its place
                               self._more(pos, rot, c, si, visible, opp_vel, seen_t), self._dense(eye, yaw, pit),
@@ -246,7 +250,11 @@ rep('''                              self._fight(pos, eye, rot, visible), self._
                               self._v15(pos, yaw, pit, eye, known, seen_t, visible),
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
-                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot)], 1)
+                              self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot),
+                              self._ord(pos, eye, yaw, pit), self._yt(), self._sp(pos, c, si, known, visible, opp),
+                              self._ins(pos, eye, yaw, pit, rot),
+                              self._dodge(pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick if self.focus_on else None),
+                              self._fgo(pos, eye, yaw, pit), self._ahi(eye, yaw)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -530,5 +538,6 @@ s = s[:a] + '''        # senses: sight (line of sight + field of view) and heari
 left = re.findall(r".*(?:\^ 1|// 2\b|repeat\(self\.[a-z_ >0]*, 2\b|2 \* m\b).*", s)
 left = [l for l in left if "dmg_life[i ^ 1]" not in l]
 assert not left, left
-open(os.path.join(ROOT, "sim", "duel_env_ffa.py"), "w", newline="", encoding="utf-8").write(s)
+open(os.path.join(ROOT, "sim", "duel_env_ffa.py.tmp"), "w", newline="", encoding="utf-8").write(s)      # (written beside and put in place at once: a tool
+os.replace(os.path.join(ROOT, "sim", "duel_env_ffa.py.tmp"), os.path.join(ROOT, "sim", "duel_env_ffa.py"))   # starting meanwhile never reads half a file)
 print("wrote sim/duel_env_ffa.py")

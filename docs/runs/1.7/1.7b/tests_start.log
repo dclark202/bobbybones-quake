@@ -1,0 +1,9 @@
+the order's layers are those of C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7a\keep\policy_10.pt to the bit (the order never learnt before)
+strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1005 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + obs 89 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 714,403 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_17b_start\s1.pt: 4 new inputs (b17b timers), new tokens ['timers'] (shut); the head's inp 950 -> 960 columns (obs +8, fight 2, at zero); the fight odds readout (last layer at zero; horizon 200 frames); the order's reference (ok_c.weight, ok_c.bias, op_x.weight, op_x.bias, op_v.weight, op_v.bias)
+the files' own shares: 400 frames x 8 seats, 14 output columns, actions that differ: 0 -> PASS
+keep choice and order at share 1, random keep numbers and candidates: 400 frames x 8 seats, 15 output columns, actions that differ: 0 -> PASS
+ALL PASSED
+
+21:08:34 PASS b17b_init same: the start against 1.7a's update 90
+21:08:34 ALL PASSED

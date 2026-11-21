@@ -140,7 +140,7 @@ the one cost is a slow slide in item control.** 1.7 starts from its end.
 | u30 against the start (teacher at 0.25) | 91-109 | 45.5% | 47.9% |
 | u50 against the start (both at 0 from u40) | 101-99 | 50.5% | 50.3% |
 | u70 against b1.2d's end (reference) | 188-12 | 94.0% | 73.5% (1.5a at u70: 88.0%) |
-| u80, the head's weapon scores off, against 1.5a's end | 79-81 on 8 of 10 maps (running) | | |
+| u80, the head's weapon scores off, against 1.5a's end | 107-93 | 53.5% | 53.3% (1.5a's end the same way: 113-87, 56.5%) |
 
 No check against the start after u50 (the watcher's every fourth went to the reference at u70; the run ends before u90).
 
@@ -156,3 +156,8 @@ No check against the start after u50 (the watcher's every fourth went to the ref
 Read: the item teacher and the speed pay are gone with no loss of games against the start and a better margin over b1.2d's end than
 1.5a's. Speed did not need its pay. Item control slid about 5% (1.70 → 1.62 big weapons owned, 1.92 → 1.84 mega and red a minute)
 and had flattened by the end; nothing in the run replaces the teacher's pull, so 1.7 should watch both from its first update.
+
+**On the public servers** since 2026-11-05 ~22:30 CT (owner: "let's go ahead and put this version on the public servers"; no weights
+release): both US and Amsterdam, a code deploy (main merged into `pub-perf` at `4464445`, image `qlbot:pub-4464445` built on each box,
+`EARLY_BOBBY=0` as before), the files of `data/duellive_16a` (version line `1.6a`); b1.2d's kept there as `*_prev.npz`. Before it: a local
+test of the same image with 1.6a against the game's bot (a whole game, no error), and the owner's local play test.

@@ -1,0 +1,6 @@
+the files' own shares: 400 frames x 8 seats, 14 output columns, actions that differ: 0 -> PASS
+keep choice and order at share 1, random keep numbers and candidates: 400 frames x 8 seats, 15 output columns, actions that differ: 0 -> PASS
+ALL PASSED
+
+19:40:22 PASS b20b_init same: the start answers as 2.0a's end (0 actions differ)
+19:40:22 ALL PASSED

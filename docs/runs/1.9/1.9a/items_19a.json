@@ -1,0 +1,305 @@
+{
+ "version": 3,
+ "tau0": 1.0381374872202243,
+ "tau1": 0.5683653000417576,
+ "eps": 0.16,
+ "horizon": 6.0,
+ "k": [
+  1.0,
+  1.0
+ ],
+ "dead_walk": 8.0,
+ "far": 60.0,
+ "judge": "C:\\Users\\dacla\\Documents\\gh\\BobbyBones\\data\\sim_runs\\judge\\judge_v060_wpn.npz",
+ "accepted": true,
+ "race": {
+  "rows": 118787,
+  "nll": 0.6506,
+  "nll_half": 0.6931,
+  "bins": [
+   {
+    "p": 0.171,
+    "took": 0.202,
+    "rows": 5988
+   },
+   {
+    "p": 0.249,
+    "took": 0.271,
+    "rows": 4465
+   },
+   {
+    "p": 0.356,
+    "took": 0.422,
+    "rows": 6412
+   },
+   {
+    "p": 0.468,
+    "took": 0.483,
+    "rows": 41320
+   },
+   {
+    "p": 0.532,
+    "took": 0.57,
+    "rows": 42678
+   },
+   {
+    "p": 0.643,
+    "took": 0.654,
+    "rows": 6387
+   },
+   {
+    "p": 0.752,
+    "took": 0.809,
+    "rows": 4665
+   },
+   {
+    "p": 0.829,
+    "took": 0.847,
+    "rows": 6872
+   }
+  ]
+ },
+ "heldout": {
+  "games": 100,
+  "rows": 50400,
+  "judge": 0.316821,
+  "with_items": 0.315434,
+  "diff": -0.001387,
+  "diff_95": [
+   -0.002529,
+   -0.000499
+  ],
+  "folds_chose": [
+   6.0,
+   6.0,
+   6.0,
+   6.0,
+   6.0
+  ]
+ },
+ "free_k": {
+  "heldout": 0.315353,
+  "folds_chose": [
+   [
+    2.0,
+    0.75,
+    6.0
+   ],
+   [
+    2.0,
+    1.0,
+    3.0
+   ],
+   [
+    2.0,
+    1.0,
+    3.0
+   ],
+   [
+    2.0,
+    1.0,
+    3.0
+   ],
+   [
+    2.0,
+    0.75,
+    3.0
+   ]
+  ],
+  "all_games": [
+   [
+    2.0,
+    0.75
+   ],
+   3.0
+  ]
+ },
+ "enough_data": true,
+ "examples": [
+  {
+   "me": [
+    100,
+    0
+   ],
+   "him": [
+    100,
+    0
+   ],
+   "mega_up_me_s": 2.0,
+   "him_s": 6.0,
+   "chance": 0.5651,
+   "without": 0.5,
+   "worth": 0.0651
+  },
+  {
+   "me": [
+    100,
+    0
+   ],
+   "him": [
+    100,
+    0
+   ],
+   "mega_up_me_s": 6.0,
+   "him_s": 2.0,
+   "chance": 0.4349,
+   "without": 0.5,
+   "worth": -0.0651
+  },
+  {
+   "me": [
+    100,
+    0
+   ],
+   "him": [
+    100,
+    0
+   ],
+   "mega_up_me_s": 4.0,
+   "him_s": 4.0,
+   "chance": 0.5,
+   "without": 0.5,
+   "worth": 0.0
+  },
+  {
+   "me": [
+    125,
+    50
+   ],
+   "him": [
+    125,
+    50
+   ],
+   "mega_up_me_s": 2.0,
+   "him_s": 6.0,
+   "chance": 0.5617,
+   "without": 0.5,
+   "worth": 0.0617
+  },
+  {
+   "me": [
+    125,
+    50
+   ],
+   "him": [
+    125,
+    50
+   ],
+   "mega_up_me_s": 6.0,
+   "him_s": 2.0,
+   "chance": 0.4383,
+   "without": 0.5,
+   "worth": -0.0617
+  },
+  {
+   "me": [
+    125,
+    50
+   ],
+   "him": [
+    125,
+    50
+   ],
+   "mega_up_me_s": 4.0,
+   "him_s": 4.0,
+   "chance": 0.5,
+   "without": 0.5,
+   "worth": 0.0
+  },
+  {
+   "me": [
+    50,
+    0
+   ],
+   "him": [
+    150,
+    100
+   ],
+   "mega_up_me_s": 2.0,
+   "him_s": 6.0,
+   "chance": 0.3367,
+   "without": 0.2864,
+   "worth": 0.0503
+  },
+  {
+   "me": [
+    50,
+    0
+   ],
+   "him": [
+    150,
+    100
+   ],
+   "mega_up_me_s": 6.0,
+   "him_s": 2.0,
+   "chance": 0.2581,
+   "without": 0.2864,
+   "worth": -0.0283
+  },
+  {
+   "me": [
+    50,
+    0
+   ],
+   "him": [
+    150,
+    100
+   ],
+   "mega_up_me_s": 4.0,
+   "him_s": 4.0,
+   "chance": 0.2959,
+   "without": 0.2864,
+   "worth": 0.0095
+  },
+  {
+   "me": [
+    150,
+    100
+   ],
+   "him": [
+    50,
+    0
+   ],
+   "mega_up_me_s": 2.0,
+   "him_s": 6.0,
+   "chance": 0.7419,
+   "without": 0.7136,
+   "worth": 0.0283
+  },
+  {
+   "me": [
+    150,
+    100
+   ],
+   "him": [
+    50,
+    0
+   ],
+   "mega_up_me_s": 6.0,
+   "him_s": 2.0,
+   "chance": 0.6633,
+   "without": 0.7136,
+   "worth": -0.0503
+  },
+  {
+   "me": [
+    150,
+    100
+   ],
+   "him": [
+    50,
+    0
+   ],
+   "mega_up_me_s": 4.0,
+   "him_s": 4.0,
+   "chance": 0.7041,
+   "without": 0.7136,
+   "worth": -0.0095
+  }
+ ],
+ "axiom_failures": 0,
+ "calibrated": true,
+ "folders": [
+  "C:\\Users\\dacla\\Documents\\gh\\BobbyBones\\data\\sim_runs\\duel_gru_1_8a\\selfplay\\items19_u190_1112"
+ ]
+}

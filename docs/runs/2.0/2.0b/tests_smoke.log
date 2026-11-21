@@ -1,0 +1,35 @@
+19:47:36 scratch_20b_smoke_f: done in 1.0 min; the log ends: exit 0
+19:47:36 PASS the trainer exited 0
+19:47:36 PASS on the CPU
+19:47:36 PASS the optimizer's state loaded from S0's opt.pt
+19:47:36 PASS no weapon table, the keep choice not frozen, no REFUSED
+19:47:36 PASS 8 or more updates (10)
+19:47:36 update 1: dmg 0.0797 / -0.0422 frag 1.5625 death None win 0.7043 | edge 0.0153 (share 0.006) cover None | frags a match-minute 1.562 | space {'thr': -0.2631, 'put': -0.2631, 'agg': 0.0, 'zones': 0.0} (frames 192)
+19:47:36 update 2: dmg 0.2906 / -0.3078 frag 1.5625 death -1.5625 win -2.1174 | edge 0.04 (share 0.0047) cover None | frags a match-minute 3.125 | space {'thr': -0.4979, 'put': -0.4973, 'agg': 0.0008, 'zones': 0.0028} (frames 180)
+19:47:36 update 3: dmg 0.3327 / -0.3714 frag 1.5625 death -1.5625 win 2.241 | edge 0.0266 (share 0.0043) cover None | frags a match-minute 3.125 | space {'thr': -0.1293, 'put': -0.1321, 'agg': 0.0055, 'zones': 0.0093} (frames 160)
+19:47:36 update 4: dmg 0.2375 / -0.1219 frag 1.5625 death None win -1.5487 | edge 0.005 (share 0.0043) cover None | frags a match-minute 1.562 | space {'thr': 0.062, 'put': 0.0568, 'agg': 0.0434, 'zones': 0.0138} (frames 176)
+19:47:36 update 5: dmg 0.6344 / -0.6234 frag 3.125 death None win 4.7775 | edge -0.0013 (share 0.0041) cover None | frags a match-minute 3.125 | space {'thr': 0.0063, 'put': 0.0079, 'agg': 0.0985, 'zones': 0.0186} (frames 180)
+19:47:36 update 6: dmg 0.4328 / -0.1406 frag None death None win 4.3489 | edge 0.088 (share 0.0071) cover None | frags a match-minute 0.0 | space {'thr': 0.1152, 'put': 0.1243, 'agg': 0.1249, 'zones': 0.0242} (frames 180)
+19:47:36 update 7: dmg 0.3938 / -0.3656 frag None death -1.5625 win 0.765 | edge 0.0362 (share 0.0045) cover None | frags a match-minute 1.562 | space {'thr': 0.1416, 'put': 0.1507, 'agg': 0.251, 'zones': 0.0516} (frames 190)
+19:47:36 update 8: dmg 0.4219 / -0.2328 frag None death None win 3.8015 | edge 0.0261 (share 0.0073) cover None | frags a match-minute 0.0 | space {'thr': 0.1524, 'put': 0.1598, 'agg': 0.1995, 'zones': 0.0651} (frames 184)
+19:47:36 update 9: dmg 0.3438 / -0.175 frag 1.5625 death None win -0.3218 | edge 0.0469 (share 0.0314) cover None | frags a match-minute 1.562 | space {'thr': 0.0938, 'put': 0.0798, 'agg': 0.1609, 'zones': 0.0749} (frames 182)
+19:47:36 update 10: dmg 0.375 / -0.3438 frag 3.125 death -1.5625 win -1.5941 | edge -0.0228 (share 0.0111) cover None | frags a match-minute 4.688 | space {'thr': 0.1252, 'put': 0.1264, 'agg': 0.3594, 'zones': 0.0964} (frames 180)
+19:47:36 PASS the ledger on every update
+19:47:36 PASS the edge in the ledger on every update, under a quarter of the pay's size; no cover
+19:47:36 PASS the readout's record on every update, with frames
+19:47:36 PASS the readout above its base rate by the last update: the threat on him 0.1252 and the zones 0.0964
+19:47:36 PASS no NaN in the head's lessons or the trainer's kl and entropy
+19:47:36 kl by update: [0.03959, 0.02372, 0.01757, 0.02506, 0.03459, 0.03577, 0.02036, 0.02716, 0.03162, 0.03036]
+19:47:36 PASS the save carries SPACE_IN 1 and SPACE_GATE 1 (1 1.0), the readout's layers and layout, no wrule
+19:47:36 PASS the new inputs' weights have left zero (0.00512): he learns from them
+19:47:56 scratch_20b_smoke_f: done in 0.3 min; the log ends: exit 0
+19:47:56 PASS a restart from the save with its optimizer: loaded, no cold start, the readout from the network, one more update (10 -> 11)
+19:47:56 the check's settings of 2.0b: ['SPACE_IN=1', 'SPACE_GATE=1.0']
+19:47:56 PASS the check plays with SPACE_IN=1 and the save's gate
+19:49:13 check: exit 0; ns 0.75/min | mega 73%, red 42% of spawns | yellow 1.25/min | in view 18% | firing 14% (64% of the time in view) | speed 337, standing 2% (over 3 s: 0%) | lives 0.5/min, own deaths 0.0 a game
+    opponent  bare 11% | first weapon 1.5 s | 150+ 56% | weapons 2.25/min | mega 15%, red 31% of spawns | yellow 1.5/min | in view 20% | firing 13% (58% of the time in view) | speed 317, standing 4% (over 3 s: 0%) | lives 3.5/min, own deaths 0.0 a game
+C:\Users\dacla\Documents\gh\BobbyBones\sim\btoken.py:349: RuntimeWarning: overflow encountered in exp
+  r = 1.0 / (1.0 + np.exp(-(gi[:, :H] + gh[:, :H])))
+
+19:49:13 PASS a one-map check of the save against S0 finished (2-0)
+19:49:13 ALL PASSED

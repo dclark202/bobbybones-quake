@@ -1,0 +1,59 @@
+strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 975 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 686,436 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp
+wrote data/sim_runs/level_17a_keep\start.pt: the keep choice at share 0 (layout keep 2, 7 numbers); its start at 5.0 readings a second:
+  out of contact, quiet: z = 0.6800 x age + -7.6600 a reading (1.4c's start a second: sigmoid(0.75 x (age - 8.5)))
+   age s     start /s       fit /s fit /reading held S fit-start
+       1       0.0036       0.0046       0.0009          -0.0008
+       3       0.0159       0.0179       0.0036          -0.0038
+       5       0.0675       0.0677       0.0139          -0.0068
+       7       0.2451       0.2349       0.0522          +0.0019
+       8       0.4073       0.4028       0.0980          +0.0079
+       9       0.5927       0.6214       0.1765          +0.0005
+      10       0.7549       0.8287       0.2973          -0.0124
+    11.5       0.9047       0.9794       0.5399          -0.0034
+      13       0.9669       0.9993       0.7649          -0.0001
+      15       0.9924       1.0000       0.9269          -0.0000
+  seconds held (quiet, out of contact): the start 7.80, the fit 7.76
+  in contact: 0.3690 a reading (0.9 a second); arrived out of contact: 0.3690 a reading (0.9 a second)
+C:\Users\dacla\anaconda3\python.exe C:\Users\dacla\Documents\gh\BobbyBones-17b\tools\run\head2head.py level_g1 duel_gru_1_7a data/sim_runs/level_17a_keep\start_g1.pt 8 C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_6a\keep\policy_end_16a.pt 8 --out data/sim_runs/level_17a_keep --games 20 --batch 2
+contact: A 1.0, B 1.0
+weapon own: A 1, B 1
+15:30:08 {'bloodrun': '16-4 66%', 'aerowalk': '7-13 47%'}
+15:41:28 {'bloodrun': '16-4 66%', 'aerowalk': '7-13 47%', 'lostworld': '10-10 54%', 'sinister': '10-10 53%'}
+15:52:47 {'bloodrun': '16-4 66%', 'aerowalk': '7-13 47%', 'lostworld': '10-10 54%', 'sinister': '10-10 53%', 'furiousheights': '15-5 62%', 'battleforged': '13-7 55%'}
+16:05:34 {'bloodrun': '16-4 66%', 'aerowalk': '7-13 47%', 'lostworld': '10-10 54%', 'sinister': '10-10 53%', 'furiousheights': '15-5 62%', 'battleforged': '13-7 55%', 'campgrounds': '11-9 48%', 'hektik': '16-4 61%'}
+16:18:01 {'bloodrun': '16-4 66%', 'aerowalk': '7-13 47%', 'lostworld': '10-10 54%', 'sinister': '10-10 53%', 'furiousheights': '15-5 62%', 'battleforged': '13-7 55%', 'campgrounds': '11-9 48%', 'hektik': '16-4 61%', 'toxicity': '7-13 44%', 'cure': '10-10 46%'}
+level_g1: A start_g1.pt at 8 s against B policy_end_16a.pt at 8 s: 115-85, win rate 57.5%, frag share 53.6%
+{
+ "won": 115,
+ "lost": 85,
+ "win_rate": 0.575,
+ "keep": {
+  "rule_readings": 102054,
+  "rule_held": 0.3948,
+  "forced": 118623,
+  "held_after_sound": 28713,
+  "held_after_sound_draw_differs": 0.3269,
+  "held_quiet": 253091,
+  "held_quiet_draw_differs": 0.29,
+  "after_sound": 29467,
+  "after_sound_changed": 0.0088,
+  "keep_seconds": 119857.5,
+  "keep_readings_a_second": 5.0507,
+  "keep_forced": 0.0795,
+  "keep_decided": 557212,
+  "redecide": 0.2145,
+  "changed": 0.0737,
+  "arrived": 34936,
+  "redecide_arrived": 0.3705,
+  "contact": 308828,
+  "redecide_contact": 0.3691,
+  "heard": 25311,
+  "redecide_heard": 0.0206,
+  "quiet": 223073,
+  "redecide_quiet": 0.0225
+ },
+ "start": "data/sim_runs/level_17a_keep\\start.pt",
+ "ref": "C:\\Users\\dacla\\Documents\\gh\\BobbyBones\\data\\sim_runs\\duel_gru_1_6a\\keep\\policy_end_16a.pt",
+ "from_sha": "f5a13e98ed7d8484d97e674c1510efba298b424305745e1584d120b42098d483"
+}
+LEVEL PASS: the start at share 1 against policy_end_16a.pt: 115-85 = 57.5%

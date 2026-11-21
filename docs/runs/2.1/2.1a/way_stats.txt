@@ -1,0 +1,4 @@
+scratch_21a_brec1 update 1 rollout 203.7 learn 507.2 worker_step [59.53, 84.55] | branch {"moments": 150, "branches": 1200, "rows": 1350, "cut": 1.0, "spam": null, "long_spam": null, "long": null, "long_reading": 0, "long_learnt": 0}
+scratch_21a_brec1 update 2 rollout 253.1 learn 525.6 worker_step [64.18, 93.11] | branch {"moments": 150, "branches": 1018, "rows": 2036, "cut": 0.0059, "spam": null, "long_spam": null, "long": null, "long_reading": 0, "long_learnt": 0}
+scratch_21a_brec1 update 3 rollout 256.1 learn 527.5 worker_step [63.33, 90.87] | branch {"moments": 150, "branches": 1050, "rows": 2100, "cut": 0.0076, "spam": null, "long_spam": null, "long": null, "long_reading": 0, "long_learnt": 0}
+scratch_21a_brec1 update 4 rollout 243.7 learn 384.8 worker_step [62.67, 89.67] | branch {"moments": 150, "branches": 1059, "rows": 2118, "cut": 0.0, "spam": null, "long_spam": null, "long": null, "long_reading": 0, "long_learnt": 0}

@@ -28,6 +28,14 @@ unfaded), as test_suite's Policy. With its readers on (BRAIN_READ in training) t
 even with the token shut, and the simulator's readers (the legs' look point, the hunt's target) take the brain's answer for
 a life drawn on it: brain_life() at each life's start, brain_feed() after each step(). NET_RULE_FADE_G=<g> overrides the
 file's g when a plugin loads it.
+
+(2.2c) A network with the aggression lever (sim/fightnet.py VERSION_LEVER; the export's "fight22" and "fight22.<name>") reads it at each
+keep reading as test_suite.Policy does (NpFight.reading_lever: the brain's state, his inputs, his target scores before the pull, the head's
+state, his memory, his target and its seconds from kf), holds it, and adds LEV_G x the lever (half precision) to "the enemy" after the pull
+and the outlook's term, before the held draw. After step() the plugin gives the simulator fight_scores(P) (env.fg_score: the hands' inputs
+of the next frame, group "b22b fight"), as tools/duel_eval.py does; NET_LEV_G overrides the file's LEV_G. A list that reads the brain's places
+ahead (AHEAD_IN, group "b22c ahead") gets them made at the brain's ticks and sent with its answer (brain_answer's "fut", brain_feed).
+2.2b's four fight options (layout version 1) are not played: sim/export_duel.py refuses them.
 """
 import json
 import os
@@ -52,7 +60,8 @@ def load(path):
         import attn as attn_                                 # sim/attn.py: numpy only (torch is imported inside make_module alone)
         lay = json.loads(str(P["attn"]))
         W = {k[len("attn."):]: v for k, v in P.items() if k.startswith("attn.")}
-        assert int(lay["obs_dim"]) == P["w0"].shape[1], "the tokens are cut from {} inputs, the network has {}".format(lay["obs_dim"], P["w0"].shape[1])
+        aw_ = int(json.loads(str(P["inputs"]))["n"]) if "inputs" in P else P["w0"].shape[1]    # (a cleaned list: the tokens are cut from the whole list)
+        assert int(lay["obs_dim"]) == aw_, "the tokens are cut from {} inputs, the network has {}".format(lay["obs_dim"], aw_)
         if np.abs(W["door.weight"]).sum() > 0:
             # (the index lists as arrays once, not at every frame: forward_np takes either)
             lay = dict(lay, kinds=[dict(k_, idx=np.asarray(k_["idx"], np.int64)) for k_ in lay["kinds"]])
@@ -83,8 +92,113 @@ def load(path):
         if os.environ.get("NET_HEAD2_GATE", "") != "":
             W2["gate"] = np.array(np.float32(float(os.environ["NET_HEAD2_GATE"])))
         base2 = P["_slow"][3] if "_slow" in P else P["whh"].shape[1]
-        P["_head2"] = (lay2, W2, head2_, head2_.np_state_width(lay2), base2, head2_.np_open(W2),
-                       head2_.mlp_of(P, "ahead"), head2_.np_ctrl_params(P, lay2))
+        cmb_ = bool(lay2.get("cmb")) and "op_v.weight" in W2      # (1.7) the combat order: its held numbers after the head's state
+        if os.environ.get("NET_CMB_G", "") != "" and cmb_:
+            W2["cmb_g"] = np.array(np.float32(float(os.environ["NET_CMB_G"])))
+        P["_ord"] = (base2 + head2_.np_state_width(lay2), head2_.CMB_HELD) if cmb_ else None
+        cg_ = float(np.asarray(W2.get("cmb_g", 0.0))) if cmb_ else 0.0
+        P["_head2"] = (lay2, W2, head2_, head2_.np_state_width(lay2) + (head2_.CMB_HELD if cmb_ else 0), base2,
+                       head2_.np_open(W2) or cg_ > 0, head2_.mlp_of(P, "ahead"), head2_.np_ctrl_params(P, lay2),
+                       head2_.np_fight_params(P, lay2))       # (1.7b) the fight odds readout the head's part "fight" reads (None: zeros)
+        P["_pass"] = None                                    # (1.7) the brain's pass readout (sim/passodds.py): the candidates' odds
+        if "passodds" in P and "passr.l1.weight" in P:
+            import passodds as passodds_                     # (numpy at the top: torch inside its torch functions only)
+            P["_pass"] = (json.loads(str(P["passodds"])), {k[len("passr."):]: np.asarray(v, np.float32) for k, v in P.items()
+                                                           if k.startswith("passr.")}, passodds_.np_forward)
+        if os.environ.get("NET_KEEP_G", "") != "" and "keep_g" in W2:       # (1.4c, checks and tests) the keep choice's share, in place of the file's
+            W2["keep_g"] = np.array(np.float32(float(os.environ["NET_KEEP_G"])))
+        P["_plan"] = None                                    # (2.1d, the pull) the slow plan inside the head: (its arrays, strength, horizon, floor,
+        if head2_.has_slowplan(lay2):                        # its refresh every `every` keep readings); NET_PULL_G overrides the file's strength
+            pw_ = head2_.np_plan_params(W2)
+            assert pw_ is not None, "the layout names the slow plan and the file has no head2.plan.* weights"
+            if os.environ.get("NET_PULL_G", "") != "":
+                W2["pull_g"] = np.array(np.float32(float(os.environ["NET_PULL_G"])))
+            P["_plan"] = dict(W=pw_, g=float(np.asarray(W2.get("pull_g", 0.0))), h=int(round(float(np.asarray(W2.get("pull_h", 0.0))))),
+                              floor=float(lay2["slowplan"]["floor"]), every=int(lay2["slowplan"]["every"]), odds=None, cnt=None)
+        P["_out"] = None                                     # (2.1f) the outlook inside the head: its arrays, its strength, the kind that plays;
+        if head2_.has_outlook(lay2):                         # NET_OUT_G, NET_OUT_PICK override the file's
+            import outlook as outlook_
+            for e_, k_ in (("NET_OUT_G", "out_g"), ("NET_OUT_PICK", "out_pick")):
+                if os.environ.get(e_, "") != "":
+                    W2[k_] = np.array(np.float32(float(os.environ[e_])))
+            ow_ = outlook_.np_params(W2)
+            assert ow_ is not None, "the layout names the outlook and the file has no head2.out.* weights"
+            ok_ = int(round(float(np.asarray(W2.get("out_pick", 0.0)))))
+            assert 0 <= ok_ < len(lay2["outlook"]["kinds"]), "out_pick {}: the layout has {} kinds".format(ok_, len(lay2["outlook"]["kinds"]))
+            P["_out"] = dict(W=ow_, g=float(np.asarray(W2.get("out_g", 0.0))), pick=ok_)
+        P["_dsc"] = None                                     # (2.2a) the desc outlook (sim/desc22.py NpDesc): its term made at a keep reading from the
+        if head2_.has_parts22(lay2):                         # simulator's description (step(ox=desc22.env_ox(env), mapname=)), held to the next;
+            import desc22 as desc22_                         # the map sense: the file's "map_sense", its tables <QLBOT_ROOT>/data/maps/space_<map>.npz
+            if os.environ.get("NET_OUT_SRC", "") != "":      # (the server needs them there); NET_OUT_SRC overrides the file's source
+                W2["out_src"] = np.array(np.float32(float(os.environ["NET_OUT_SRC"])))
+            ms_ = None
+            if "map_sense" in P:
+                msl_ = json.loads(str(P["map_sense"]))
+                ms_ = dict(layout=msl_, model={k_[len("map_sense."):]: P[k_] for k_ in list(P.keys()) if k_.startswith("map_sense.")})
+            P["_dsc"] = desc22_.NpDesc(W2, lay2, ms_)
+        P["_shalf"] = None                                   # (2.1e) the slow halves inside the head: the picked half (its arrays, its per-seat
+        if head2_.has_slowhalf(lay2):                        # state: sim/slowhalf.py NpState), the pull's source mix, the read-back's gate;
+            import slowhalf as slowhalf_                     # NET_SLOW_MIX, NET_SLOW_BACK, NET_SLOW_PICK override the file's
+            for e_, k_ in (("NET_SLOW_MIX", "slow_mix"), ("NET_SLOW_BACK", "slow_back"), ("NET_SLOW_PICK", "slow_pick")):
+                if os.environ.get(e_, "") != "":
+                    W2[k_] = np.array(np.float32(float(os.environ[e_])))
+            shL_ = head2_.slowhalf_layout(lay2)
+            pk_ = int(round(float(np.asarray(W2.get("slow_pick", 1.0)))))
+            assert 0 <= pk_ < len(shL_["clocks"]), "slow_pick {}: the layout has {} halves".format(pk_, len(shL_["clocks"]))
+            shP_ = slowhalf_.np_params(W2, pk_)
+            assert shP_ is not None, "the layout names the slow halves and the file has no head2.slow.{}.* weights".format(pk_)
+            P["_shalf"] = dict(L=shL_, mix=float(np.asarray(W2.get("slow_mix", 0.0))), back=float(np.asarray(W2.get("slow_back", 0.0))), pick=pk_,
+                               st=slowhalf_.NpState(shL_, pk_, shP_), mod=slowhalf_)
+        P["_kq"] = None                                      # (2.1) the keep choice's quiet layer: its share (the file's head2.keepq_g; NET_KEEPQ_G
+        if lay2.get("keep") and lay2.get("keepq") and head2_.np_has_keepq(W2):   # overrides it) and the stay value's (layout, weights) or None
+            if os.environ.get("NET_KEEPQ_G", "") != "":      # (sim/stay.py; the export's "stay" and "stay.<name>"; none: 0)
+                W2["keepq_g"] = np.array(np.float32(float(os.environ["NET_KEEPQ_G"])))
+            st_ = None
+            if "stay" in P:
+                import stay as stay_                         # sim/stay.py: numpy at the top (torch inside make_module alone)
+                stL_ = json.loads(str(P["stay"]))
+                stW_ = {k[len("stay."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("stay.")}
+                assert int(stL_["mem"]) == int(P["whh"].shape[1]) and int(stL_["head"]) == int(lay2["size"]) \
+                    and int(stL_["kx"]) == head2_.KEEP_F and int(stL_["ksig"]) == head2_.KSIG, "stay: its widths do not fit the network"
+                st_ = (stL_, stW_, stay_.np_value)
+            P["_kq"] = dict(stay=st_, sv=None)
+    P["_fgt"] = None                                         # (2.2c, sim/fightnet.py VERSION_LEVER) the aggression lever: the export's "fight22"
+    if "fight22" in P and P.get("_head2") is not None:      # (its layout with the measured norm, its dials) and "fight22.<name>" (its layers);
+        if "/sim" not in sys.path and os.path.isdir("/sim"):     # read at each keep reading as test_suite.Policy reads it (NpFight.reading_lever),
+            sys.path.insert(0, "/sim")                       # held to the next, x LEV_G on "the enemy" after the pull and the outlook's term;
+        import fightnet as fightnet_                         # NET_LEV_G overrides the file's LEV_G. 2.2b's four options (layout version 1)
+        fj_ = json.loads(str(P["fight22"]))                  # are refused (sim/export_duel.py never writes them)
+        assert fightnet_.is_lever(fj_["layout"]), "the file's fight network is not the aggression lever (2.2b's four options are not played here)"
+        Wf_ = {k[len("fight22."):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith("fight22.")}
+        lg_ = float(os.environ["NET_LEV_G"]) if os.environ.get("NET_LEV_G", "") != "" else float((fj_.get("dials") or {}).get("LEV_G", 0.0))
+        P["_fgt"] = dict(F=fightnet_.NpFight(dict(layout=fj_["layout"], model=Wf_), P["_head2"][1], P["_head2"][0]), g=lg_, lev=None, last=None,
+                         mod=fightnet_)
+    P["_ahead_in"] = False                                   # (2.2c, AHEAD_IN) his list reads the brain's places ahead (group "b22c ahead"): they are
+    if "input_names" in P:                                   # made at the brain's ticks (test_suite.Policy.ahead_in) and sent with its answer
+        P["_ahead_in"] = any(g_ == "b22c ahead" for g_, _ in json.loads(str(P["input_names"])))
+    P["_ins"] = None                                        # (2.1) the head's choice of an instruction: the scorer, the appraisals it reads,
+    if "ins" in P and "appraise" in P and P.get("_head2") is not None and P["_head2"][0].get("ins"):    # the brain's readouts written into
+        if "/sim" not in sys.path and os.path.isdir("/sim"):                                             # the rows (sim/head2.py np_ins_prep,
+            sys.path.insert(0, "/sim")                                                                   # np_ins_read: the checks' own sums)
+        import appraise as appraise_                         # sim/appraise.py, sim/knownodds.py, sim/spawnodds.py, sim/mapsense.py: numpy at the top
+        ij_ = json.loads(str(P["ins"]))
+        f32_ = lambda pre_: {k[len(pre_):]: np.asarray(v, np.float32) for k, v in P.items() if k.startswith(pre_)}    # noqa: E731
+        Wi_ = f32_("ins.")
+        g_ = float(os.environ["NET_INS_G"]) if os.environ.get("NET_INS_G", "") != "" else float(np.asarray(Wi_.get("ins_g", 0.0)))
+        I_ = dict(I=P["_head2"][0]["ins"], W=Wi_, aprL=json.loads(str(P["appraise"])), aprP=appraise_.np_params(f32_("appraise.")),
+                  warm=int(ij_.get("seen", 0)) >= int(ij_.get("warm", 0)), g=g_, none=int(ij_.get("none_row", -1)), fill=dict(ij_.get("fill") or {}),
+                  knP=None, spP=None, msL=None, msP=None, tabs={}, rng=np.random.default_rng(4067))
+        if "known" in P:
+            import knownodds as knownodds_
+            I_["knP"] = knownodds_.np_params(f32_("known."))
+        if "spawn" in P:
+            import spawnodds as spawnodds_
+            I_["spP"] = spawnodds_.np_params(f32_("spawn."))
+        if "map_sense" in P and int(I_["I"].get("ms", 0) or 0):
+            I_["msL"], I_["msP"] = json.loads(str(P["map_sense"])), f32_("map_sense.")
+        P["_ins"] = I_
+        if g_ > 0:                                           # (the scorer reads the head's state: the head is stepped)
+            P["_head2"] = P["_head2"][:5] + (True,) + P["_head2"][6:]
     P["_brain"] = None                                       # (v0.4.1) the brain and its token: (brain weights, token layout, btoken, where
     if "btoken" in P and "belief" in P:                      # its state starts in a seat's array, the gate); played only while the gate is open
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -106,6 +220,12 @@ def load(path):
         if os.environ.get("NET_RULE_FADE_G", "") != "":
             rf_["g"] = float(os.environ["NET_RULE_FADE_G"])
         P["_rfade"] = (np.asarray(rf_["cols"], np.int64), float(rf_.get("g", 0.0)), bool(rf_.get("readers")))
+        m_ = rf_.get("more") or {}                           # (1.8a) the second fade group (the strategy inputs out of the hands)
+        if os.environ.get("NET_STRAT_FADE_G", "") != "":
+            m_ = dict(m_, g=float(os.environ["NET_STRAT_FADE_G"]))
+        if m_.get("cols"):
+            P["_rfade2"] = (np.asarray(m_["cols"], np.int64), float(m_.get("g", 0.0)))
+    P["_src"] = np.asarray(P["input_src"], np.int64) if "input_src" in P else None    # (a cleaned list: its columns in the simulator's full list)
     P["_uni"] = None                                         # (--legs-feat, --legs-guide) (layout, door or None, guide weights or None):
     if "legs_unify" in P:                                    # None while both parts are at zero (they add nothing then)
         if "/sim" not in sys.path and os.path.isdir("/sim"):
@@ -161,7 +281,10 @@ def brain_answer(P, h):
     if not brain_on(P):
         return None
     B_, bl_, bt_, at_, _ = P["_brain"]
-    return bt_.answer_of(bt_.unpack(B_, bl_, np.asarray(h)[:, at_:])[1])
+    an = bt_.answer_of(bt_.unpack(B_, bl_, np.asarray(h)[:, at_:])[1])
+    if P.get("_fut") is not None and len(P["_fut"]) == len(h):     # (1.7) the brain's places ahead, for the simulator's order
+        an["fut"] = P["_fut"].copy()
+    return an
 
 
 def _readers(P, env):
@@ -188,6 +311,10 @@ def brain_feed(P, env, h, seats):
     env._brain_init()
     r = np.asarray(seats)
     env.brain_bel[r], env.brain_ok[r], env.brain_band[r], env.brain_ztop[r] = an["bel"], an["ok"], an["band"], an["ztop"]
+    if "fut" in an:                                          # (1.7, COMBAT) the brain's places ahead: the order's cut off and spam
+        if getattr(env, "brain_fut", None) is None or len(env.brain_fut) != env.n:
+            env.brain_fut = np.zeros((env.n, 3, 3), np.float32)
+        env.brain_fut[r] = an["fut"]
 
 
 def pose(P, env, mapname=None):
@@ -203,6 +330,14 @@ def clear(P, h, rows=None):
     the same frames whatever is cleared, as in training); everything else is zeros. For a network without a head the
     same as h[rows] = 0."""
     r = slice(None) if rows is None else rows
+    if P.get("_ist") is not None and len(P["_ist"]) == len(h):     # (2.1) the instruction's held numbers of these seats (kept beside the arrays)
+        P["_ist"][r] = 0.0
+    if P.get("_plan") is not None and P["_plan"]["odds"] is not None and len(P["_plan"]["odds"]) == len(h):   # (2.1d) the plan's held odds: even
+        P["_plan"]["odds"] = P["_plan"]["odds"].copy()
+        P["_plan"]["odds"][r] = np.float32(1.0 / P["_plan"]["odds"].shape[-1])
+    sh_ = P.get("_shalf")                                    # (2.1e) the slow half of these seats: zeros, even odds, its clock from naught
+    if sh_ is not None and sh_["st"].s is not None and len(sh_["st"].s) == len(h):
+        sh_["st"].clear(rows)
     end = None
     if P.get("_brain") is not None:                          # (v0.4.1) the brain and its answer, by the same flag (the trainer's reset:
         B_, _, bt_, end, _ = P["_brain"]                     # btoken.packed_clear keeps its tick clock and the time since he noticed
@@ -241,6 +376,10 @@ def describe(P, A):
                                                                      "open" if np.abs(P["_head"][1]["plan_in.weight"]).sum() > 0 else "at zero")
     if P.get("_rfade") is not None:                          # (v0.4.2a)
         hd += ", rule fade of {} columns at g {:.4f} (readers {})".format(len(P["_rfade"][0]), P["_rfade"][1], "on the brain" if P["_rfade"][2] else "on the rule")
+    if P.get("_fgt") is not None:                            # (2.2c)
+        hd += ", the aggression lever (layout {}, {} inputs) at LEV_G {:.4f}".format(P["_fgt"]["F"].L["version"], P["_fgt"]["F"].L["width"], P["_fgt"]["g"])
+    if P.get("_ahead_in"):                                   # (2.2c)
+        hd += ", the brain's places ahead in his inputs"
     if P.get("_brain") is not None:                          # (v0.4.1)
         B_, bl_, _, _, g_ = P["_brain"]
         hd += ", brain of {} ticking every {} frames (readouts {}), its token of {} numbers at gate {:.4f}{}".format(
@@ -290,17 +429,196 @@ def keep_g(P):
     return float(np.asarray(P["_head2"][1].get("keep_g", 0.0)))
 
 
-def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None):
+def cmb_g(P):
+    """(1.7) the combat order's share of his readings in this file (0: none; sim/head2.py)"""
+    if P.get("_ord") is None:
+        return 0.0
+    return float(np.asarray(P["_head2"][1].get("cmb_g", 0.0)))
+
+
+def keepq_g(P):
+    """(2.1) the keep choice's quiet layer's share (its coin) in this file (0: none; sim/head2.py keepq). It acts only in the keep
+    choice's seconds and with KEEP_ZONE in the simulator; the plugin's keep_feat() needs KEEP_SIG's columns then"""
+    if P.get("_kq") is None:
+        return 0.0
+    return float(np.asarray(P["_head2"][1].get("keepq_g", 0.0)))
+
+
+def kf_rows(P, env):
+    """(2.1c) what step(kf=) reads: the simulator's keep_feat() rows, with the trip-end column for a network on the held draw"""
+    if held_g(P) > 0 or goal_on(P):
+        return P["_head2"][2].np_kf_end(env)
+    return env.keep_feat()
+
+
+def held_g(P):
+    """(2.1c) the held draw's share of his trips in this file (0: none, the lock rule; sim/head2.py held_g)"""
+    if P.get("_head2") is None:
+        return 0.0
+    return float(np.asarray(P["_head2"][1].get("held_g", 0.0)))
+
+
+def pull_g(P):
+    """(2.1d) the pull's strength in this file (0: none; sim/head2.py pull_g; NET_PULL_G overrides it)"""
+    return float(P["_plan"]["g"]) if P.get("_plan") is not None else 0.0
+
+
+def pull_on(P):
+    """(2.1d) the pull plays: the slow plan inside the head and its strength above 0 (it plays with the held draw's rows: kf_rows)"""
+    return pull_g(P) > 0
+
+
+def _pull(P, logits, si_, h2s, fr_):
+    """(2.1d) the pull on the target's logits (test_suite.Policy._pull's sums: each seat's plan odds made from the head's state before its tick
+    at its keep readings every `every` of its own and where its numbers are drawn anew, held between, even after a clear; + strength x
+    log(max(odds of its horizon, floor)), half precision) -> the logits with it (a copy: P["_logits"] stays the network's own)"""
+    PL_ = P["_plan"]
+    hm_ = P["_head2"][2]
+    lay_ = P["_head2"][0]
+    B_ = len(logits)
+    nh_, ni_ = len(lay_["slowplan"]["horizons"]), si_.stop - si_.start
+    if PL_["odds"] is None or len(PL_["odds"]) != B_:
+        PL_["odds"] = np.full((B_, nh_, ni_), 1.0 / ni_, np.float32)
+        PL_["cnt"] = np.zeros(B_, np.int64)
+    kr_ = P.get("_k_r")
+    kr_ = np.asarray(kr_, bool) if (kr_ is not None and len(kr_) == B_) else np.zeros(B_, bool)
+    rf_ = np.asarray(fr_, bool) | (kr_ & (PL_["cnt"] % PL_["every"] == 0))
+    PL_["cnt"] = PL_["cnt"] + kr_.astype(np.int64)
+    if rf_.any():
+        PL_["odds"] = PL_["odds"].copy()
+        PL_["odds"][rf_] = hm_.np_plan_odds(PL_["W"], lay_, np.asarray(h2s)[rf_])
+    logits = logits.copy()
+    sh_ = P.get("_shalf")
+    if slow_on(P) and sh_["mix"] > 0:                        # (2.1e, channel 2) the pull's source mixed (test_suite.Policy._pull's sums)
+        logits[:, si_] += sh_["mod"].np_pull_mix(PL_["odds"][:, PL_["h"]], sh_["st"].odds[:, PL_["h"]], PL_["g"], PL_["floor"], sh_["mix"])
+    else:
+        logits[:, si_] += hm_.np_pull(PL_["odds"][:, PL_["h"]], PL_["g"], PL_["floor"])
+    return logits
+
+
+def out_g(P):
+    """(2.1f) the outlook's strength in this file (0: none; sim/head2.py out_g; NET_OUT_G overrides it)"""
+    return float(P["_out"]["g"]) if P.get("_out") is not None else 0.0
+
+
+def desc_on(P):
+    """(2.2a) the desc outlook's term plays (the outlook's term plays and its source is desc)"""
+    return P.get("_dsc") is not None and P["_dsc"].src == 1 and out_on(P)
+
+
+def desc_due(P):
+    """(2.2a) the coming frame is a keep reading for some seat and desc's term plays: give step() ox=desc22.env_ox(env) and mapname="""
+    kr_ = P.get("_k_r")
+    return desc_on(P) and kr_ is not None and bool(np.asarray(kr_).any())
+
+
+def out_on(P):
+    """(2.1f) the outlook's term plays: the outlook inside the head and its strength above 0 (with the held draw's rows: kf_rows)"""
+    return out_g(P) > 0
+
+
+def slow_on(P):
+    """(2.1e) the picked slow half plays: its read-back's gate above 0, or the pull plays with its source's mix above 0 (test_suite.Policy.sh_on)"""
+    sh_ = P.get("_shalf")
+    return sh_ is not None and (sh_["back"] > 0 or (pull_on(P) and sh_["mix"] > 0))
+
+
+def goal_on(P):
+    """(2.1c) the head reads the goal he holds (the layout's part "goal")"""
+    return P.get("_head2") is not None and P["_head2"][2].has_goal(P["_head2"][0])
+
+
+def column_on(P):
+    """(1.4c, 1.7) step() gives the keep column (kf= needed): the keep choice or the combat order at a share above 0; (2.1c) the held
+    draw at a share above 0 or a head that reads the goal he holds: kf with the trip-end column then (head2.np_kf_end(env))"""
+    return keep_g(P) > 0 or cmb_g(P) > 0 or held_g(P) > 0 or goal_on(P)
+
+
+def order_on(P):
+    """(1.7) the order plays: asked at a share, or its adds on the targets' and the way's above 0"""
+    return P.get("_ord") is not None and (cmb_g(P) > 0 or float(np.asarray(P["_head2"][1].get("padd", 0.0))) > 0)
+
+
+def ins_due(P):
+    """(2.1) the coming frame is a reading for some seat and this file's head gives instructions (its share above 0): give step()
+    ix= (sim/branch.py worker_feat(env), these rows) and mapname=; after it P["_ins_pick"] is (rows, c, w, who, q) for
+    env.instr_pick(c, w, who, q) of those rows, or None"""
+    I_, kr_ = P.get("_ins"), P.get("_k_r")
+    return I_ is not None and I_["g"] > 0 and kr_ is not None and bool(np.asarray(kr_).any())
+
+
+def bind_weapon(env, act, rows=None):
+    """(2.1a, INS_BIND: the weapon an instruction asks for is binding) the plugin's call after draw() and after
+    env.instr_pick(): act [k, outputs] the drawn actions of the seats `rows` (None: every seat), changed in place: the weapon
+    key's column (6) set to what the instruction binds. The definition is the simulator's own (env.instr_bind(), sim/duel_env.py
+    ins_bind_act: the one the simulator's step and the trainer's mask use); with the switch off (env_vars) nothing changes.
+    Returns [k] the action set (-1: his own stood)"""
+    b = np.asarray(env.instr_bind(), np.int64)
+    if rows is not None:
+        b = b[np.asarray(rows)]
+    act[:, 6] = np.where(b >= 0, b, act[:, 6])
+    return b
+
+
+def lever_on(P):
+    """(2.2c) the file has the aggression lever (sim/fightnet.py VERSION_LEVER)"""
+    return P.get("_fgt") is not None
+
+
+def lev_g(P):
+    """(2.2c) the lever's share LEV_G in play (the file's dial; NET_LEV_G overrides it; set_lev_g)"""
+    return float(P["_fgt"]["g"]) if lever_on(P) else 0.0
+
+
+def set_lev_g(P, g):
+    """(2.2c, tests and checks) play the lever at this share (test_suite.Policy.set_fight(g=))"""
+    assert lever_on(P), "this file has no lever"
+    P["_fgt"]["g"] = float(g)
+
+
+def fight_scores(P):
+    """(2.2c) what the plugin gives the simulator after step() for the hands' inputs of the next frame (env.fg_score, these seats' rows; group
+    "b22b fight"'s last four columns): the lever's add on "the enemy" as played (g x lev, half precision) clipped to +-5 in the first column,
+    zeros in the other three (test_suite.Policy.fight_scores, tools/duel_eval.py's env.fg_score). None: no lever in the file, or no step yet"""
+    FG_ = P.get("_fgt")
+    if FG_ is None or FG_["lev"] is None:
+        return None
+    out = np.zeros((len(FG_["lev"]), 4), np.float32)
+    out[:, 0] = np.clip(FG_["mod"].lever_add(FG_["lev"], FG_["g"]), -5.0, 5.0)
+    return out
+
+
+def order_due(P):
+    """(1.7) the coming frame is a keep reading for some seat: give step() ox= (the simulator's order_feat() after this frame, these rows)"""
+    kr_ = P.get("_k_r")
+    return order_on(P) and kr_ is not None and bool(np.asarray(kr_).any())
+
+
+def norm(P, obs):
+    """the network's raw inputs [B, its list] -> what its readers read: the trainer's norm() (sim/train_duel_rnn.py) and
+    test_suite.Policy.norm, bit for bit (obs float32 as observe() gives them, the mean and variance as the checkpoint keeps them)"""
+    sd_ = P.get("_sd")                                       # (the frame budget, 2026-10-29: the scale made once per network,
+    if sd_ is None or sd_[0] is not P["obs_var"]:            # the same np.sqrt of the same numbers: bit for bit)
+        sd_ = P["_sd"] = (P["obs_var"], np.sqrt(P["obs_var"] + 1e-8))
+    x = np.clip((obs - P["obs_mean"]) / sd_[1], -10, 10).astype(np.float16).astype(np.float32)   # (owner, 2026-11-15)
+    if "cell" in P:                                          # rounded to half precision at the source; the cell numbers stay as they
+        x[:, -2:] = obs[:, -2:]                              # are (the trainer's HAS_CELLS)
+    return x
+
+
+def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None, ox=None, ix=None, mapname=None):
     """one frame for B players: obs [B, inputs] as the simulator's observe() gives them, h [B, memory]. Returns the
     choices [B, outputs] (sampled, as in training; one random number per player and output from rng, a numpy Generator)
-    kf [B, 3] (1.4c, keep_g(P) above 0): the simulator's keep_feat() rows after the frame before; the keep column of this frame
-    (-1 the lock rule, 0 keep, 1 re-decide; test_suite.Policy's sums, its own stream P["_krng"]) is left in P["_keep"] [B]
-    for the simulator's keep_in (None: no keep choice)
+    kf [B, KEEP_FEAT] (1.4c, 1.7a; keep_g(P) above 0): the simulator's keep_feat() rows after the frame before; the keep column
+    of this frame (d + 2 c + 4 r: the draw, the hand-over's coin, a keep reading on the frame after the head's tick; test_suite.Policy's
+    sums, its own stream P["_krng"]) is left in P["_keep"] [B] for the simulator's keep_in (None: no keep choice)
     and the new memory.
     events [B, 32] (v0.4, a network with a head): what the head is told on its tick (the simulator's head_events(),
     fetched when head_due() says the coming frame ticks); None: zeros. Read on the tick frames only.
     xl [B, the branch's inputs] (--legs-feat, --legs-guide, needs_xl(P)): the simulator's legs_prep() rows of this frame.
-    pose [B, 4], zmap [B] (v0.4.1, needs_pose(P)): these rows of pose(P, env, mapname) of this frame."""
+    pose [B, 4], zmap [B] (v0.4.1, needs_pose(P)): these rows of pose(P, env, mapname) of this frame.
+    ox (1.7, order_due(P) after the frame before): (X, C) of the simulator's order_feat() for these rows; the seats with a keep reading
+    make their order from it before this frame's outputs (test_suite.Policy's sums)."""
     dadd = gadd = None
     if P.get("_uni") is not None:                            # (--legs-feat, --legs-guide) the branch on this frame's inputs
         lay_u, D_u, G_u, LU_, T_u = P["_uni"]
@@ -313,10 +631,13 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
     if P.get("_brain") is not None:                          # (v0.4.1) the brain's packed state, at the very end of the array
         hb = h[:, P["_brain"][3]:]
         h = h[:, :P["_brain"][3]]
-    h2s = None
+    h2s = ohs = None
     if P.get("_head2") is not None:                          # (v0.4.3) the strategy head's state, before the brain's
         h2s = h[:, P["_head2"][4]:]
         h = h[:, :P["_head2"][4]]
+        if P.get("_ord") is not None:                        # (1.7) the order's held numbers after it
+            w2_ = P["_head2"][2].np_state_width(P["_head2"][0])
+            ohs, h2s = h2s[:, w2_:], h2s[:, :w2_]
     hh = None
     if "_head" in P:                                         # (v0.4) the head's state at the end of the array
         hh = h[:, P["_head"][4]:]
@@ -325,13 +646,13 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
     if "_slow" in P:
         h = hf[:, :P["whh"].shape[1]]
     mean = P["obs_mean"]
+    obs_full = obs                                           # (the weapon dial reads the simulator's full list by position)
+    if P.get("_src") is not None and obs.shape[1] != len(mean):    # (a cleaned list, sim/input_list.py) the network's own columns, by
+        obs = obs[:, P["_src"]]                              # name, out of the simulator's inputs (a caller may give them already cut)
     if obs.shape[1] > len(mean):                             # an older network in a simulator with more inputs: they are appended at the end
         obs = obs[:, :len(mean)]
-    sd_ = P.get("_sd")                                       # (the frame budget, 2026-10-29: the scale made once per network)
-    if sd_ is None or sd_[0] is not P["obs_var"]:
-        sd_ = P["_sd"] = (P["obs_var"], np.sqrt(P["obs_var"] + 1e-8))
-    x = np.clip((obs - mean) / sd_[1], -10, 10).astype(np.float32)
-    xa = x                                                   # (the brain reads these: unfaded)
+    x = norm(P, obs)                                         # (half precision at the source, as the trainer: owner 2026-11-15)
+    xa = x                                                 # (the brain reads these: unfaded)
     if needs_pose(P):                                        # (v0.4.1) the brain's last answer turned to his pose now (test_suite's token_pre)
         B_, bl_, bt_m, _, _ = P["_brain"]
         assert pose is not None and zmap is not None, "this network's brain token is open: give step() pose= and zmap= (netpass.pose)"
@@ -344,11 +665,30 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         y_ = np.array(x, copy=True)                          # (sim/rule_fade.py apply_np: the same sums)
         y_[:, rf[0]] = y_[:, rf[0]] * np.float32(1.0 - float(rf[1]))
         x = y_
+    rf2 = P.get("_rfade2")
+    if rf2 is not None and rf2[1] > 0:                       # (1.8a) the second group, as test_suite.Policy: the same sums
+        y_ = np.array(x, copy=True)
+        y_[:, rf2[0]] = y_[:, rf2[0]] * np.float32(1.0 - float(rf2[1]))
+        x = y_
     xh = x                                                   # (the hands' attention reads these)
+    ord_ = None
+    kr0_ = P.get("_k_r")
+    if ohs is not None and order_on(P) and ox is not None and kr0_ is not None and len(kr0_) == len(ohs) and np.asarray(kr0_).any():
+        hm2o_ = P["_head2"][2]                               # (1.7) a keep reading: the order made from the candidates the simulator made
+        r_ = np.nonzero(np.asarray(kr0_, bool))[0]           # after the head's tick, the brain's odds written in (test_suite's sums)
+        X_ = np.array(np.asarray(ox[0])[r_], np.float32)
+        C_ = np.asarray(ox[1], np.float32)[r_]
+        if P.get("_pass") is not None and bst is not None:
+            X_[..., hm2o_.CMB_PASS0:hm2o_.CMB_PASS0 + 3] = P["_pass"][2](P["_pass"][1], P["_pass"][0], bst[0].s[r_], X_)
+        kl_, ps_, ta_, ya_, okc_ = hm2o_.np_order_scores(P["_head2"][1], P["_head2"][0], h2s[r_], X_, C_)   # (1.7b: okc_: ok_ is the legs' way flags)
+        okf_ = okc_.astype(np.float32)[:, None]
+        ohs = np.array(ohs, np.float32, copy=True)
+        ohs[r_] = np.concatenate([kl_, ps_, ta_ * okf_, ya_ * okf_], 1)
+        ord_ = (r_, kl_, ps_, okc_)
     if "cell" in P:                                          # the learned map (v8): the last two inputs are cell numbers
         ids = np.clip(obs[:, -2:].astype(np.int64), 0, len(P["cell"]) - 1)
         x = np.concatenate([x[:, :-2], P["cell"][ids[:, 0]], P["cell"][ids[:, 1]]], 1)
-    x = np.tanh(x @ P["w0"].T + P["b0"])
+    x = np.tanh(x[:, :P["w0"].shape[1]] @ P["w0"].T + P["b0"])    # (a cleaned list: the encoder reads the list's first n_hands)
     x = np.tanh(x @ P["w1"].T + P["b1"])
     if A is not None:                                        # (v0.2) what the door lets through of the tokens
         if bt is None or not P["_brain"][4] > 0:             # (v0.4.2a: the brain stepped for the readers alone: its token stays out)
@@ -382,10 +722,36 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         si2_ = head_slices(P)[0]                             # (b1.4a: the mix, his target choice moved toward the head's own; none at mix 0)
         logits[:, si2_] = P["_head2"][2].np_mix_in(P["_head2"][1], P["_head2"][0], h2s, logits[:, si2_]) + b2
         wa2_ = P["_head2"][2].np_wadd(P["_head2"][1], P["_head2"][0], h2s)    # (1.5a) its weapon scores on the weapon key's
+        o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])
         if wa2_ is not None:
-            o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])
             logits[:, int(o_[6]):int(o_[7])] += wa2_
-    if hh is not None:                                       # (v0.4) the head ticks after the fast memory's step (on its frames) and its
+        fa2_ = P["_head2"][2].np_fadd(P["_head2"][1], P["_head2"][0], h2s)    # (1.7) its fire scores on the fire key's
+        if fa2_ is not None:
+            logits[:, int(o_[5]):int(o_[6])] += fa2_
+        pa_ = float(np.asarray(P["_head2"][1].get("padd", 0.0))) if ohs is not None else 0.0
+        if pa_ > 0:                                          # (1.7) the pointer's scores held from the last reading on the targets' and the way's
+            hm2a_ = P["_head2"][2]
+            o0_ = hm2a_.CMB_NK + hm2a_.CMB_NEW
+            logits[:, int(o_[10]):int(o_[10]) + hm2a_.CMB_T] += np.float32(pa_) * ohs[:, o0_:o0_ + hm2a_.CMB_T]
+            if len(o_) > 13:
+                logits[:, int(o_[12]):int(o_[12]) + hm2a_.CMB_W] += np.float32(pa_) * ohs[:, o0_ + hm2a_.CMB_T:]
+    FG_ = P.get("_fgt")
+    if FG_ is not None:                                      # (2.2c) THE LEVER at a keep reading (test_suite.Policy's sums, the trainer's rollout): the
+        B_f = len(logits)                                    # brain's state of its tick, his inputs, his target scores before the pull, the head's
+        if FG_["lev"] is None or len(FG_["lev"]) != B_f:     # state his outputs read, his memory after this frame, his target and its seconds (the
+            FG_["lev"] = np.zeros(B_f, np.float32)           # keep rows after the frame before); held to the next reading (a clear keeps it)
+        krf_ = P.get("_k_r")
+        if krf_ is not None and len(krf_) == B_f and np.asarray(krf_).any() and h2s is not None:
+            assert kf is not None and bst is not None, "(2.2c) the lever reads at a keep reading: give step() kf=kf_rows(P, env)"
+            r_f = np.nonzero(np.asarray(krf_, bool))[0]
+            si_f = head_slices(P)[0]
+            kfa_ = np.asarray(kf, np.float32)
+            o_f = FG_["F"].reading_lever(np.asarray(bst[0].s, np.float32)[r_f], xa[r_f], logits[r_f, si_f], h2s[r_f, :int(P["_head2"][0]["size"])],
+                                         hfast[r_f, :H], kfa_[r_f, 2], kfa_[r_f, 0])
+            FG_["lev"] = FG_["lev"].copy()
+            FG_["lev"][r_f] = o_f["lev"]
+            FG_["last"] = (r_f, o_f)
+    if hh is not None:                                      # (v0.4) the head ticks after the fast memory's step (on its frames) and its
         _, t_add, w_add, hh = hm.np_tick(hW, hlay, x, hfast, hh, events)    # target and way are added to the hands' (held between ticks)
         si, sw = head_slices(P)
         logits[:, si] += t_add
@@ -397,8 +763,76 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         logits = logits + LU_.np_gate_add(lay_u, *T_u, zo, h2_, lgl_, ok_, int(np.sum(P["action_dims"])))
     P["_zo"] = zo                                            # (--legs-residual: legs_feed's rows read it)
     P["_keep"] = None
+    kd_ = None                                               # (the keep choice's draw of this frame, where there is one: it gates a change of instruction)
+    P["_logits"] = logits                                    # (a parity check with test_suite.Policy's last_logits)
     kg_ = keep_g(P)
-    if kg_ > 0 and kf is not None and h2s is not None:      # (1.4c) the keep choice: the head's state this frame's outputs read (before its
+    te_ = None
+    P["_hon_prev"] = None
+    if kf is not None and P.get("_head2") is not None:       # (2.1c) keep rows with the trip-end column after them (head2.np_kf_end)
+        hmk_ = P["_head2"][2]
+        kf = np.asarray(kf, np.float32)
+        if kf.shape[1] in (hmk_.KEEP_FEAT + 1, hmk_.KEEP_FEAT + hmk_.KSIG + 1):
+            te_, kf = kf[:, -1] > 0, kf[:, :-1]
+    assert not out_on(P) or (kf is not None and h2s is not None and (held_g(P) > 0 or goal_on(P))),         "(2.1f) the outlook plays with the held draw's rows: give step() kf=kf_rows(P, env)"
+    assert not pull_on(P) or (kf is not None and h2s is not None and (held_g(P) > 0 or goal_on(P))), \
+        "(2.1d) the pull plays with the held draw's rows: give step() kf=kf_rows(P, env)"
+    if (held_g(P) > 0 or goal_on(P)) and kf is not None and h2s is not None:   # (2.1c) the held draw (test_suite.Policy's, the trainer's): a
+        assert kg_ <= 0 and cmb_g(P) <= 0, "the held draw: not with a keep choice or an order at a share"   # seat whose target ended (or is
+        assert te_ is not None, "the held draw: give step() the keep rows with the trip-end column (head2.np_kf_end(env))"   # "nothing", once
+        si_ = head_slices(P)[0]                                                 # a second) gets new numbers and a new coin; under the coin
+        B_ = len(logits)                                                        # its target is the highest of its scores plus its numbers
+        HD_ = P.get("_hd")
+        first_ = HD_ is None or len(HD_["g"]) != B_
+        if first_:
+            HD_ = P["_hd"] = dict(g=np.zeros((B_, si_.stop - si_.start), np.float32), on=np.zeros(B_, bool), t=0, rng=np.random.default_rng(2121))
+        fr_ = te_ | ((kf[:, 2].astype(np.int64) == 0) & (HD_["t"] % 40 == 0)) | first_
+        if slow_on(P):                                                          # (2.1e) the slow half's ticks (clock, the roll moment, a
+            kr_s = P.get("_k_r")                                                # change of mind), before the pull and the head's tick
+            P["_shalf"]["st"].step(kf[:, 2], fr_, np.asarray(kr_s, bool) if (kr_s is not None and len(kr_s) == B_) else None, h2s,
+                                   P["_head2"][2].np_goal_u(P["_head2"][0], kf, HD_["on"]))
+        if pull_on(P):                                                        # (2.1d) the pull on his target scores before the held
+            logits = _pull(P, logits, si_, h2s, fr_)                            # draw's pick and the draw
+        if out_on(P):                                                         # (2.1f) the outlook's term after the pull (test_suite.Policy's sums)
+            logits = logits.copy()
+            if desc_on(P):                                                    # (2.2a) desc's term: made at a keep reading, held (test_suite's)
+                kr_d = P.get("_k_r")
+                if kr_d is not None and len(kr_d) == B_ and np.asarray(kr_d).any():
+                    assert ox is not None and len(ox) >= 5 and bst is not None and mapname, \
+                        "(2.2a) desc's term plays: give step() ox=desc22.env_ox(env) at a keep reading (desc_due) and mapname="
+                    r_d = np.nonzero(np.asarray(kr_d, bool))[0]
+                    br_d, tk_d = bst
+                    sb_d = np.asarray(br_d.s, np.float32)[r_d]
+                    P["_dsc"].reading(r_d, h2s[r_d], sb_d, xa[r_d], np.asarray(tk_d.P, np.float32)[r_d], np.asarray(tk_d.valid, bool)[r_d],
+                                      np.asarray(tk_d.hand)[r_d].argmax(1), P["_brain"][2].np_mlp(P["_brain"][0]["trk"], sb_d),
+                                      tuple(np.asarray(v_)[r_d] for v_ in ox[:5]), np.full(len(r_d), mapname), P["_out"]["g"], P["_out"]["pick"], B_)
+                logits[:, si_] += P["_dsc"].term(B_)
+            else:
+                logits[:, si_] += P["_head2"][2].np_out_vec(P["_out"]["W"], P["_head2"][0], h2s, P["_out"]["g"], P["_out"]["pick"])
+        if FG_ is not None and FG_["lev"] is not None and len(FG_["lev"]) == B_:     # (2.2c) THE LEVER on "the enemy", after the pull and the
+            logits = logits.copy()                                                  # outlook's term, before the draw (test_suite.Policy's sums)
+            logits[:, si_.start + FG_["mod"].EN_INTENT] += FG_["mod"].lever_add(FG_["lev"], FG_["g"])
+        if FG_ is not None:
+            P["_target_logits"] = np.asarray(logits[:, si_], np.float32).copy()    # (2.2c, readouts) his target logits as drawn (Policy.last_target_logits)
+        li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
+        lsm_ = li_ - np.log(np.exp(li_).sum(1, keepdims=True))
+        HD_["t"] += 1
+        P["_hon_prev"] = HD_["on"].copy()
+        if fr_.any():
+            gn_ = HD_["rng"].gumbel(size=lsm_.shape).astype(np.float32)
+            cn_ = HD_["rng"].random(B_) < held_g(P)
+            HD_["g"] = np.where(fr_[:, None], gn_, HD_["g"])
+            HD_["on"] = np.where(fr_, cn_, HD_["on"])
+        pk_ = (lsm_ + HD_["g"]).argmax(1)
+        if HD_["on"].any():                                  # (whoever draws from these logits draws the held target: the others shut)
+            logits = logits.copy()
+            tl_ = logits[:, si_]
+            sh_ = np.full(tl_.shape, -1e9, np.float32)
+            sh_[np.arange(B_), pk_] = 0.0
+            logits[:, si_] = np.where(HD_["on"][:, None], sh_, tl_)
+        kr_ = P.get("_k_r")
+        kr_ = np.zeros(B_, np.int64) if kr_ is None or len(kr_) != B_ else np.asarray(kr_, np.int64)
+        P["_keep"] = 3 * HD_["on"].astype(np.int64) + 4 * kr_
+    elif (kg_ > 0 or cmb_g(P) > 0) and kf is not None and h2s is not None:  # (1.4c) the keep choice: the head's state this frame's outputs read (before its
         hm2_ = P["_head2"][2]                                # tick), the hands' memory after the frame, its own numbers (test_suite.Policy)
         si_ = head_slices(P)[0]
         li_ = logits[:, si_] - logits[:, si_].max(1, keepdims=True)
@@ -409,34 +843,151 @@ def step(P, A, obs, h, rng, events=None, xl=None, pose=None, zmap=None, kf=None)
         if P.get("_krng") is None:
             P["_krng"] = np.random.default_rng(1414)
         kd_ = (P["_krng"].random(len(kz_)) < sig(kz_)).astype(np.int64)
-        P["_keep"] = np.where(P["_krng"].random(len(kz_)) < kg_, kd_, -1)
+        kc_ = (P["_krng"].random(len(kz_)) < kg_).astype(np.int64)
+        kr_ = P.get("_k_r")
+        kr_ = np.zeros(len(kz_), np.int64) if kr_ is None or len(kr_) != len(kz_) else np.asarray(kr_, np.int64)
+        P["_keep"] = kd_ + 2 * kc_ + 4 * kr_                 # (1.7a) the seats whose head ticked on the frame before: a keep reading
+        if ord_ is not None and cmb_g(P) > 0:                # (1.7) the order's kind and candidate drawn at the reading, asked with its
+            r_, kl_, ps_, okc_ = ord_                        # share where the head has a state: + 8 k + 32 c + 256
+
+            def pick_(z_):
+                p_ = np.exp(z_ - z_.max(1, keepdims=True))
+                p_ /= p_.sum(1, keepdims=True)
+                return np.minimum((p_.cumsum(1) < P["_krng"].random((len(z_), 1))).sum(1), z_.shape[1] - 1).astype(np.int64)
+            hm2d_ = P["_head2"][2]
+            ko_ = pick_(kl_)
+            co_ = np.zeros_like(ko_)
+            for k_ in range(1, hm2d_.CMB_NK):
+                c0_, m_ = hm2d_.CMB_C0[k_], hm2d_.CMB_SLOTS[k_]
+                co_ = np.where(ko_ == k_, pick_(ps_[:, c0_:c0_ + m_]), co_)
+            oq_ = ((P["_krng"].random(len(r_)) < cmb_g(P)) & okc_).astype(np.int64)
+            P["_keep"][r_] = P["_keep"][r_] + (8 * ko_ + 32 * co_ + 256) * oq_
+        kqg_ = keepq_g(P)
+        if kqg_ > 0:                                         # (2.1) the quiet layer's draw and its coin: + 512 d + 1024 c, after 1.7a's and the order's
+            KQ_ = P["_kq"]                                   # draws on the keep choice's stream (test_suite.Policy.keepq_play: the same sums). The
+            kfq_ = np.asarray(kf, np.float32)                # stay value made at the seats' keep readings (the brain's state, the hands' memory
+            K0_, K1_ = hm2_.KEEP_FEAT, hm2_.KEEP_FEAT + hm2_.KSIG    # after the frame, the head's state, keep_x, the change signals), held between
+            assert kfq_.shape[1] >= K1_, "the quiet layer reads the change signals: a simulator with KEEP_SIG=1 (keep_feat {} columns, {} given)".format(K1_, kfq_.shape[1])
+            n_ = len(kfq_)
+            if KQ_["sv"] is None or len(KQ_["sv"]) != n_:
+                KQ_["sv"] = np.zeros(n_, np.float32)
+            if KQ_["stay"] is not None and bst is not None and kr_.any():
+                rq_ = np.nonzero(kr_)[0]
+                Sq_ = int(P["_head2"][0]["size"])
+                xq_ = np.concatenate([np.asarray(bst[0].s, np.float32)[rq_], np.asarray(hfast, np.float32)[rq_, :H], np.asarray(h2s, np.float32)[rq_, :Sq_],
+                                      np.asarray(kx_, np.float32)[rq_], kfq_[rq_, K0_:K1_]], 1)
+                KQ_["sv"] = KQ_["sv"].copy()
+                KQ_["sv"][rq_] = KQ_["stay"][2](KQ_["stay"][1], xq_)
+            kqx_ = hm2_.np_keepq_x(kfq_, KQ_["sv"])
+            kqz_ = hm2_.np_keepq_logit(P["_head2"][1], kqx_)
+            kqd_ = (P["_krng"].random(n_) < sig(kqz_)).astype(np.int64)
+            kqc_ = (P["_krng"].random(n_) < kqg_).astype(np.int64)
+            P["_last_keepq"] = (kqx_, kqz_, kqd_, kqc_)
+            P["_keep"] = P["_keep"] + 512 * kqd_ + 1024 * kqc_
+    P["_ins_pick"] = None                                    # (2.1) this frame's picks of an instruction: (rows, c, w, who, q) for the
+    I_ = P.get("_ins")                                       # plugin's env.instr_pick, or None
+    kr1_ = P.get("_k_r")
+    if I_ is not None and ix is not None and I_["g"] > 0 and h2s is not None and bst is not None and kr1_ is not None \
+            and len(kr1_) == len(h2s) and np.asarray(kr1_).any():
+        hm2i_ = P["_head2"][2]                               # a reading (the frame after the head's tick): test_suite.Policy's sums
+        S_ = int(P["_head2"][0]["size"])
+        r_ = np.nonzero(np.asarray(kr1_, bool))[0]
+        ixs_ = tuple(np.asarray(v_)[r_] for v_ in ix)
+        if P.get("_ist") is None or len(P["_ist"]) != len(h2s):
+            P["_ist"] = np.zeros((len(h2s), hm2i_.ins_held_width(I_["I"])), np.float32)
+        sb_i, tk_i = np.asarray(bst[0].s, np.float32)[r_], bst[1]
+        ms_ = None
+        if I_["msP"] is not None and mapname:                # the map sense at the rows' places: this map's table, where the server has it
+            import mapsense as mapsense_
+            if mapname not in I_["tabs"]:
+                I_["tabs"][mapname] = mapsense_.load_tables(os.environ.get("QLBOT_ROOT") or "/", [mapname])[0].get(mapname)
+            S_t = I_["tabs"][mapname]
+            if S_t is not None:
+                en_, eo_, hd_ = np.asarray(tk_i.P, np.float32)[r_], np.asarray(tk_i.valid, bool)[r_], np.asarray(tk_i.hand)[r_].argmax(1)
+                ms_ = lambda Pp, pk, wme: mapsense_.rows_at(lambda x, row: mapsense_.np_forward(I_["msP"], x, row), I_["msL"], {mapname: S_t},   # noqa: E731
+                                                            np.full(len(r_), mapname), Pp, pk, en_, eo_, wme, hd_)
+        ah_i = P["_head2"][6]
+        X_, bq_ = hm2i_.np_ins_prep(ixs_, I_["fill"], I_["I"], sb_i, hfast[r_, :H],
+                                    zone=np.asarray(tk_i.zone)[r_] if getattr(tk_i, "zone", None) is not None else None,
+                                    ah=hm2i_.np_mlp(ah_i, sb_i) if ah_i is not None else None, knP=I_["knP"], spP=I_["spP"], ms=ms_)
+        sit_ = np.concatenate([sb_i, hfast[r_, :H], h2s[r_, :S_]], 1).astype(np.float32)
+        st_, pk_ = hm2i_.np_ins_read(I_["I"], I_["W"], I_["aprL"], I_["aprP"], I_["warm"], I_["g"], I_["none"], P["_head2"][0]["every"],
+                                     P["_ist"][r_], h2s[r_, :S_], sit_, X_, ixs_[1], ixs_[2], ixs_[3], ixs_[4], ixs_[5], ixs_[6],
+                                     (kd_[r_] > 0) if kd_ is not None else np.ones(len(r_), bool), I_["rng"], bq_)
+        P["_ist"][r_] = st_
+        P["_ins_pick"] = (r_,) + pk_
     if bst is not None:                                      # (v0.4.1) the brain reads the frame's normalised inputs; at its tick the readouts'
         br_, tk_ = bst                                       # answer is kept in map coordinates (his pose of this frame): test_suite's token_post
         tkd_ = br_.frame(xa)
+        P["_k_r"] = np.asarray(tkd_, bool) & bool(h2s is not None and P["_head2"][5])   # (1.7a) whose head ticks now: their next frame a keep reading
         if tkd_.any():
             o1_, o2_ = br_.readouts(tkd_)
             tk_.answer(tkd_, o1_, o2_, np.asarray(pose, np.float32)[tkd_], np.asarray(zmap)[tkd_])
+            if (P.get("_ord") is not None or P.get("_ahead_in")) and P.get("_head2") is not None and P["_head2"][6] is not None:   # (1.7; 2.2c
+                # AHEAD_IN: his list reads them) the readout ahead's places, kept in map coordinates
+                hm2f_, ah2f_ = P["_head2"][2], P["_head2"][6]                    # at the tick, for the simulator's order (test_suite's token_post)
+                if P.get("_fut") is None or len(P["_fut"]) != len(tkd_):
+                    P["_fut"] = np.zeros((len(tkd_), 3, 3), np.float32)
+                f_ = np.asarray(hm2f_.np_mlp(ah2f_, br_.s[tkd_]), np.float64)[:, :15].reshape(-1, 3, 5)
+                pz_ = np.asarray(pose, np.float64)[tkd_]
+                x_, y_ = bt_m._turn(np.repeat(pz_[:, 3:4], 3, 1), f_[..., 0] * 1000.0, f_[..., 1] * 1000.0)
+                P["_fut"][tkd_] = np.stack([pz_[:, None, 0] + x_, pz_[:, None, 1] + y_, pz_[:, None, 2] + f_[..., 2] * 1000.0], -1)
             if h2s is not None and P["_head2"][5]:           # (v0.4.3) the strategy head ticks with the brain, after the frame
-                lay2, W2, hm2, _, _, _, ah2, ct2 = P["_head2"]
+                lay2, W2, hm2, _, _, _, ah2, ct2, fo2 = P["_head2"]
                 sb_ = br_.s[tkd_]
                 u_ = hm2.np_feats(lay2, brain=sb_, trk=o1_, trz=o2_, ahead=hm2.np_mlp(ah2, sb_) if ah2 is not None else None,
-                                  ctrl=hm2.np_ctrl(ct2, sb_, hfast[tkd_]), obs=xa[tkd_], hands=hfast[tkd_])
+                                  ctrl=hm2.np_ctrl(ct2, sb_, hfast[tkd_]), fight=hm2.np_fight(fo2, sb_, hfast[tkd_]),
+                                  obs=xa[tkd_], hands=hfast[tkd_],
+                                  ins=(hm2.np_ins_held_u(P["_ins"]["I"], P["_ist"][tkd_]) if (P.get("_ins") is not None and P.get("_ist") is not None
+                                                                                            and len(P["_ist"]) == len(tkd_)) else None),
+                                  goal=(hm2.np_goal_u(lay2, np.asarray(kf)[tkd_], P["_hon_prev"][tkd_])     # (2.1c) the goal he holds
+                                        if (hm2.has_goal(lay2) and kf is not None and P.get("_hon_prev") is not None) else None),
+                                  slowback=(np.float32(P["_shalf"]["back"]) * P["_shalf"]["st"].s[tkd_]   # (2.1e, channel 3) the read-back
+                                            if (slow_on(P) and P["_shalf"]["back"] > 0 and P["_shalf"]["st"].s is not None
+                                                and len(P["_shalf"]["st"].s) == len(tkd_)) else None))
                 h2s = h2s.copy()
                 h2s[tkd_] = hm2.np_tick(W2, lay2, u_, h2s[tkd_])
         hb = P["_brain"][2].pack(br_, tk_)
     if h2s is not None:
         h = np.concatenate([h, np.asarray(h2s, np.float32)], 1)
+    if ohs is not None:                                      # (1.7) the order's held numbers back after the head's state
+        h = np.concatenate([h, np.asarray(ohs, np.float32)], 1)
     if float(P.get("switch_fade", 0.0)) > 0:                 # (--switch-fade) off the switch's "legs" choice, as in training
         logits = logits.copy()
         logits[:, int(np.sum(P["action_dims"][:11])) + 1] -= float(P["switch_fade"])
+    wd_ = float(P.get("_wdial") or 0.0)
+    if wd_ > 0:                                              # (owner, 2026-11-07, duelbot's !weapons) the weapon dial: a push on the presses
+        o_ = np.concatenate([[0], np.cumsum([int(d) for d in P["action_dims"]])])    # of rockets, rail and the lightning gun
+        logits = logits.copy()                               # toward the owner's table (sim/weapon_dial.py; P["_logits"] stays the network's)
+        P["_wdial_add"] = _weapon_dial().push(obs_full, wd_)
+        logits[:, int(o_[6]) + 1:int(o_[6]) + 4] += P["_wdial_add"]
     out = draw(P, logits, rng)
     if P.get("_no_switch") is None:                          # (v0.3.5, NO_SWITCH) the switch retired: drawn as before, then off
         P["_no_switch"] = str(json.loads(str(P["env_vars"])).get("NO_SWITCH", "0")) not in ("0", "", "0.0") if "env_vars" in P else False
     if P["_no_switch"] and out.shape[1] > 11:
         out[:, 11] = 0
+    if P.get("_wdial_mode") == "replace":                    # (!weapons pros) the dial's replace form: the owner's table chooses his weapon
+        if P.get("_wdial_rng") is None:                      # the dial's own stream: every other output drawn exactly as with it off
+            P["_wdial_rng"] = np.random.default_rng(101)
+        a_ = _weapon_dial().choose(obs_full, P.setdefault("_wdial_state", {}), P["_wdial_rng"])    # (sim/weapon_dial.py; test_suite.Policy the same)
+        P["_wdial_act"] = a_
+        out[:, 6] = np.where(a_ >= 0, a_, out[:, 6])        # in place of the network's weapon key where he owns one of the three
+        t_ = _weapon_dial().target(obs_full, P["_wdial_state"], P["_wdial_rng"])    # the weapon he lacks (the rail, rocket ammunition) as his
+        P["_wdial_tgt"] = t_                                 # target where the rule speaks; the simulator's readings and hold as ever
+        out[:, 10] = np.where(t_ >= 0, t_, out[:, 10])
     if hb is not None:                                       # (v0.4.1) the brain's state back at the very end of the array
         h = np.concatenate([h, np.asarray(hb, np.float32)], 1)
     return out, h
+
+
+def _weapon_dial():
+    """sim/weapon_dial.py (on a server /sim is on the path: plugins/duelbot.py; in the repo the folder beside plugins/)"""
+    try:
+        import weapon_dial
+    except ImportError:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sim"))
+        import weapon_dial
+    return weapon_dial
 
 
 def draw(P, logits, rng):

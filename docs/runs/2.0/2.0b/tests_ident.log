@@ -1,0 +1,28 @@
+19:40:49 scratch_20b_id_z0_e: done in 0.3 min; the log ends: exit 0
+19:40:49 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+19:40:49 PASS z0: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+19:40:49 PASS z0: the readout 'space' from the network; no weapon table, no REFUSED live file
+19:41:09 scratch_20b_id_z0b_e: done in 0.3 min; the log ends: exit 0
+19:41:09 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+19:41:09 PASS z0b: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+19:41:09 PASS z0b: the readout 'space' from the network; no weapon table, no REFUSED live file
+19:41:29 scratch_20b_id_z2_e: done in 0.3 min; the log ends: exit 0
+19:41:29 PASS z2: the trainer ran 2 updates and dumped them (2 dumps)
+19:41:29 PASS z2: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+19:41:29 PASS z2: the readout 'space' from the network; no weapon table, no REFUSED live file
+19:41:49 scratch_20b_id_z3_e: done in 0.3 min; the log ends: exit 0
+19:41:49 PASS z3: the trainer ran 2 updates and dumped them (2 dumps)
+19:41:49 PASS z3: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+19:41:49 PASS z3: the readout 'space' from the network; no weapon table, no REFUSED live file
+19:41:49 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
+19:41:49 PASS the pay changes nothing before the first learning step (z2 = z0: update 1's actions and log p, to the bit)
+19:41:49 PASS ... and update 2's actions differ (0.0163 of them): the pay reached the learning step
+19:41:49 PASS the open inputs' gate changes nothing before the first learning step (z3 = z0: update 1's actions and log p, to the bit): zero weight
+19:41:49 PASS ... and update 2's actions differ (0.0000 of them): the inputs reached the learning step
+19:41:49 update 1's ledger z0: {'dmg_dealt': 0.0391, 'dmg_taken': -0.0391, 'frag': None, 'death': None, 'win_part': 1.7302} | edge None cover None (size shares None None)
+19:41:49 update 1's ledger z2: {'dmg_dealt': 0.0391, 'dmg_taken': -0.0391, 'frag': None, 'death': None, 'win_part': 1.7302} | edge 0.0382 cover 0.0025 (size shares 0.0032 0.0008)
+19:41:49 PASS z0: no edge, no cover in the ledger
+19:41:49 PASS z2: the edge and the cover are in the ledger (size shares 0.0032 and 0.0008)
+19:41:49 PASS z2: every old term as z0's (the same frames, two terms more)
+19:41:49 PASS z3: the ledger's old terms as z0's (the gate is no pay)
+19:41:49 ALL PASSED

@@ -1,0 +1,75 @@
+11-09 21:08:13 the run ends 16:00 (owner, 11-09: 'sure 16:00 is fine'): 1126 minutes from now
+11-09 21:08:15 train.cmd, 1126 minutes: written
+11-09 21:08:15 no firing cost in the command: every one at zero
+11-09 21:08:15 allowed set COVER_PAY: run '0' | reference '<unset>'
+11-09 21:08:15 allowed set EDGE_PAY: run '0' | reference '<unset>'
+11-09 21:08:15 allowed set SPACE_GATE: run '0' | reference '<unset>'
+11-09 21:08:15 allowed set SPACE_IN: run '1' | reference '<unset>'
+11-09 21:08:15 allowed set SPACE_TRUTH: run '1' | reference '<unset>'
+11-09 21:08:15 allowed arg --gate-start: run '25452.96' | reference '21009.47'
+11-09 21:08:15 allowed arg --minutes: run '1126' | reference '565'
+11-09 21:08:15 allowed arg --run: run 'duel_gru_2_0b' | reference 'duel_gru_2_0a'
+11-09 21:08:15 allowed arg --space-read: run '1' | reference '<unset>'
+11-09 21:08:15 settings check: PASS
+11-09 21:08:17 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-09 21:08:17 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-09 21:08:17 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.25' | command '0.12'
+11-09 21:08:17 settings check: PASS
+11-09 21:08:23 simulator: duel_env_20a on bloodrun: 970 inputs, 1200 frames, frags 0
+11-09 21:08:29 simulator: duel_env on bloodrun: 1029 inputs, 1200 frames, frags 0
+11-09 21:08:36 simulator: duel_env on bloodrun: 1029 inputs, 1200 frames, frags 0
+11-09 21:08:36 simulator: ok   off: the old inputs as 2.0a's simulator (970 + 59 columns)
+11-09 21:08:36 simulator: ok   off: the new inputs are zeros 
+11-09 21:08:36 simulator: ok   off: the pay as 2.0a's simulator 
+11-09 21:08:36 simulator: ok   off: the round ends as 2.0a's simulator 
+11-09 21:08:36 simulator: ok   off: the truth columns unchanged 
+11-09 21:08:36 simulator: ok   off: the ledger's old terms unchanged, the new ones zero 
+11-09 21:08:36 simulator: ok   on: the round ends the same (the switches do not touch the play) 
+11-09 21:08:36 simulator: ok   on: the old inputs the same 
+11-09 21:08:36 simulator: ok   on: the truth is there (sp_ok in 100% of the frames)
+11-09 21:08:36 simulator: ok   on: the truth in range and finite (threat mean 0.64, max 45.7; |agg| mean 0.068)
+11-09 21:08:36 simulator: ok   on: the edge = put - threat 
+11-09 21:08:36 simulator: ok   on: the truth zero-sum between a match's seats (edge, aggregate, zones) 
+11-09 21:08:36 simulator: ok   on: the new inputs live and in range (32 of 59 columns ever non-zero; he believes a place in 6% of the frames)
+11-09 21:08:36 simulator: ok   on: the edge pay zero-sum, every frame (size 0.0216 a player-minute)
+11-09 21:08:36 simulator: ok   on: the cover pay zero-sum, every frame (size 0.0146 a player-minute)
+11-09 21:08:36 simulator: ok   on: the edge pay is the dial's arithmetic (0.0005 a damage-second, a frame 1/40 s) 
+11-09 21:08:36 simulator: ok   on: the ledger sums to the pay 
+11-09 21:08:36 simulator: ok   on: the pay = off's pay + the two terms 
+11-09 21:08:36 simulator: all passed
+11-09 21:08:53 backup: copied 312 files 2.34 GB to T:\BobbyBones_backup
+11-09 21:08:55 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\policy.pt: 59 new inputs (b20b space, b20b targets), new tokens ['space', 'targets'] (shut); the head's inp 960 -> 1019 columns (obs +59, at zero); the readout 'space' (768 -> 128 -> 27, its last layer at zero, every 2 tick(s))
+11-09 21:09:07 the files' own shares: 400 frames x 8 seats, 14 output columns, actions that differ: 0 -> PASS
+11-09 21:09:07 keep choice and order at share 1, random keep numbers and candidates: 400 frames x 8 seats, 15 output columns, actions that differ: 0 -> PASS
+11-09 21:09:07 ALL PASSED
+11-09 21:09:09 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\snapshots\anchor_20a.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-09 21:09:11 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\snapshots\anchor_17a.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-09 21:09:13 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\snapshots\anchor_16a.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-09 21:09:14 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\snapshots\anchor_15a.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-09 21:09:16 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\snapshots\anchor_13b.pt: 59 new inputs, new tokens ['space', 'targets']; its strategy head's inputs widened (at zero)
+11-09 21:09:18 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\snapshots\anchor_b12d.pt: 59 new inputs, new tokens ['space', 'targets']
+11-09 21:09:20 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\snapshots\anchor_b11.pt: 59 new inputs, new tokens ['space', 'targets']
+11-09 21:09:21 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\snapshots\anchor_v060_end.pt: 59 new inputs, new tokens ['space', 'targets']
+11-09 21:09:22 live.json: 2.0a's end played: {"BRAIN_FADE": 1.0, "BTOK_GATE_CAP": 1.0, "CMB_G": 0.0, "CONTACT_FREE": 1.0, "COST_FIRE_W": 0.0, "COST_JERK_W": 0.0, "DMG_REWARD": 0.001, "DMG_TAKEN_W": 1.0, "FADD": 0.0, "FADE_CAP": 1.0, "FADE_V": 0.0, "H2_COPY": 0.0, "H2_FPG": 0.0, "H2_GATE_CAP": 0.0, "H2_GATE_OPEN": 0.0, "H2_MIX": 0.0, "H2_PG": 1.0, "H2_WPG": 1.0, "HABIT_P": 0.3, "INTENT_HOLD": 8.0, "INTENT_TEACH_W": 0.0, "ITEM_DECAY": 0.002, "ITEM_FLAT": "MH:0.35,RA:0.30,YA:0.15", "ITEM_PT_HI": 0.002, "ITEM_PT_LO": 0.004, "ITEM_PT_MIX": 1.0, "ITEM_RATE_AR": 0.002, "ITEM_RATE_HP": 0.0025, "KEEP_G": 0.975, "LEVEL_PULL": 1.0, "ORD_GATE": -30.0, "PADD": 0.0, "RAIL_FAR_PAY": 0.25, "RJ_TEACH_W": 0.0, "SPEED_PAY": 0.0, "STACK_DIFF": 0.0, "VALUE_WARM": 0.0, "WIN_ADD": 0.6, "WIN_GAIN": 1.0, "WIN_SHAPE_K": 0.0, "WIN_W": 0.0}
+11-09 21:09:22 live.json: 2.0b's start values: {"SPACE_GATE": 0.0, "EDGE_PAY": 0.0, "COVER_PAY": 0.0, "SPACE_W": 1.0}
+11-09 21:09:22 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\live.json
+11-09 21:09:22 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0b\live.json: accepted
+11-09 21:09:22 the ramp ramp_20b.py: 102 files (clocks 0 to 101), all accepted
+11-09 21:09:22 LIVE ACCEPT: PASS
+11-09 21:09:22 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0a\keep\policy_end_20a.pt (b20b_init add), with its optimizer; anchors 2.0a's end, 1.7a's update 90, 1.6a's end, 1.5a's end, 1.3b's end, b1.2d's end, b1.1, v0.6.0's end; the judge C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\judge\judge_v060_wpn.npz
+11-09 21:09:22 trainer started: cmd 29680, from 2.0a's end, 1126 minutes
+11-09 21:09:37 live.json applied by the trainer before its first rollout (2026-11-09 21:09:35)
+11-09 21:09:42 watcher 5908 | ramp 8036 (its dials: ramp_20b.py, SPACE_GATE 0 -> 1 over updates 30 to 60, EDGE_PAY 0 -> 0.0005 over 60 to 100; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 25416 | all on 0x3C3C
+11-09 21:09:52 trainer: space (2.0b): the brain's readout of the threat on him, what he puts on the enemy, the map's cover and 24 zones', on the brain's state and his hands' memory (768 -> 128 -> 27), from the network; lesson 1.0 (rate 0.001 x weight, rising over 0.0 min); its ring every 2 tick(s)
+11-09 21:09:52 trainer: combat order (1.7): the readout ahead's places (1, 2, 4 s) go to the simulators with the brain's answer
+11-09 21:09:52 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1064 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + fight 2 + obs 148 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 729,507 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+11-09 21:09:52 trainer: optimizer: the 2 new token(s)' first layer starts fresh
+11-09 21:09:52 trainer: optimizer: attn.mark carried over, (65, 96) -> (67, 96)
+11-09 21:09:52 trainer: optimizer: enc.0.weight carried over, (256, 994) -> (256, 1053)
+11-09 21:09:52 trainer: optimizer: head2.inp.weight carried over, (256, 960) -> (256, 1019)
+11-09 21:09:52 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 108 step counts moved to the host)
+11-09 21:09:52 trainer: keep choice (1.4c): z = keep(cat[head state, hands' memory (a number), 7 numbers]); its share from --keep-g 0.975 (live KEEP_G); its weights: bias -7.625, on its own numbers [6.603, 7.303, -0.836, 7.188, 0.026, 0.114, 0.006]
+11-09 21:09:52 trainer: keep choice: share 0.9750 of his readings not forced (the rest: the lock rule, INTENT_HOLD)
+11-09 21:09:52 trainer: combat order (1.7): asked at a share 0.0000 of his readings (target, cut, spam, out); the pointer's adds on the targets and the way x 0.0000; the kinds' bias [0.15, -4.903, -4.347, -5.501], |op_v| 8.371
+11-09 21:09:52 trainer: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 3981117 weights, device cuda, 1126.0 min
+11-09 21:09:52 trainer: space: the ring of states, 26 slots of 10080 x 768 (0.40 GB on the host)

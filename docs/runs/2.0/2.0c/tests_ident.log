@@ -1,0 +1,31 @@
+22:06:45 scratch_20c_id_z0: done in 0.5 min; the log ends: exit 0
+22:06:45 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+22:06:45 PASS z0: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+22:06:45 PASS z0: no weapon table, no REFUSED live file
+22:06:45 PASS z0: the gates left as the file has them (no opening)
+22:07:17 scratch_20c_id_z0b: done in 0.5 min; the log ends: exit 0
+22:07:17 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+22:07:17 PASS z0b: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+22:07:17 PASS z0b: no weapon table, no REFUSED live file
+22:07:17 PASS z0b: the gates left as the file has them (no opening)
+22:07:39 scratch_20c_id_z2: done in 0.3 min; the log ends: exit 0
+22:07:39 PASS z2: the trainer ran 2 updates and dumped them (2 dumps)
+22:07:39 PASS z2: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+22:07:39 PASS z2: no weapon table, no REFUSED live file
+22:07:39 PASS z2: the gates left as the file has them (no opening)
+22:08:01 scratch_20c_id_z3: done in 0.3 min; the log ends: exit 0
+22:08:01 PASS z3: the trainer ran 2 updates and dumped them (2 dumps)
+22:08:01 PASS z3: the optimizer's state loaded from opt.pt, not a cold start; its moments carried over the widened inputs
+22:08:01 PASS z3: no weapon table, no REFUSED live file
+22:08:01 PASS z3: the gates left as the file has them (no opening)
+22:08:01 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
+22:08:01 PASS the END AIM dials reach the simulators: update 1's actions differ from z0's (0.0633 of them)
+22:08:01 PASS the END PAY dials change nothing before the first learning step (z2 = z0: update 1's actions and log p, to the bit)
+22:08:01 PASS ... and update 2's actions differ (0.0848 of them): the pay reached the learning step
+22:08:01 update 1's ledger z0: {'dmg_dealt': 0.043, 'dmg_taken': -0.1702, 'frag': None, 'death': None, 'win_part': 0.3868}
+22:08:01 update 1's ledger z2: {'dmg_dealt': 0.0156, 'dmg_taken': -0.0656, 'frag': None, 'death': None, 'win_part': 0.3868}
+22:08:01 PASS update 1's damage dealt pays 0.002/0.0055 of z0's (0.3628, wanted 0.3636)
+22:08:01 FAIL update 1's damage taken pays (1.0 x 0.002)/(0.8 x 0.0055) of z0's (0.3854, wanted 0.4545)
+22:08:01 PASS update 1's win part unchanged (1.0000)
+22:08:01 PASS update 1's frags and deaths unchanged (1.0, 1.0)
+22:08:01 FAILED

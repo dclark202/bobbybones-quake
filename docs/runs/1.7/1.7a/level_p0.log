@@ -1,0 +1,88 @@
+strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 975 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 71 + hands 512 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 686,436 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp
+wrote data/sim_runs/level_17a_p0\start.pt: the keep choice at share 0 (layout keep 2, 7 numbers); its start at 5.0 readings a second:
+  out of contact, quiet: z = 0.6800 x age + -7.6600 a reading (1.4c's start a second: sigmoid(0.75 x (age - 8.5)))
+   age s     start /s       fit /s fit /reading held S fit-start
+       1       0.0036       0.0046       0.0009          -0.0008
+       3       0.0159       0.0179       0.0036          -0.0038
+       5       0.0675       0.0677       0.0139          -0.0068
+       7       0.2451       0.2349       0.0522          +0.0019
+       8       0.4073       0.4028       0.0980          +0.0079
+       9       0.5927       0.6214       0.1765          +0.0005
+      10       0.7549       0.8287       0.2973          -0.0124
+    11.5       0.9047       0.9794       0.5399          -0.0034
+      13       0.9669       0.9993       0.7649          -0.0001
+      15       0.9924       1.0000       0.9269          -0.0000
+  seconds held (quiet, out of contact): the start 7.80, the fit 7.76
+  in contact: 0.3690 a reading (0.9 a second); arrived out of contact: 0.3690 a reading (0.9 a second)
+strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 995 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 81 + hands 512 + wobs 45), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 711,843 weights; its weapon part: 10 scores added to the weapon key's, its 45 inputs read by winp; the combat order: 4 kinds (target, cut, spam, out), a pointer of 64 over 39 candidates of 34 numbers; the fire push: 2 scores added to the fire key's
+wrote data/sim_runs/level_17a_p0\start_cmb.pt: 10 new inputs (b17 order), new tokens ['order']; the order (share 0, adds 0), the fire push (add 0), the pass readout; the order's start: fitted to the pros (C:\Users\dacla\Documents\gh\BobbyBones-17b\docs\runs\1.7\1.7a\order_fit.json)
+C:\Users\dacla\anaconda3\python.exe C:\Users\dacla\Documents\gh\BobbyBones-17b\tools\run\head2head.py level_g1_cmb_padd0 duel_gru_1_7a data/sim_runs/level_17a_p0\start_g1.pt 8 C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_6a\keep\policy_end_16a.pt 8 --out data/sim_runs/level_17a_p0 --games 20
+contact: A 1.0, B 1.0
+weapon own: A 1, B 1
+14:58:13 {'bloodrun': '2-18 26%', 'aerowalk': '2-18 40%', 'lostworld': '6-14 34%', 'sinister': '4-16 35%'}
+15:09:31 {'bloodrun': '2-18 26%', 'aerowalk': '2-18 40%', 'lostworld': '6-14 34%', 'sinister': '4-16 35%', 'furiousheights': '4-16 33%', 'battleforged': '1-19 37%', 'campgrounds': '2-18 36%', 'hektik': '1-19 22%'}
+15:19:05 {'bloodrun': '2-18 26%', 'aerowalk': '2-18 40%', 'lostworld': '6-14 34%', 'sinister': '4-16 35%', 'furiousheights': '4-16 33%', 'battleforged': '1-19 37%', 'campgrounds': '2-18 36%', 'hektik': '1-19 22%', 'toxicity': '0-20 32%', 'cure': '2-18 20%'}
+level_g1_cmb_padd0: A start_g1.pt at 8 s against B policy_end_16a.pt at 8 s: 24-176, win rate 12.0%, frag share 31.4%
+{
+ "won": 24,
+ "lost": 176,
+ "win_rate": 0.12,
+ "keep": {
+  "rule_readings": 99703,
+  "rule_held": 0.3982,
+  "forced": 155420,
+  "held_after_sound": 30042,
+  "held_after_sound_draw_differs": 0.4206,
+  "held_quiet": 248137,
+  "held_quiet_draw_differs": 0.4029,
+  "after_sound": 30511,
+  "after_sound_changed": 0.0074,
+  "keep_seconds": 119857.5,
+  "keep_readings_a_second": 5.0531,
+  "keep_forced": 0.0519,
+  "keep_decided": 574195,
+  "redecide": 0.2192,
+  "changed": 0.1234,
+  "arrived": 87474,
+  "redecide_arrived": 0.3722,
+  "contact": 328467,
+  "redecide_contact": 0.3705,
+  "heard": 27179,
+  "redecide_heard": 0.0181,
+  "quiet": 218549,
+  "redecide_quiet": 0.0168
+ },
+ "start": "data/sim_runs/level_17a_p0\\start_cmb.pt",
+ "ref": "C:\\Users\\dacla\\Documents\\gh\\BobbyBones\\data\\sim_runs\\duel_gru_1_6a\\keep\\policy_end_16a.pt",
+ "from_sha": "f5a13e98ed7d8484d97e674c1510efba298b424305745e1584d120b42098d483",
+ "order": {
+  "asked": 150869,
+  "chosen": {
+   "target": 107686,
+   "cut": 5940,
+   "spam": 7224,
+   "out": 30019
+  },
+  "frames": {
+   "target": 8189871,
+   "cut": 226690,
+   "spam": 193240,
+   "out": 603309
+  },
+  "arrived": {
+   "target": 0,
+   "cut": 1748,
+   "spam": 3574,
+   "out": 1527
+  },
+  "dealt": {
+   "target": 1049746.8,
+   "cut": 22284.7,
+   "spam": 22426.7,
+   "out": 208688.9
+  }
+ },
+ "fit": "C:\\Users\\dacla\\Documents\\gh\\BobbyBones-17b\\docs\\runs\\1.7\\1.7a\\order_fit.json",
+ "padd": 0.0
+}
+LEVEL FAIL: the start at share 1 against policy_end_16a.pt: 24-176 = 12.0% (flag: under 50%)

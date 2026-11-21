@@ -1,0 +1,10 @@
+10:00:07 PASS the start's live.json carries the start values ({'DMG_REWARD': 0.005, 'DMG_TAKEN_W': 1.0, 'WIN_ADD': 0.33, 'AIM3_W': 0.0, 'AIM3_SIZE_A': 1.0, 'AIM3_SIZE_B': 0.0, 'H2_PG': 0.0, 'KEEP_G': 0.0, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125, 'COST_FIRE_W': 0.0, 'H2_WPG': 0.0, 'HABIT_P': 0.0})
+10:00:19 after update 1: live.json {'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18, 'H2_PG': 0.4, 'INTENT_TEACH_W': 0.5, 'SPEED_PAY': 0.06, 'KEEP_G': 0.5}
+10:00:34 PASS no refusal in the log
+10:00:34 PASS live_status.json says applied ({'update': 4, 'status': 'applied', 'reason': None, 'time': '2026-11-11 10:00:21'})
+10:00:34 PASS 3 updates or more (5)
+10:00:34 PASS live_applied.json carries the mid values by the end ({'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.7, 'AIM3_SIZE_B': 0.18, 'H2_PG': 0.4, 'INTENT_TEACH_W': 0.5, 'SPEED_PAY': 0.06, 'KEEP_G': 0.5}, from update 4)
+10:00:35 the save's record: sim {'AIM3_W': '0.5', 'AIM3_SIZE_A': '0.7', 'AIM3_SIZE_B': '0.18', 'SPEED_PAY': '0.06'} | trainer {'H2_PG': 0.4, 'INTENT_TEACH_W': 0.5, 'KEEP_G': 0.5}
+10:00:35 PASS the save's record of what was played carries every mid value (the simulators' or the trainer's part)
+10:00:35 PASS the last update played them: the head's credit 0.4 the keep choice's share 0.5
+10:00:35 ALL PASSED

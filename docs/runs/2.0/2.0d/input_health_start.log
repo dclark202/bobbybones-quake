@@ -1,0 +1,63 @@
+821 inputs (list 20d); the hands read the first 813, the brain the first 691; the head 79 of its own; 47992 rows
+group                 n const  size  <0.5    >2 clip  hands%  brain%   head%
+self                 13     1  1.00     1     0    0    7.41    2.42   15.46
+walls                 5     0  1.00     0     0    0    1.06    0.28       -
+floor                 8     0  1.00     0     0    0    0.93    0.16       -
+enemy                35     2  1.00     4     0    0   14.13   18.32       -
+projectiles          90    46  0.16    39     0    0    1.13    0.16       -
+weapons              27     6  1.00     3     1    1    5.55    0.29   16.10
+items                49     6  1.02     5     0    0    7.42   14.16    9.67
+clock and score       8     0  1.00     0     0    0    0.97    0.08   32.14
+more items           20     0  0.89     0     0    0    2.66    1.28       -
+sounds               24     0  1.00     0     0    0    4.08    4.09       -
+place                29     0  1.00     0     0    0    3.56    4.81       -
+sight                20     0  1.00     1     0    0    3.04    0.50       -
+hits                  4     0  0.40     3     0    0    0.89    0.84       -
+enemy shots          18     3  1.00     5     0    0    0.82    1.55       -
+own hands            14     0  1.00     1     1    1    3.89    6.88       -
+enemy pain            5     0  1.00     0     0    0    0.49    1.37       -
+memory               18     2  1.00     1     0    0    1.50    0.76       -
+routes                7     0  1.00     0     0    0    2.39    2.87       -
+hearing               9     1  1.00     1     0    0    1.29    6.81       -
+hazards              16     0  0.75     0     0    0    2.03    0.33       -
+intention            16     0  1.00     1     0    0    8.31    0.44   16.30
+map reader           32     0  1.00     0     0    1    4.36    2.05       -
+dropped weapon        8     0  0.67     3     0    0    0.58    0.03       -
+his movement          4     0  1.00     0     0    0    0.40    0.16       -
+lead                  6     0  0.94     1     0    0    0.82    0.16       -
+jump ahead            5     0  1.00     0     0    0    0.52    0.04       -
+grenade arc           6     0  0.14     6     0    0    0.00    0.00       -
+v02 game              3     0  1.00     0     0    0    0.01    0.04    0.02
+v02 position          9     0  1.00     0     0    0    0.03    0.05       -
+v02 believed         18     0  1.00     4     0    0    0.29    6.02       -
+v02 items            13     1  1.00     0     0    0    0.03    0.06    0.48
+v02 places           72     0  1.00     3     0    0    0.44    0.83       -
+b2 holds             56     0  0.99     2     1    0    0.44    3.97       -
+b3 ways               7     7     -     0     0    0    0.00    0.00       -
+v031 enemy stack      1     0  1.00     0     0    0    0.08    0.20       -
+v036 rocket aim      20     0  0.85     3     0    0    0.05    0.08       -
+b12 small items     105     0  1.00     5     0    0    0.44       -       -
+b17 order            10     4  1.00     0     0    0    0.00       -    0.14
+b20d dodge            7     0  1.00     0     0    0    0.00       -       -
+b17b timers           4     0  1.00     0     0    0       -       -       -
+input health: 821 inputs, 79 constant in the sample; the live ones' size median 1.00, 12.4% under 0.5, 0.4% over 2; 20 FLAG(s)
+FLAG input health: size: 39 of the 44 live columns of 'projectiles' arrive outside 0.5 to 2 (median 0.16)
+FLAG input health: clip: 1 column(s) of 'weapons' at the clip in over 1% of rows
+FLAG input health: size: 3 of the 4 live columns of 'hits' arrive outside 0.5 to 2 (median 0.40)
+FLAG input health: size: 5 of the 15 live columns of 'enemy shots' arrive outside 0.5 to 2 (median 1.00)
+FLAG input health: clip: 1 column(s) of 'own hands' at the clip in over 1% of rows
+FLAG input health: clip: 1 column(s) of 'map reader' at the clip in over 1% of rows
+FLAG input health: size: 3 of the 8 live columns of 'dropped weapon' arrive outside 0.5 to 2 (median 0.67)
+FLAG input health: share: 'dropped weapon' (8 live columns) carries 0.030% of the brain' first layer's signal
+FLAG input health: share: 'jump ahead' (5 live columns) carries 0.036% of the brain' first layer's signal
+FLAG input health: size: 6 of the 6 live columns of 'grenade arc' arrive outside 0.5 to 2 (median 0.14)
+FLAG input health: share: 'grenade arc' (6 live columns) carries 0.000% of the hands' first layer's signal
+FLAG input health: share: 'grenade arc' (6 live columns) carries 0.001% of the brain' first layer's signal
+FLAG input health: share: 'v02 game' (3 live columns) carries 0.010% of the hands' first layer's signal
+FLAG input health: share: 'v02 game' (3 live columns) carries 0.036% of the brain' first layer's signal
+FLAG input health: share: 'v02 game' (3 live columns) carries 0.018% of the head' first layer's signal
+FLAG input health: share: 'v02 position' (9 live columns) carries 0.032% of the hands' first layer's signal
+FLAG input health: share: 'v02 position' (9 live columns) carries 0.050% of the brain' first layer's signal
+FLAG input health: share: 'v02 items' (12 live columns) carries 0.029% of the hands' first layer's signal
+FLAG input health: share: 'b17 order' (6 live columns) carries 0.003% of the hands' first layer's signal
+FLAG input health: share: 'b20d dodge' (7 live columns) carries 0.000% of the hands' first layer's signal

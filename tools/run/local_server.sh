@@ -5,7 +5,9 @@
 # <save>: a file in the run's folder, or a full path. Never public: the server is unlisted and its games stay out of the public site.
 # It refuses if the save is missing, or another container holds the port (it never stops a server: someone may be on it).
 # Options: PORT (27970), MAP, IMAGE (qlbot:playaim2), ENVMOD (duel_env_ffa), LEGS (move_v17_look), CARD_CMD (the run's train.cmd, for the settings check),
-# DATA (data/duellive_<version without dots>), EXPORT_ONLY=1 (stop after the !aim files).
+# AIM3=1 (a network trained under AIM3: the AIM3 aim table), AIM4=1 (a network trained under aim4, 2.2e on: aim4's default and aim3's max; no
+# better, no worse), DATA (data/duellive_<version without dots>), EXPORT_ONLY=1 (stop after the !aim files), WEAPONS (off, light, strong or pros: the !weapons
+# dial's setting at a map's start, plugins/duelbot.py DUEL_WEAPONS; default off; pros: the table chooses his weapon).
 set -e
 export MSYS_NO_PATHCONV=1
 RUN="${1:?run}"; SAVE="${2:?save}"; VER="${3:?version}"; MAP="${4:-${MAP:-bloodrun}}"
@@ -25,12 +27,18 @@ fi
 if [ -n "$CARD_CMD" ]; then "$PY" tools/run/check_settings.py "$CARD_CMD" --ck "$CK" || echo "settings check: READ THE DIFFERENCES ABOVE"; fi
 mkdir -p "$DATA"
 CUDA_VISIBLE_DEVICES=-1 OMP_NUM_THREADS=1 "$PY" sim/export_duel.py --run "$RUN" --env "$ENVMOD" --policy "$SAVE" --out "$DATA/policy_trained.npz" --legs "$LEGS" --version "$VER" | tail -1 | cut -c1-120
-CUDA_VISIBLE_DEVICES=-1 OMP_NUM_THREADS=1 "$PY" tools/aim2_levels.py "$DATA" | cut -c1-30
-for f in policy.npz policy_worse.npz policy_default.npz policy_better.npz policy_max.npz legs.npz; do [ -f "$DATA/$f" ] || { echo "MISSING $DATA/$f"; exit 1; }; done
+# (2.0e) AIM3=1: a network trained under AIM3 gets the AIM3 table (default, better, max; "worse" is on hold: tools/aim2_levels.py --aim3)
+# (2.2e) AIM4=1: a network trained under aim4 gets aim4's default and aim3's max (tools/aim2_levels.py --aim4)
+[ -n "$AIM3" ] && [ -n "$AIM4" ] && { echo "REFUSED: AIM3=1 and AIM4=1: one or the other"; exit 1; }
+CUDA_VISIBLE_DEVICES=-1 OMP_NUM_THREADS=1 "$PY" tools/aim2_levels.py "$DATA" ${AIM3:+--aim3} ${AIM4:+--aim4} | cut -c1-30
+if [ -n "$AIM4" ]; then NEED="policy.npz policy_default.npz policy_max.npz legs.npz"
+elif [ -n "$AIM3" ]; then NEED="policy.npz policy_default.npz policy_better.npz policy_max.npz legs.npz"
+else NEED="policy.npz policy_worse.npz policy_default.npz policy_better.npz policy_max.npz legs.npz"; fi
+for f in $NEED; do [ -f "$DATA/$f" ] || { echo "MISSING $DATA/$f"; exit 1; }; done
 [ -n "$EXPORT_ONLY" ] && { echo "exported to $DATA"; exit 0; }
 # (playaim2 predates sim/btoken.py's current form: the server of v0.6.1c mounted it too. EARLY_BOBBY=0 as the public servers)
 RW="$(pwd -W)"
-MIND=1 EARLY_BOBBY=0 NAME="$NAME" DATA="$DATA" IMAGE="$IMAGE" PORT="$PORT" DOCKER_EXTRA="-v $RW/sim/btoken.py:/sim/btoken.py:ro" bash tools/duel_server.sh - "$MAP" | tail -1
+MIND=1 EARLY_BOBBY=0 NAME="$NAME" DATA="$DATA" IMAGE="$IMAGE" PORT="$PORT" DOCKER_EXTRA="-v $RW/sim/btoken.py:/sim/btoken.py:ro${WEAPONS:+ -e DUEL_WEAPONS=$WEAPONS}" bash tools/duel_server.sh - "$MAP" | tail -1
 free_port() {
     p=$1; while netstat -an | grep -qE "[:.]$p +.*LISTENING"; do p=$((p + 2)); done; echo "$p"
 }
