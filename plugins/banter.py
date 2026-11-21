@@ -181,7 +181,7 @@ class Picker:
 
 
 def aim_level():
-    """BobbyBones's aim setting on a 1v1 server ("worse", "default", "better", "max"), None elsewhere (plugins/duelbot.py, !aim)"""
+    """BobbyBones's aim setting on a 1v1 server ("default", "max"), None elsewhere (plugins/duelbot.py, !aim)"""
     pl = minqlx.Plugin._loaded_plugins.get("duelbot")
     try:
         lv = pl.aim_level() if pl is not None and hasattr(pl, "aim_level") else None
@@ -190,21 +190,7 @@ def aim_level():
     return lv if lv in AIM_ORDER else None
 
 
-AIM_ORDER = ("worse", "default", "better", "max")         # (owner, 2026-10-27: the labels replace 1-5|max)
-
-
-def aim_gg_line(level, person, bobby):
-    """after a full duel: what BobbyBones says about his aim, by the result (owner's wording, 2026-10-21); None on a draw"""
-    if level is None or person == bobby:
-        return None
-    i = AIM_ORDER.index(level)
-    if person > bobby:
-        if level != "max":
-            return "Too easy at aim {}? Try ^2!aim {}^7 next game".format(level, AIM_ORDER[i + 1])
-        return "You beat me at max aim. Respect."
-    if level == "worse":
-        return "That's my easiest aim. Rematch?"
-    return "Want a closer game? Try ^2!aim {}^7".format(AIM_ORDER[i - 1])
+AIM_ORDER = ("default", "max")                         # (owner, 2026-10-27: the labels replace 1-5|max; 2026-11-21: default and max only)
 
 
 def clean(s):
@@ -366,14 +352,7 @@ class banter(minqlx.Plugin):
                         delay += 1.2 + self.rng.random()
                 except Exception:                            # noqa: BLE001
                     pass
-                try:                                         # (!aim, owner, 2026-10-21) a line by the result and his aim
-                    people = [q for q in table if not is_bot(q)]
-                    line_ = aim_gg_line(aim_level(), people[0].stats.score, p.stats.score) if len(people) == 1 else None
-                    if line_:
-                        self.say(p.id, line_, delay)
-                        delay += 1.2 + self.rng.random()
-                except Exception:                            # noqa: BLE001
-                    pass
+                # (owner, 2026-11-21) no aim line after the gg any more (it suggested another setting)
             if voice(p) == 0 and lad is not None and hasattr(lad, "report_lines"):   # (owner, 2026-10-25) the game history,
                 try:                                         # after any recorded game (a quit too), with the shared board on
                     for line_ in lad.report_lines():

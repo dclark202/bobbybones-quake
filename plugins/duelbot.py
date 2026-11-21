@@ -237,7 +237,7 @@ class duelbot(minqlx.Plugin):
         self.add_command("note", self.cmd_note, 0, usage="<anything you noticed>")
         # (owner, 2026-10-26: duels on the ten maps only: !duel, !match, !reflex, !movement, !room, !rooms, !drill, !arena,
         # !spar, !nosg removed; their code below is no longer reachable from chat)
-        self.add_command("aim", self.cmd_aim, 0, usage="[worse|default|better|max]")
+        self.add_command("aim", self.cmd_aim, 0, usage="[default|max]")
         self.add_command("weapons", self.cmd_weapons, 0, usage="[off|light|strong|pros]")
         self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
         self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
@@ -471,8 +471,8 @@ class duelbot(minqlx.Plugin):
     # the second line a person reads on joining (owner, 2026-10-23: 1v1 only, no !mode or !bots)
     WELCOME = "^2!map <map>^7 to change maps (^2!maps^7 lists them), ^2F3^7 starts a 10-minute game"
 
-    AIM_WELCOME = ("^3My aim:^7 ^2!aim worse^7 easier, ^2!aim default^7 as he trains ^6(default)^7, ^2!aim better^7 sharper, "
-                   "^2!aim max^7 no human limits. The player in the duel can change it at any time.")
+    AIM_WELCOME = ("^3My aim:^7 ^2!aim default^7 as he trains ^6(default)^7, ^2!aim max^7 no human limits. "
+                   "The player in the duel can change it at any time.")
     WEAPONS_WELCOME = ("^3My weapons:^7 ^2!weapons off^7 as he trains; ^2!weapons pros^7: the pros' weapon for the distance is put in my hand "
                        "(rockets close, lightning mid, rail long, rockets on the move); ^2light^7 and ^2strong^7 only nudge toward it.")
 
@@ -495,7 +495,7 @@ class duelbot(minqlx.Plugin):
 
     # owner, 2026-10-12: the project's Discord server, in the welcome of both modes (ffabot inherits on_player_loaded);
     # the wording and the version line: owner, 2026-10-15
-    DISCORD = "^3Join the discord:^7 ^5discord.gg/dH2mfzbMa^7 ^6(feedback appreciated!)^7"
+    DISCORD = "^3Join the discord:^7 ^5discord.gg/KpBp9CDUBj^7 ^6(feedback appreciated!)^7"
 
     def bot_version(self):
         """the network's version name (docs: v0.1, v0.2, v0.3, ...): BOBBY_VERSION if the server sets it, else from the run's
@@ -1660,7 +1660,7 @@ class duelbot(minqlx.Plugin):
         return w, fire, pitch, yaw, [fwd, side, jump, int(fire)]
 
     # ------------------------------------------------------------------ !aim (owner, 2026-10-21; at once: 2026-10-27)
-    # !aim worse|default|better|max: one export per setting (policy_<name>.npz: the same network, only the aim limits in
+    # !aim default|max: one export per setting (policy_<name>.npz: the same network, only the aim limits in
     # env_vars and the aim delays react_ms / acquire_ms differ). Since 2026-10-27 (owner) a change takes effect AT ONCE,
     # mid-game too, without loading the network again: aim_live() sets the simulator module's aim globals, the env's copies
     # of them and the delays to the chosen file's, as worked out by aim_build() (the module run once a setting, under that
@@ -1669,11 +1669,11 @@ class duelbot(minqlx.Plugin):
     # the duel leaves (disconnects or goes to spectate), so the next person starts at the default (owner, 2026-10-27).
     # Each person's own choice comes back when they are seated, on a new map too, and is said in the chat (owner, 2026-10-31):
     # aim_choices.json in the data folder, {key: level}, the key a hash of the Steam ID; choosing the default removes the line.
-    AIM_FILES = {"worse": "policy_worse.npz", "default": "policy_default.npz", "better": "policy_better.npz", "max": "policy_max.npz"}
+    AIM_FILES = {"default": "policy_default.npz", "max": "policy_max.npz"}   # (owner, 2026-11-21: default and max only; worse/better gone)
     # (2026-10-26, owner: one aim setting, four values; a file names itself by AIM_NAME in its env_vars)
     AIM_KEEP = ("env_vars", "react_ms", "acquire_ms")        # the arrays that may differ between the files of the settings
 
-    AIM_SAY = dict(worse="easier", default="as he trains", better="sharper", max="no human limits")
+    AIM_SAY = dict(default="as he trains", max="no human limits")
 
     def aim_here(self):
         """(2.2e, aim4) the settings whose files are on this server, in the table's order (an aim4 network has default and max only); all
@@ -1936,7 +1936,7 @@ class duelbot(minqlx.Plugin):
                 return
             if self.aim_set(self.AIM_DEFAULT):
                 self.log("aim back to {}: the player in the duel {}".format(self.AIM_DEFAULT, why))
-                self.msg("^3aim level reset to:^7 ^2{}^7".format(self.AIM_DEFAULT))
+                self.msg("^3Aim reset to^7 ^2{}^7.".format(self.AIM_DEFAULT))
         except Exception as e:                               # noqa: BLE001
             self.log("aim reset ({}): {!r}".format(why, e))
 
@@ -2089,7 +2089,7 @@ class duelbot(minqlx.Plugin):
             self.mind_w = None
 
     def cmd_aim(self, player, msg, channel):
-        """!aim: the aim setting now. !aim worse|default|better|max: that setting at once (the person playing the duel,
+        """!aim: the aim setting now. !aim default|max: that setting at once (the person playing the duel,
         or the server's owner)"""
         cur = self.aim_level()
         here_ = self.aim_here()
@@ -2142,7 +2142,7 @@ class duelbot(minqlx.Plugin):
         if getattr(self, "aim_said", False):                 # (aim_reset) the last map ended at another setting
             self.aim_said = False
             if self.aim_level() == self.AIM_DEFAULT and not kept:
-                self.msg("^3aim level reset to:^7 ^2{}^7".format(self.AIM_DEFAULT))
+                self.msg("^3Aim reset to^7 ^2{}^7.".format(self.AIM_DEFAULT))
         sid_ = next(iter(here)) if len(here) == 1 else None
         if sid_ is not None and sid_ != getattr(self, "aim_for", None) and getattr(self, "ready", False):
             self.aim_for = sid_
@@ -2150,7 +2150,7 @@ class duelbot(minqlx.Plugin):
             try:
                 if lv is not None and lv != self.aim_level() and self.aim_set(lv):
                     self.log("aim {}: the choice of the person seated".format(lv))
-                    self.msg("^3Aim back to your last setting:^7 ^2{}^7 (^2!aim default^7 to change)".format(lv))
+                    self.msg("^3Aim back to your last setting:^7 ^2{}^7 (^2!aim {}^7 to change)".format(lv, "|".join(self.aim_here())))
             except Exception as e:                           # noqa: BLE001
                 self.log("aim choice {}: {!r}".format(lv, e))
         seen = self.__dict__.setdefault("aim_seen", {})     # steam id -> the last time he was in the game
