@@ -1,0 +1,12 @@
+after update 1: live.json {'KEEP_G': 0.5, 'KEEPQ_G': 0.5, 'KEEP_TEACH': 2.0, 'STAY_W': 0.5, 'BRANCH_ZONE_P': 0.3, 'KEEP_ZONE': '1'}
+PASS  the trainer ended by itself
+PASS  exit 0 and no refusal in the log
+PASS  live_status.json applied (applied)
+PASS  5 updates (5)
+PASS  live_applied.json carries the new values ({'KEEP_G': 0.5, 'KEEPQ_G': 0.5, 'KEEP_TEACH': 2.0, 'STAY_W': 0.5, 'BRANCH_ZONE_P': 0.3, 'KEEP_ZONE': '1'}, from update 4)
+PASS  the last update played them: keep g 0.5, quiet g 0.5, teach w 2.0, stay w 0.5, zone_p 0.3
+PASS  the layers decided once open (zone 114, quiet 17)
+PASS  the save's record of the simulators' values: KEEP_ZONE 1
+PASS  live_accept refuses KEEPQ_G 1.5 (exit 1: ['LIVE ACCEPT: FAIL'])
+PASS  live_accept refuses KEEP_ZONE 2 (exit 1: ['LIVE ACCEPT: FAIL'])
+ALL PASSED

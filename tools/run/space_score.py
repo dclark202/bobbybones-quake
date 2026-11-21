@@ -36,12 +36,12 @@ REACH = 1.5                                                   # seconds: the gro
 FWD = 2.0                                                     # seconds ahead for "what it brought"
 FWDF = int(round(FWD / 0.025))
 CTRL = 2.0                                                    # damage a second: the margin by which a place is covered by one of them
-SETS = os.path.join(ROOT, "data", "sim_runs", "duel_gru_1_7a", "cypher", "u90", "meta.json")   # the games' switches (the sight's mask)
+SETS = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", "duel_gru_1_7a", "cypher", "u90", "meta.json")   # the games' switches (the sight's mask)
 WZ = np.array([1.0, 1.0, 2.0])                                # height counted double in "the nearest point" (RouteField's rule)
 
 
 def path(mp):
-    return os.path.join(ROOT, "data", "maps", "space_{}.npz".format(mp))
+    return os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", "space_{}.npz".format(mp))
 
 
 def score_map(a):
@@ -52,8 +52,8 @@ def score_map(a):
         os.environ[k] = v
     os.environ.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", CUDA_VISIBLE_DEVICES="-1")
     import duel_env as D
-    env = D.DuelEnv(os.path.join(ROOT, "data", "maps", a.map + ".bsp"), n_matches=1, seed=0)
-    g = json.load(open(os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(a.map))))
+    env = D.DuelEnv(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", a.map + ".bsp"), n_matches=1, seed=0)
+    g = json.load(open(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", "nav_{}_sim.json".format(a.map))))
     P = np.array(g["nodes"], np.float32)
     n = len(P)
     eye, body = np.array([0, 0, float(D.VIEW_H)], np.float32), np.array([0, 0, 8.0], np.float32)
@@ -279,7 +279,7 @@ def _report(nm, acc, S_mean):
 
 
 def test(a):
-    root = open(os.path.join(ROOT, "data", "demo_root.txt")).read().strip()
+    root = open(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "demo_root.txt")).read().strip()
     step = 10                                                 # a sample every 0.25 s
     back = 40
     dt = step * 0.025
@@ -413,7 +413,7 @@ def edge(a):
     """the edge of a pair of places: the damage a second he puts on where the enemy is, less what the enemy puts on where he is, each
     over the ground the other can be on within REACH seconds and by the weapon in hand (the weapon table: the pros' damage a second
     in sight, by weapon and the length of the line, measured on the first half of the demos; everything else on the second half)"""
-    root = open(os.path.join(ROOT, "data", "demo_root.txt")).read().strip()
+    root = open(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "demo_root.txt")).read().strip()
     dt = 0.25
     maps = a.maps.split(",")
     Wt = np.zeros((9, 3, 2))
@@ -437,9 +437,9 @@ def edge(a):
     print("the weapon table (the pros, damage a second in sight; under 400 / 400 to 768 / over 768 units; minutes):")
     for w_ in range(9):
         print("  {:<12} {:>5.1f} {:>5.1f} {:>5.1f}   ({:.0f} / {:.0f} / {:.0f})".format(names[w_], *W[w_], *(Wt[w_, :, 0] / 60)))
-    os.makedirs(os.path.join(ROOT, "data", "sim_runs", "space"), exist_ok=True)
+    os.makedirs(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", "space"), exist_ok=True)
     json.dump(dict(weapons=names, bands=list(DBAND), dmg_s=np.round(W, 2).tolist(), minutes=np.round(Wt[:, :, 0] / 60, 1).tolist()),
-              open(os.path.join(ROOT, "data", "sim_runs", "space", "weapon_threat.json"), "w"), indent=1)
+              open(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", "space", "weapon_threat.json"), "w"), indent=1)
     TE = (2.0, 5.0, 10.0, 20.0)                               # the threat on him, damage a second
     EE = (-10.0, -3.0, 3.0, 10.0)                             # the edge
     CE = (-0.3, -0.1, 0.1, 0.3)                               # the map: his share less the enemy's
@@ -523,7 +523,7 @@ def state(a):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import zonemap as ZM
-    W = np.array(json.load(open(os.path.join(ROOT, "data", "sim_runs", "space", "weapon_threat.json")))["dmg_s"])
+    W = np.array(json.load(open(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", "space", "weapon_threat.json")))["dmg_s"])
     names = ("rockets", "rail", "lightning", "machine gun", "shotgun", "grenades", "plasma", "hmg", "gauntlet")
     S, Z = Score(a.map), ZM.load(a.map)
     z = Z.locate(S.P)
@@ -590,7 +590,7 @@ def main():
     ap.add_argument("--maps", default=MAPS)
     ap.add_argument("--map", default="")
     ap.add_argument("--par", type=int, default=4)
-    ap.add_argument("--rec", default=os.path.join(ROOT, "data", "sim_runs", "duel_gru_1_7a", "cypher", "u90"))
+    ap.add_argument("--rec", default=os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", "duel_gru_1_7a", "cypher", "u90"))
     ap.add_argument("--demos", type=int, default=150)
     ap.add_argument("--by-map", action="store_true")
     ap.add_argument("--zone", type=int, default=0)

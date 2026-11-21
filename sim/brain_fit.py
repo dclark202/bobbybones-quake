@@ -6,7 +6,8 @@
 Only the brain (belief.*) and its readouts (track.*, trackz.*, ahead.*) learn; nothing of the hands (encoder, attention, GRU,
 pi, v, the token's layers) is in the optimizer, and the saved checkpoint is the input checkpoint with only those tensors
 replaced. The lesson is the trainer's own (sim/train_duel_rnn.py, --belief with --track, --track-z, --ahead): the inputs
-normalised as the trainer stores them (clip((obs - mean) / sd, +-10), half precision), belief.seq over 384-frame pieces with
+normalised as the trainer plays and stores them (its norm(): clip((obs - mean) / sd, +-10) rounded once to half precision, bit
+for bit: sim/obs_half.py), belief.seq over 384-frame pieces with
 the state carried between them (as rollouts), the readouts graded on the ticks, track.loss x --track (0.3) + track_z.loss x 1 +
 ahead.loss x 1 (the run's weights; parts from the checkpoint's layouts), each module's gradient clipped to 0.5, Adam at the
 run's rates (the brain 2.5 x 1e-4, the readouts 5 x 1e-4).
@@ -199,11 +200,12 @@ class Brain(torch.nn.Module):
 
 
 def norm_fn(ck, dev):
-    mean = torch.from_numpy(np.asarray(ck["obs_mean"], np.float32)).to(dev)
-    sd = torch.from_numpy(np.sqrt(np.asarray(ck["obs_var"], np.float64) + 1e-8).astype(np.float32)).to(dev)
+    import obs_half as OH                                    # (owner, 2026-11-15) the trainer's norm(), bit for bit: the sums in double
+    m_, s_ = OH.stats(ck["obs_mean"], ck["obs_var"])         # precision, one rounding to half precision (as it plays and stores them)
+    mean, sd = torch.from_numpy(m_).to(dev), torch.from_numpy(s_).to(dev)
 
     def f(o):
-        return torch.clamp((o.float() - mean) / sd, -10, 10).half().float()       # (--obs-half: the trainer stores them so)
+        return OH.norm_t(o, mean, sd)
     return f
 
 

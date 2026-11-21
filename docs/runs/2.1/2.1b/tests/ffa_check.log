@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\tools\ffa_check.py", line 60, in <module>
+    run(m, int(g), int(fr), out if out != "-" else None, bsp, (int(room),),
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\tools\ffa_check.py", line 23, in run
+    env = E.DuelEnv(os.path.join(MAPS, bsp + ".bsp"), n_matches=matches, seed=5, **kw)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\sim\duel_env.py", line 3974, in __init__
+    self.w = World(bsp, n=self.n)
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\sim\qsim.py", line 116, in __init__
+    raise RuntimeError("qsim: " + self.lib.qsim_error().decode())
+RuntimeError: qsim: Couldn't load maps/sim.bsp
+Traceback (most recent call last):
+  File "C:\Users\dacla\Documents\gh\BobbyBones-21\tools\ffa_check.py", line 67, in <module>
+    subprocess.run([sys.executable, __file__, mod, "2", "3000", outs[-1], "testlab", "2", "sets"], check=True)
+  File "C:\Users\dacla\anaconda3\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['C:\\Users\\dacla\\anaconda3\\python.exe', 'C:\\Users\\dacla\\Documents\\gh\\BobbyBones-21\\tools\\ffa_check.py', 'duel_env', '2', '3000', 'C:\\Users\\dacla\\AppData\\Local\\Temp\\tmpfy03o239\\duel_env.npz', 'testlab', '2', 'sets']' returned non-zero exit status 1.
+
+[lowrun] exit code 1

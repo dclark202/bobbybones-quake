@@ -1,0 +1,48 @@
+11-15 12:27:50 train.cmd, 384 minutes, 100 updates, head2-lam 0.998: wrote train.cmd: --minutes 384 --max-updates 100 --head2-lam 0.998 --held 1 --held-g 0 --plan 1 
+11-15 12:27:50 no firing cost in the command: every one at zero
+11-15 12:27:50 allowed arg --dmg-taken-w: run '0.9' | reference '1.0'
+11-15 12:27:50 allowed arg --head2-lam: run '0.998' | reference '0.995'
+11-15 12:27:50 allowed arg --held: run '1' | reference '<unset>'
+11-15 12:27:50 allowed arg --held-g: run '0' | reference '<unset>'
+11-15 12:27:50 allowed arg --max-updates: run '100' | reference '80'
+11-15 12:27:50 allowed arg --minutes: run '384' | reference '720'
+11-15 12:27:50 allowed arg --plan: run '1' | reference '<unset>'
+11-15 12:27:50 allowed arg --run: run 'duel_gru_2_1c' | reference 'duel_gru_2_0e'
+11-15 12:27:50 settings check: PASS
+11-15 12:27:51 allowed checkpoint AIM3_LEAD: checkpoint '1.0' | command '0'
+11-15 12:27:51 allowed checkpoint AIM3_RELOAD: checkpoint '0.0' | command '1'
+11-15 12:27:51 allowed checkpoint AIM3_SIZE_A: checkpoint '0.39' | command '1'
+11-15 12:27:51 allowed checkpoint AIM3_SIZE_B: checkpoint '0.355' | command '0'
+11-15 12:27:51 allowed checkpoint AIM3_W: checkpoint '1.0' | command '0'
+11-15 12:27:51 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-15 12:27:51 allowed checkpoint DODGE_G: checkpoint '1.0' | command '0'
+11-15 12:27:51 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-15 12:27:51 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.1' | command '0.12'
+11-15 12:27:51 settings check: PASS
+11-15 12:27:53 backup: copied 104 files 0.73 GB to T:\BobbyBones_backup
+11-15 12:27:55 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\policy.pt: the head's input 938 -> 957 columns (19 of the part 'goal', at zero); the held draw's share 0
+11-15 12:28:01 held_init same: same: 400 real rows x 8 seats (400 head ticks read the goal): actions that differ: 0 of 44800
+11-15 12:28:01 held_init same: ALL PASSED
+11-15 12:28:03 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\snapshots\anchor_13b.pt: the head's input widened by 19 columns at zero; the held draw's share 0 (the lock rule)
+11-15 12:28:05 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\snapshots\anchor_15a.pt: the head's input widened by 19 columns at zero; the held draw's share 0 (the lock rule)
+11-15 12:28:07 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\snapshots\anchor_16a.pt: the head's input widened by 19 columns at zero; the held draw's share 0 (the lock rule)
+11-15 12:28:09 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\snapshots\anchor_b11.pt: no strategy head in this file, written as it is
+11-15 12:28:11 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\snapshots\anchor_b12d.pt: no strategy head in this file, written as it is
+11-15 12:28:13 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\snapshots\anchor_v060_end.pt: no strategy head in this file, written as it is
+11-15 12:28:15 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\snapshots\anchor_20e.pt: the head's input widened by 19 columns at zero; the held draw's share 0 (the lock rule)
+11-15 12:28:15 live.json: 2.1c's new names at the start: {"HELD_G": 0.0}; changed: {"DMG_TAKEN_W": 0.9}; every other value as 2.0e's end (45 names)
+11-15 12:28:15 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\live.json
+11-15 12:28:16 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\live.json: accepted
+11-15 12:28:16 the ramp ramp_21c.py: 32 files (clocks 0 to 31), all accepted
+11-15 12:28:16 LIVE ACCEPT: PASS
+11-15 12:28:16 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_0e\keep\policy_end_20e.pt with the head's part goal at zero and the held draw's share 0 (held_init add), with its optimizer; anchors anchor_13b.pt, anchor_15a.pt, anchor_16a.pt, anchor_b11.pt, anchor_b12d.pt, anchor_v060_end.pt and anchor_20e.pt (2.0e's end), widened; the judge C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\judge\judge_v060_wpn.npz
+11-15 12:28:16 trainer started: cmd 30940, from 2.0e's end, 384 minutes, at most 100 updates (--max-updates)
+11-15 12:28:31 live.json applied by the trainer before its first rollout (2026-11-15 12:28:30)
+11-15 12:28:36 watcher 26584 | ramp 38608 (ramp_21c.py: HELD_G 0 to update 10, 0 -> 0.25 over 10 to 30, 0.25 after; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 38424 | all on 0x3C3C
+11-15 12:28:46 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 992 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 69 + hands 512 + goal 19 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 690,012 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp
+11-15 12:28:46 trainer: optimizer: head2.inp.weight carried over, (256, 938) -> (256, 957)
+11-15 12:28:46 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 101 step counts moved to the host)
+11-15 12:28:46 trainer: slow plan (2.1c, shadow): head state 256 -> 128 -> 128 -> 2 horizons x 17 targets (horizons [10, 25] head ticks, refresh every 5 and at a new draw); new (its last layer at zero); lesson: his own odds after the reading, Adam 0.0003; nothing reads it
+11-15 12:28:46 trainer: held draw (2.1c): share 0.0000 of his trips (the rest: the lock rule, INTENT_HOLD)
+11-15 12:28:46 trainer: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 3694964 weights, device cuda, 384.0 min
+11-15 12:28:46 trainer: the dodge token (2.0d): gate 0.00 now (follows live DODGE_G = 0: log of it, shut at 0)

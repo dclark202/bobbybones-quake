@@ -2,16 +2,16 @@ PASS 15 lines: {'AIM3_W': 0.5, 'AIM3_SIZE_A': 0.695, 'AIM3_SIZE_B': 0.1775, 'AIM
 PASS 50 lines: {'AIM3_W': 1.0, 'AIM3_SIZE_A': 0.39, 'AIM3_SIZE_B': 0.355, 'AIM3_LEAD': 1.0, 'AIM3_RELOAD': 0.0, 'H2_PG': 0.0}
 PASS 90 lines: {'AIM3_W': 1.0, 'H2_PG': 0.5, 'INTENT_TEACH_W': 1.0, 'KEEP_G': 0.0}
 PASS 150 lines: {'H2_PG': 1.0, 'INTENT_TEACH_W': 1.0, 'SPEED_PAY': 0.125, 'KEEP_G': 0.0}
-PASS the marks kept so far, each with its optimizer: ['opt_u150_18a.pt', 'opt_u15_18a.pt', 'opt_u50_18a.pt', 'opt_u90_18a.pt', 'policy_u150_18a.pt', 'policy_u15_18a.pt', 'policy_u50_18a.pt', 'policy_u
+PASS the marks kept so far, each with its optimizer: ['opt_u150_18a.pt', 'opt_u15_18a.pt', 'opt_u50_18a.pt', 'opt_u90_18a.pt', 'policy_u150_18a.pt', 'policy_u15_18a.pt', 'policy_u50_18a.pt', 'policy_u90_18a.pt']
 PASS after the restart, 175 lines (the trainer's own number 25): {'H2_PG': 1.0, 'INTENT_TEACH_W': 0.5, 'SPEED_PAY': 0.0625, 'KEEP_G': 0.0}
 PASS after the restart, 210 lines (the trainer's own number 60): {'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'KEEP_G': 0.0}
 PASS after the restart, 230 lines (the trainer's own number 80): {'KEEP_G': 0.4875, 'INTENT_TEACH_W': 0.0, 'H2_PG': 1.0, 'AIM3_W': 1.0}
 PASS after the restart, 270 lines (the trainer's own number 120): {'KEEP_G': 0.975, 'SFADE': 0.0}
 PASS after the restart, 290 lines (the trainer's own number 140): {'KEEP_G': 0.975, 'SFADE': 0.5, 'INTENT_TEACH_W': 0.0}
-PASS after the restart, 320 lines (the trainer's own number 170): {'KEEP_G': 0.975, 'SFADE': 1.0, 'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_PG': 1.0, 'AIM3_W': 1.0, 'AIM3_SIZE_A': 0.39, 'AIM3_SIZE_
-PASS the marks after the restart by the run's update, none kept twice: ['policy_u150_18a.pt', 'policy_u15_18a.pt', 'policy_u175_18a.pt', 'policy_u210_18a.pt', 'policy_u230_18a.pt', 'policy_u270_18a.pt
+PASS after the restart, 320 lines (the trainer's own number 170): {'KEEP_G': 0.975, 'SFADE': 1.0, 'INTENT_TEACH_W': 0.0, 'SPEED_PAY': 0.0, 'H2_PG': 1.0, 'AIM3_W': 1.0, 'AIM3_SIZE_A': 0.39, 'AIM3_SIZE_B': 0.355}
+PASS the marks after the restart by the run's update, none kept twice: ['policy_u150_18a.pt', 'policy_u15_18a.pt', 'policy_u175_18a.pt', 'policy_u210_18a.pt', 'policy_u230_18a.pt', 'policy_u270_18a.pt', 'policy_u290_18a.pt', 'policy_u320_18a.pt', 'policy_u50_18a.pt', 'policy_u90_18a.pt']
 PASS the check under 40% logged as a MAJOR PROBLEM, and the clock went on
 PASS the lightning over half flagged (230) and a firing cost above zero a MAJOR PROBLEM (320)
 PASS the head's parts logged each update
 PASS the resumed ramp says so and never wrote a clock under 150
-ALL PASSED | C:\Users\dacla\AppData\Local\Temp\ramp18a_t6mtu10y
+ALL PASSED | C:\Users\dacla\AppData\Local\Temp\ramp18a_k6kc8af8

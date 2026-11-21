@@ -19,12 +19,13 @@ import minqlx
 D = "/tmp/practice"
 LINE_START = (-1377.0, -817.0, 538.1)       # longest flat, clear floor run on Campgrounds (1408 units, simulator search)
 LINE_YAW = 0.0
+LINE2 = (447.0, 255.0, 538.1, 270.0)       # (set 7) open air ahead: shooter here, target along -y (2026-11-13)
 WEAPON = {"g": 1, "mg": 2, "sg": 3, "gl": 4, "rl": 5, "lg": 6, "rg": 7, "pg": 8, "hmg": 14}
 REPEATS = 4
 
 
-def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None, pf=0, thp=200):
-    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre, pf=pf, thp=thp)
+def spec(weapon, dist=400.0, aim="body", hold=1, frames=48, pin=False, off=0.0, pre=None, pf=0, thp=200, air=0.0, line=None):
+    return dict(weapon=weapon, dist=dist, aim=aim, hold=hold, frames=frames, pin=pin, off=off, pre=pre, pf=pf, thp=thp, air=air, line=line)
 
 
 SETS = {
@@ -57,6 +58,25 @@ SETS = {
     "5": dict(
         [("rl_{}_{}".format(a, b), spec(b, hold=100, frames=110, pin=True, pre=a, pf=1, thp=999))
          for a, b in (("rg", "lg"), ("rl", "lg"), ("rl", "rg"), ("rg", "rl"), ("sg", "lg"), ("gl", "lg"), ("mg", "lg"))]),
+    # (2026-11-13, docs/research/MECHANICS.md section 7.1: the cvars say LG 1.75, MG/HMG/SG 1; the simulator has 1.167, 0.4, 0.625, 0.85)
+    # knockback alone: one trigger frame at a target at 999 health, on the ground and in the air (lifted `air` units and let go two
+    # frames before the shot: no ground friction in the hit frame), every frame's velocity recorded
+    "6": dict(
+        [("{}kick_{}".format(w, where), spec(w, dist=d, hold=1, frames=24, thp=999, air=a))
+         for w, d in (("lg", 300), ("mg", 300), ("hmg", 300), ("sg", 100), ("rg", 400), ("rl", 300))
+         for where, a in (("ground", 0.0), ("air", 120.0))] +
+        [("lgkick2_air", spec("lg", dist=300, hold=3, frames=24, thp=999, air=120.0))]),
+    # (2026-11-13) set 6's lifted targets at 300 units sat inside the geometry over the first line (they never moved); this line
+    # (Campgrounds, found by a simulator search) has 900 units of open air ahead of a target lifted 100: streams in the air, the
+    # vertical kick, and where the target is in the hit frame (the game moves it in that frame)
+    "7": dict(
+        [("lgstream_air_{}".format(d), spec("lg", dist=d, hold=h, frames=48, thp=999, air=100.0, line=LINE2))
+         for d in (150, 300) for h in (1, 16)] +
+        [("lgstream_ground_150", spec("lg", dist=150, hold=16, frames=40, thp=999, line=LINE2)),
+         ("mgstream_air_150", spec("mg", dist=150, hold=16, frames=40, thp=999, air=100.0, line=LINE2)),
+         ("rlkick_air_200", spec("rl", dist=200, hold=1, frames=40, thp=999, air=100.0, line=LINE2)),
+         ("rgkick_air_300", spec("rg", dist=300, hold=1, frames=40, thp=999, air=100.0, line=LINE2)),
+         ("sgkick_air_150", spec("sg", dist=150, hold=1, frames=40, thp=999, air=100.0, line=LINE2))]),
 }
 TESTS = SETS[os.environ.get("WEAPONLAB_SET", "1")]
 
@@ -82,9 +102,10 @@ class weaponlab(minqlx.Plugin):
 
     def setup_test(self, shooter, target, name):
         sp_ = TESTS[name]
-        dirx, diry = math.cos(math.radians(LINE_YAW)), math.sin(math.radians(LINE_YAW))
+        lx, ly, lz, lyaw = sp_.get("line") or (LINE_START[0], LINE_START[1], LINE_START[2], LINE_YAW)
+        dirx, diry = math.cos(math.radians(lyaw)), math.sin(math.radians(lyaw))
         dist = float(sp_["dist"])
-        sx, sy, sz = LINE_START
+        sx, sy, sz = lx, ly, lz
         sp = (sx + dirx * 64, sy + diry * 64, sz + 2)
         tp = (sp[0] + dirx * dist, sp[1] + diry * dist, sz + 2)
         for p, pos in ((shooter, sp), (target, tp)):
@@ -96,22 +117,22 @@ class weaponlab(minqlx.Plugin):
             p.ammo(mg=150, sg=25, gl=25, rl=50, lg=200, rg=50, pg=200, hmg=200)
         eye = (sp[0], sp[1], sp[2] + 26.0)
         if sp_["aim"] == "self":
-            pitch, yaw = 89.0, LINE_YAW
+            pitch, yaw = 89.0, lyaw
         elif sp_["aim"] == "pitch":                             # a fixed pitch along the line (negative: up)
-            pitch, yaw = float(sp_["off"]), LINE_YAW
+            pitch, yaw = float(sp_["off"]), lyaw
         else:
             if sp_["aim"] == "floor":
                 off = float(sp_["off"])
                 aim = (tp[0] - dirx * (15 + off), tp[1] - diry * (15 + off), tp[2] - 24.0)   # floor, in front of the box
             else:
-                aim = (tp[0], tp[1], tp[2] + 4.0)                                            # body centre
+                aim = (tp[0], tp[1], tp[2] + 4.0 + float(sp_.get("air", 0.0)))              # body centre (set 6: where it is lifted to)
             dx, dy, dz = aim[0] - eye[0], aim[1] - eye[1], aim[2] - eye[2]
             pitch = -math.degrees(math.atan2(dz, math.hypot(dx, dy)))
             yaw = math.degrees(math.atan2(dy, dx))
         self.cur = dict(name=name, spec=sp_, tpos=tp, shooter=shooter.id, target=target.id, weapon=WEAPON[sp_["weapon"]], pre=WEAPON[sp_["pre"] or sp_["weapon"]],
                         pitch=pitch, yaw=yaw, frame=-30, dist=dist, rows=[])
         minqlx.set_bot_input(shooter.id, 0, 0, 0, 0, self.cur["pre"], pitch, yaw)
-        minqlx.set_bot_input(target.id, 0, 0, 0, 0, 2, 0.0, LINE_YAW + 180.0)
+        minqlx.set_bot_input(target.id, 0, 0, 0, 0, 2, 0.0, lyaw + 180.0)
 
     def on_frame(self):
         now = time.time()
@@ -153,6 +174,11 @@ class weaponlab(minqlx.Plugin):
                 tgt = self.player(c["target"])
                 if tgt is not None:
                     tgt.position(x=c["tpos"][0], y=c["tpos"][1], z=c["tpos"][2])
+            if f == -2 and float(sp_.get("air", 0.0)) > 0:    # (set 6) the target lifted and let go: in the air at the shot
+                tgt = self.player(c["target"])
+                if tgt is not None:
+                    tgt.position(x=c["tpos"][0], y=c["tpos"][1], z=c["tpos"][2] + float(sp_["air"]))
+                    tgt.velocity(reset=True)
             minqlx.set_bot_input(c["shooter"], 0, 0, 0, 0, c["pre"], c["pitch"], c["yaw"])
             return
         firing = f < sp_["hold"]

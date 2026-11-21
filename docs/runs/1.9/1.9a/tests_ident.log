@@ -1,0 +1,94 @@
+17:30:07 scratch_19a_id_z0_r2: done in 1.4 min; the log ends: exit 0
+17:30:09 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+17:30:09 PASS z0: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+17:30:09    aux: and near: 34 outputs; who takes the big items next within 288 frames (asked: 400)
+17:30:09    optimizer: the small tokens' first layer starts fresh
+17:30:09    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+17:30:09    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+17:30:09    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1052)
+17:30:09    optimizer: its state loaded from opt.pt
+17:30:09    item floor: 2 maps, their big items {'aerowalk': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA'], 'bloodrun': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA', 'YA2']}; floor 0.02 weight 0.0 (live ITEM_FLOOR, ITEM_FLOOR_W)
+17:30:09    the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+17:31:36 scratch_19a_id_z0b_r2: done in 1.4 min; the log ends: exit 0
+17:31:36 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+17:31:36 PASS z0b: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+17:31:36    aux: and near: 34 outputs; who takes the big items next within 288 frames (asked: 400)
+17:31:36    optimizer: the small tokens' first layer starts fresh
+17:31:36    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+17:31:36    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+17:31:36    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1052)
+17:31:36    optimizer: its state loaded from opt.pt
+17:31:36    item floor: 2 maps, their big items {'aerowalk': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA'], 'bloodrun': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA', 'YA2']}; floor 0.02 weight 0.0 (live ITEM_FLOOR, ITEM_FLOOR_W)
+17:31:36    the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+17:33:03 scratch_19a_id_zc_r2: done in 1.4 min; the log ends: exit 0
+17:33:03 PASS zc: the trainer ran 2 updates and dumped them (2 dumps)
+17:33:03 PASS zc: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+17:33:03    aux: and near: 34 outputs; who takes the big items next within 288 frames (asked: 400)
+17:33:03    optimizer: the small tokens' first layer starts fresh
+17:33:03    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+17:33:03    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+17:33:03    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1052)
+17:33:03    optimizer: its state loaded from opt.pt
+17:33:03    item floor: 2 maps, their big items {'aerowalk': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA'], 'bloodrun': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA', 'YA2']}; floor 0.02 weight 0.0 (live ITEM_FLOOR, ITEM_FLOOR_W)
+17:33:03    the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+17:34:30 scratch_19a_id_zg_r2: done in 1.4 min; the log ends: exit 0
+17:34:30 PASS zg: the trainer ran 2 updates and dumped them (2 dumps)
+17:34:30 PASS zg: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+17:34:30    aux: and near: 34 outputs; who takes the big items next within 288 frames (asked: 400)
+17:34:30    optimizer: the small tokens' first layer starts fresh
+17:34:30    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+17:34:30    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+17:34:30    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1052)
+17:34:30    optimizer: its state loaded from opt.pt
+17:34:30    item floor: 2 maps, their big items {'aerowalk': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA'], 'bloodrun': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA', 'YA2']}; floor 0.02 weight 0.0 (live ITEM_FLOOR, ITEM_FLOOR_W)
+17:34:30    the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+17:35:57 scratch_19a_id_zp_r2: done in 1.4 min; the log ends: exit 0
+17:35:57 PASS zp: the trainer ran 2 updates and dumped them (2 dumps)
+17:35:57 PASS zp: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+17:35:57    aux: and near: 34 outputs; who takes the big items next within 288 frames (asked: 400)
+17:35:57    optimizer: the small tokens' first layer starts fresh
+17:35:57    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+17:35:57    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+17:35:57    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1052)
+17:35:57    optimizer: its state loaded from opt.pt
+17:35:57    item floor: 2 maps, their big items {'aerowalk': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA'], 'bloodrun': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA', 'YA2']}; floor 0.02 weight 0.0 (live ITEM_FLOOR, ITEM_FLOOR_W)
+17:35:57    the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+17:37:24 scratch_19a_id_zf_r2: done in 1.4 min; the log ends: exit 0
+17:37:24 PASS zf: the trainer ran 2 updates and dumped them (2 dumps)
+17:37:24 PASS zf: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+17:37:24    aux: and near: 34 outputs; who takes the big items next within 288 frames (asked: 400)
+17:37:24    optimizer: the small tokens' first layer starts fresh
+17:37:24    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+17:37:24    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+17:37:24    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1052)
+17:37:24    optimizer: its state loaded from opt.pt
+17:37:24    item floor: 2 maps, their big items {'aerowalk': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA'], 'bloodrun': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA', 'YA2']}; floor 0.02 weight 0.0 (live ITEM_FLOOR, ITEM_FLOOR_W)
+17:37:24    the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+17:38:51 scratch_19a_id_zgf_r2: done in 1.4 min; the log ends: exit 0
+17:38:51 PASS zgf: the trainer ran 2 updates and dumped them (2 dumps)
+17:38:51 PASS zgf: the optimizer's state loaded from opt.pt (the widened layers carried, the group 'ins' fresh), no REFUSED live file
+17:38:51    aux: and near: 34 outputs; who takes the big items next within 288 frames (asked: 400)
+17:38:51    optimizer: the small tokens' first layer starts fresh
+17:38:51    optimizer: attn.mark carried over, (67, 96) -> (68, 96)
+17:38:51    optimizer: enc.0.weight carried over, (256, 796) -> (256, 844)
+17:38:51    optimizer: head2.inp.weight carried over, (256, 958) -> (256, 1052)
+17:38:51    optimizer: its state loaded from opt.pt
+17:38:51    item floor: 2 maps, their big items {'aerowalk': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA'], 'bloodrun': ['MH', 'RA', 'RL', 'RG', 'LG', 'YA', 'YA2']}; floor 0.02 weight 0.0 (live ITEM_FLOOR, ITEM_FLOOR_W)
+17:38:51    the binding weapon (2.1a, INS_BIND): a seat under an instruction that names a weapon he owns with ammunition holds it; the weapon key's policy gradient and entropy bonus are off on those frames (b_wd, head2.bound_mask)
+17:38:51 PASS update 1: it repeats itself to the bit
+17:38:51 PASS update 2: it repeats itself to the bit
+17:38:51 PASS zc: the copy lesson on or off changes nothing of update 1's play (it teaches; nothing plays from it at share 0)
+17:38:51 PASS zp: the pay on his own choice with the head's share 0 changes nothing of update 1's play
+17:38:51 PASS zg: the head's own instructions reach the simulators (update 1's or 2's actions differ from z0's)
+17:38:51 PASS zgf: the head's share at 1 repeats itself to the bit (the follow arm's reference)
+17:38:51 PASS zf: the follow pay changes his pay (not his first frame's actions: True), only upward, by at most FOLLOW_PAY x DT a frame (largest 0.00025)
+17:38:51    zf's follow: {"seat_secs": 307.2, "doing": 0.1042, "pay_per_seat_min": 0.0625}
+17:38:51 PASS zf: the follow record is there (seat-seconds under an instruction, the share doing, the pay)
+17:38:51 PASS z0: the records are there (pay_of: the head's side on the win chance alone)
+17:38:51    z0's pay_of: {"hands": "the pay table + the win part as today", "head_old": "his whole pay (the table + the win part)", "head_ins": "win chance only", "win_gain": 1.0, "win_abs": 0.027739, "full_abs": 0.007431, "v_win": 0.0, "v_win_loss": 0.550244}
+17:38:51    z0's judge_items: {"head_abs": 0.0278117, "judge_abs": 0.0137476, "items_abs": 0.0221373}
+17:38:51    z0's ins terms: {"teach": 0.0, "pg": 0.0, "ent": 0.0, "ent_w": 0.0, "copy": 4.48094, "copy_agree": 0.3209, "copy_w": 1.0}
+17:38:51 PASS z0: the copy lesson was taught (its term above 0 on update 1 or 2)
+17:38:51    zg's ins_bind: {"bound": 1.0, "not_his_pick": 0.632, "weapon_changes_min": 194.434}
+17:38:51 PASS zg: with the head's share at 1 the binding's counts are there
+17:38:51 ALL PASSED (25 checks)

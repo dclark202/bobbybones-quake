@@ -61,6 +61,52 @@ P_RADIUS = {RL: 120.0, GL: 150.0, PG: 20.0}
 P_GRAV = {RL: 0.0, GL: 800.0, PG: 0.0}
 P_FUSE = {RL: 0.0, GL: 2.5, PG: 0.0}
 GL_BOUNCE = 0.65
+# (2.1, third pass; the owner, 2026-11-11: the lightning gun "is for cleanup": break the enemy's stack down with the chunk weapons, then
+# finish him with what does it surely; "we need to have a way to estimate whether the lg ammo owned is (on average) enough to cover
+# the expected remaining stack"; "not if every shot hit ... It needs to be based around the hit rate he believes he will get, or perhaps
+# simpler just an average dps of each weapon") THE FINISH TIME's table: FIN_RATE [weapon, distance band] = HIS OWN damage a second of
+# trigger held (misses and splash in it), by the distance to the enemy (under 400, 400 to 768, over 768 units). Measured from his own
+# recorded games by tools/run/fin_rate.py and given as the environment's FIN_RATE (27 numbers: the weapons in WEAPONS' order joined by
+# ";", a weapon's three bands by ","); a play variable (the checkpoint's and the export's env_vars carry it: play, checks and a server
+# read the same table) and a live one (re-measured as his aim changes). A fact about his own hands: nothing of the pros' (CLAUDE.md
+# rule 12). FIN_RATE_DEFAULT IS A PLACEHOLDER, by design and not measured (a guessed hit share of each weapon's full rate): it is
+# there so the code runs before the first measurement on 1.8's end; a run's command carries the measured table.
+FIN_BANDS = (400.0, 768.0)
+FIN_RATE_DEFAULT = np.array([[45.0, 30.0, 15.0],      # rl    PLACEHOLDER
+                             [25.0, 22.0, 20.0],      # rg    PLACEHOLDER
+                             [48.0, 38.0, 0.0],       # lg    PLACEHOLDER (its reach is 768 units)
+                             [18.0, 15.0, 12.0],      # mg    PLACEHOLDER
+                             [40.0, 15.0, 5.0],       # sg    PLACEHOLDER
+                             [25.0, 12.0, 4.0],       # gl    PLACEHOLDER
+                             [50.0, 30.0, 12.0],      # pg    PLACEHOLDER
+                             [35.0, 28.0, 20.0],      # hmg   PLACEHOLDER
+                             [40.0, 0.0, 0.0]],       # g     PLACEHOLDER
+                            np.float32)
+FIN_RATE_MAX = 250.0                                   # (no weapon's full rate reaches it: plasma's is 200)
+
+
+def fin_rate_parse(s):
+    """FIN_RATE's string -> [NW, 3] float32 (unset or empty: the placeholder). Raises ValueError on anything else"""
+    s = (s or "").strip()
+    if not s:
+        return FIN_RATE_DEFAULT.copy()
+    try:
+        t = np.array([[float(x_) for x_ in r_.split(",")] for r_ in s.split(";")], np.float32)
+    except ValueError:
+        raise ValueError("FIN_RATE {!r}: numbers only".format(s))
+    if t.shape != (NW, 3) or not np.isfinite(t).all() or (t < 0).any() or (t > FIN_RATE_MAX).any():
+        raise ValueError("FIN_RATE: {} weapons by 3 distance bands, each within 0 .. {}".format(NW, FIN_RATE_MAX))
+    return t
+
+
+def fin_rate_str(t):
+    """a table [NW, 3] as FIN_RATE's string"""
+    t = np.asarray(t, np.float64)
+    assert t.shape == (NW, 3)
+    return ";".join(",".join("{:.2f}".format(float(x_)) for x_ in r_) for r_ in t)
+
+
+FIN_RATE = fin_rate_parse(os.environ.get("FIN_RATE"))
 SPLASH_KNOCK, SPLASH_KNOCK_SELF = 1.07, 1.3            # splash pushes 5 u/s per point of splash damage, times this
                                                        # (rocket at an enemy's feet 450 u/s, at your own 549; plasma 80 / 95)
 SPLASH_NEAR = 20.0                                     # measured splash falloff sits ~20 units closer than box distance
@@ -753,7 +799,8 @@ RG_FAR_DIST = float(os.environ.get("RG_FAR_DIST") or 700.0)
 PLAY_VARS = ("INTENT_HOLD", "ITEM_BELIEF", "AIM_LEVEL", "AIM_PRESET", "FIRE_HOLD", "SURPRISE_MS", "AMMO_PACKS",
              "PERCEPT_SIGMA", "PERCEPT_TAU", "PERCEPT_SPEED", "KEY_RATE", "GROUND_SENSE", "SHOT_MASK", "LAVA", "WALK_FIX",
              "ITEM_DROP", "SOLIDS", "PRO_WAYS", "NEAREST", "PROJ_SEE", "JUMP_OPEN", "LEGS_LOOK", "LEGS_STAND", "LEGS", "LEGS_EVERY", "LEGS_OFF", "AUTO_SWITCH", "FIGHT_TARGET", "EN_KNOWN", "TARGETS", "TARGETS_FREE", "WAYS", "WAY_CAP", "WAY_ALPHA", "WAY_UNTESTED",
-             "STYLE_MIX", "EN_STACK", "ES_MU_H", "ES_MU_A", "ES_SD_H", "ES_SD_A", "ES_TAU", "HUNT", "CONTACT_FREE", "CONTACT_S")
+             "STYLE_MIX", "EN_STACK", "ES_MU_H", "ES_MU_A", "ES_SD_H", "ES_SD_A", "ES_TAU", "HUNT", "CONTACT_FREE", "CONTACT_S",
+             "KEEP_ZONE", "KEEP_SIG")                       # (2.1: the keep choice by zone, the target's change signals)
 # ARMOR_COST (a proposal of 2026-10-08 after the owner's "go pick up the red armor"; 1.0 = off): what damage soaked by his
 # armor costs him, as a share of what health lost costs. Damage taken was charged in full whether armor took it or not,
 # so armor earned nothing in a fight but a later death. At a third, a hit on a player with armor costs him about half.
@@ -1076,6 +1123,22 @@ RULE_BLIND = float(os.environ.get("RULE_BLIND") or 0.0)
 #   DMG_ENEMY_ONLY=1      (a training switch) dmg_taken_w applies to damage from an enemy only: his own splash, falls and hazards stay at full cost.
 CONTACT_FREE = float(os.environ.get("CONTACT_FREE") or 0.0)
 CONTACT_S = float(os.environ.get("CONTACT_S") or 2.0)
+# 2.1 (owner 2026-11-14, docs/runs/2.1/README.md; off by default, off = bit-identical):
+#   KEEP_ZONE=1  (a PLAY_VAR and live) the keep choice (1.7a's: the keep column) is split by where he is. In contact (the enemy seen or
+#                heard within CONTACT_S) or at an arrival (intent_arr) its zone layer decides, as 1.7a's did (bit 0 of the column). In
+#                quiet (neither) a reading is the quiet layer's (bit 9 of the column: 512) only in a second whose quiet coin (bit 10: 1024,
+#                taken with the keep coin at his lock reading) gave it to the quiet layer; otherwise the lock rule (INTENT_HOLD) decides
+#                there as before. The quiet coin's share is the network's keepq_g (the trainer's KEEPQ_G). env.keep_live: 1 where the
+#                zone layer decided, 2 where the quiet layer did (an int8; 0 nowhere). With KEEP_ZONE=0: 1.7a's keep choice, unchanged.
+#   KEEP_SIG=1   (a PLAY_VAR) the change signals of his TARGET (the instruction's, 2.1a, taken out from behind INSTR for the target):
+#                keep_feat() gains KSIG columns after its seven: his target is an item that is there or back within his way to it by
+#                what he knows (0 or 1); his target is an item (0 or 1); how far his belief of the enemy's place moved since the target
+#                was chosen (units / 1000, at most 2; 2 when a belief came or went); a pain sound of the enemy within the head's tick
+#                (0 or 1); how far his believed stack of the enemy fell since the target was chosen (/ 100, 0 .. 2). The belief's
+#                numbers are made at the head's tick (every HEAD_EVERY frames, held between; reads only, no draw).
+KEEP_ZONE = float(os.environ.get("KEEP_ZONE") or 0.0) > 0
+KEEP_SIG = float(os.environ.get("KEEP_SIG") or 0.0) > 0
+KSIG = 5
 DMG_ENEMY_ONLY = float(os.environ.get("DMG_ENEMY_ONLY") or 0.0) > 0
 # b1.3a (owner, 2026-11-01: "We need to price ALL the health/armor on the map"; "remove fire toggle, jerk, weapon switch"), off by default:
 #   ITEM_RATE_HP, ITEM_RATE_AR  (live) pay a point of health or armor actually gained, on every such item, bubbles and shards too; zero-sum: the enemy loses as much.
@@ -2088,7 +2151,8 @@ MOMENT_STATIC = ("cell_n", "cell_table", "floor_off", "hand_tab", "hi", "hold_fe
                  "hd_ev", "hd_frames", "hd_clear", "hd_gr", "hd_z0", "hd_pos", "hd_w", "hd_gid", "hd_gid_ran", "hd_band",   # (HEAD_EVENTS)
                  "rail_m", "rail_t0", "rail_shot", "rail_pairs",    # (RAIL_START_P)
                  "pro_mm", "pro_t0", "pro_s0",                     # (PRO_START_P)
-                 "pa_closed", "pa_since", "pa_pos", "pa_life", "stag_first")    # (the pre-aim counters, STAGGER_START)
+                 "pa_closed", "pa_since", "pa_pos", "pa_life", "stag_first",    # (the pre-aim counters, STAGGER_START)
+                 "force_instr", "ins_drill", "ins_drill_t", "ins_drill_arm", "ins_drill_w", "force_quiet", "ins_spn", "ins_spfire")   # (2.1: a force and a drill are the seat's, not the moment's)
 MOMENT_HIST = ("opp_hist", "v02_q", "drift_q")                          # the last frames' sightings: lists of tuples of arrays a player a row
 #   HIGH_PAY      who stands higher (B-160: he fights from below; owner, 2026-10-09: "fights from the low ground"): a hit
 #                 from above counts for more, to the one who deals it and to the one who takes it, and a hit from below
@@ -2233,13 +2297,19 @@ LIVE_VARS = ("ITEM_FLAT", "SPEED_PAY", "SPEED_PAY_RUN", "HOP_PAY", "HOP_QUIET", 
              "LEVEL_PULL",                                                                                          # (v0.4.3, B-275)
              "INTENT_HOLD",                                                                                         # (b1.1a, owner 2026-10-31: the target lock faded, a PLAY_VAR too)
              "CONTACT_FREE",                                                                                        # (b1.4a, the chance a contact is free of the lock)
+             "KEEP_ZONE",                                                                                           # (2.1, the keep choice by zone; read only in intend())
              "ITEM_RATE_HP", "ITEM_RATE_AR", "COST_FIRE_W", "COST_JERK_W",                                          # (b1.3a, a point of health or armor gained; the costs' factors)
              "ITEM_PT_LO", "ITEM_PT_HI", "ITEM_DECAY", "ITEM_PT_MIX",                                               # (b1.2d, the table by the point)
              "BLIND_AHEAD_P",                                                                                       # (v0.4.3, BLIND_AHEAD's chance a life)
              "PERCEPT_SPEED", "PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG",                                    # (v0.4.4, owner 2026-10-26: "his LG is overtuned"; calibrated 0.05)
              "EDGE_PAY", "COVER_PAY", "SPACE_GATE",                                                                # (2.0b, the pay by the place; the inputs' gate)
+             "DODGE_G",                                                                                             # (2.0d, the dodge inputs' gate)
+             "DRILL_INS_P", "INS_DRILL_SECS", "DRILL_INS_VERBS", "DRILL_INS_QUIET", "DRILL_INS_RATE",                                                    # (2.1, the drills of the instruction)
+             "FIN_RATE",                                                                                            # (2.1, the finish time's table: his own damage a second, re-measured as his aim changes)
+             "FOLLOW_PAY",                                                                                          # (1.9a, the hands' pay for carrying an instruction out)
+             "INTENT_SWITCH", "WEAPON_OWN",                                                                         # (2.1a:the switch cost and "a held weapon is choosable", read only in intend() and in the pay: live, so they go out with the fades and no restart is needed)
              ) + WIN_LIVE + AIM2_LIVE                                                                               # (v0.5.1, the cross-fade to the win pay; AIM2)
-LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ")                   # (B-265) the live names whose value is a string, not one number
+LIVE_STR = ("ITEM_FLAT", "BIG_PICK_SEQ", "DRILL_INS_VERBS", "FIN_RATE")                   # (B-265) the live names whose value is a string, not one number
 
 
 def live_values(get):
@@ -2289,10 +2359,22 @@ def live_values(get):
         v[k_] = float(cw_) if (cw_ or "").strip() else 1.0
         if not 0.0 <= v[k_] <= 1.0:
             raise ValueError(k_ + " must be within 0 .. 1")
+    isw_ = get("INTENT_SWITCH")                              # (2.1a) the switch cost, live; unset: 0.02 (as the import)
+    v["INTENT_SWITCH"] = float(isw_ or 0.02)
+    if not 0.0 <= v["INTENT_SWITCH"] <= 0.1:
+        raise ValueError("INTENT_SWITCH must be within 0 .. 0.1")
+    v["WEAPON_OWN"] = float(get("WEAPON_OWN") or 0.0) > 0   # (2.1a) a held weapon is choosable, live (a PLAY_VAR too); unset: off
+    v["FOLLOW_PAY"] = float(get("FOLLOW_PAY") or 0.0)        # (1.9a) the hands' pay a second for carrying an instruction out; unset: 0
+    if not 0.0 <= v["FOLLOW_PAY"] <= 0.2:
+        raise ValueError("FOLLOW_PAY must be within 0 .. 0.2")
     cf_ = get("CONTACT_FREE")                                # (b1.4a) the chance a contact is free of the lock, live; unset: 0
     v["CONTACT_FREE"] = float(cf_) if (cf_ or "").strip() else 0.0
     if not 0.0 <= v["CONTACT_FREE"] <= 1.0:
         raise ValueError("CONTACT_FREE must be within 0 .. 1")
+    kz_ = get("KEEP_ZONE")                                   # (2.1) the keep choice by zone, live (a PLAY_VAR too); unset: off
+    if (kz_ or "").strip() not in ("", "0", "1", "0.0", "1.0"):
+        raise ValueError("KEEP_ZONE must be 0 or 1")
+    v["KEEP_ZONE"] = float(kz_ or 0.0) > 0
     bap_ = get("BLIND_AHEAD_P")                              # (v0.4.3) BLIND_AHEAD's chance a life; unset: 1
     v["BLIND_AHEAD_P"] = float(bap_) if (bap_ or "").strip() else 1.0
     if not 0.0 <= v["BLIND_AHEAD_P"] <= 1.0:
@@ -2301,10 +2383,35 @@ def live_values(get):
     v["COVER_PAY"] = float(get("COVER_PAY") or 0.0)
     if not (0.0 <= v["EDGE_PAY"] <= 0.01 and 0.0 <= v["COVER_PAY"] <= 0.1):
         raise ValueError("EDGE_PAY must be within 0 .. 0.01 and COVER_PAY within 0 .. 0.1")
+    # (2.1, INSTR; docs/runs/2.1/SIM_PARTS.md) the drills: DRILL_INS_P the chance that a game's start is followed by a drill (one seat
+    # of the match is given an instruction by script, drawn among its valid candidates, and held to it for INS_DRILL_SECS seconds;
+    # paid by the game's pay alone); DRILL_INS_VERBS "hold:2,spam:2,go:1" the verbs' shares in the draw (unset: all alike)
+    v["DRILL_INS_RATE"] = float(get("DRILL_INS_RATE") or 0.0)   # (2.1a) drills begun in the middle of a game: a second, a seat; unset: 0
+    if not 0.0 <= v["DRILL_INS_RATE"] <= 1.0:
+        raise ValueError("DRILL_INS_RATE must be within 0 .. 1")
+    v["DRILL_INS_P"] = float(get("DRILL_INS_P") or 0.0)
+    if not 0.0 <= v["DRILL_INS_P"] <= 1.0:
+        raise ValueError("DRILL_INS_P must be within 0 .. 1")
+    v["INS_DRILL_SECS"] = float(get("INS_DRILL_SECS") or 8.0)
+    if not 1.0 <= v["INS_DRILL_SECS"] <= 60.0:
+        raise ValueError("INS_DRILL_SECS must be within 1 .. 60")
+    dv_ = (get("DRILL_INS_VERBS") or "").strip()
+    v["DRILL_INS_VERBS"] = {k_.strip(): float(x_) for k_, x_ in (p_.split(":") for p_ in dv_.split(",") if ":" in p_)}
+    if (dv_ and not v["DRILL_INS_VERBS"]) or any(k_ not in ("go", "contest", "hold", "spam", "push", "cut", "out", "check") or x_ < 0
+                                                  for k_, x_ in v["DRILL_INS_VERBS"].items()):
+        raise ValueError("DRILL_INS_VERBS {!r}: verb:share pairs of go, contest, hold, spam, push, cut, out, check".format(dv_))
+    v["DRILL_INS_QUIET"] = float(get("DRILL_INS_QUIET") or 0.25)    # (second pass) the chance a drill asks quiet (go, hold, cut off, check)
+    if not 0.0 <= v["DRILL_INS_QUIET"] <= 1.0:
+        raise ValueError("DRILL_INS_QUIET must be within 0 .. 1")
+    v["FIN_RATE"] = fin_rate_parse(get("FIN_RATE"))          # (third pass) the finish time's table (unset: the placeholder)
     sg_ = get("SPACE_GATE")                                  # (2.0b) the inputs' gate, live; unset: 1
     v["SPACE_GATE"] = float(sg_) if (sg_ or "").strip() else 1.0
     if not 0.0 <= v["SPACE_GATE"] <= 1.0:
         raise ValueError("SPACE_GATE must be within 0 .. 1")
+    dg_ = get("DODGE_G")                                     # (2.0d) the dodge inputs' gate, live; unset: 1
+    v["DODGE_G"] = float(dg_) if (dg_ or "").strip() else 1.0
+    if not 0.0 <= v["DODGE_G"] <= 1.0:
+        raise ValueError("DODGE_G must be within 0 .. 1")
     v.update(_win_live(get))                                 # (v0.5.1) the cross-fade to the win pay, its long part, the stack term
     v.update(_aim2_values(get))                              # (AIM2) its live numbers
     for k_, d_ in (("FLINCH_PER_DMG", "flinch_per_dmg"), ("FLINCH_MAX", "flinch_max"), ("FLINCH_TAU", "flinch_tau")):
@@ -2338,7 +2445,7 @@ def live_values(get):
     if len(v["BIG_PICK_SEQ"]) > 3 or any(x_ < 0 for x_ in v["BIG_PICK_SEQ"]):
         raise ValueError("BIG_PICK_SEQ: at most three numbers of 0 or more")
     for k_, x_ in v.items():
-        for y_ in (x_.values() if isinstance(x_, dict) else x_ if isinstance(x_, tuple) else (x_,)):
+        for y_ in (x_.values() if isinstance(x_, dict) else x_ if isinstance(x_, tuple) else np.ravel(x_) if isinstance(x_, np.ndarray) else (x_,)):
             if not np.isfinite(float(y_)):
                 raise ValueError("{}: not a finite number".format(k_))
     if v["RAIL_FAR_HI"] <= v["RAIL_FAR_LO"]:
@@ -2365,7 +2472,8 @@ def live_set(vals):
 def live_now():
     """(B-265) the LIVE_VARS globals in force in this process"""
     g_ = globals()
-    return {k_: (dict(g_[k_]) if isinstance(g_[k_], dict) else g_[k_]) for k_ in LIVE_VARS}
+    return {k_: (dict(g_[k_]) if isinstance(g_[k_], dict) else (np.asarray(g_[k_]).tolist() if isinstance(g_[k_], np.ndarray) else g_[k_]))
+            for k_ in LIVE_VARS}                              # (an array, as FIN_RATE's table: a list, so that two simulators' answers compare and are written as they are)
 #   TRICKS=1      the scripted opponents of docs/SCOPE_v15.md (the personas holder, lobber, watcher) get what they need:
 #                 ways to places that are not items (the spawn points, posts to watch an item from). Off: none of it is
 #                 built, and those personas play as the plain item runner.
@@ -2856,6 +2964,24 @@ PLAY_VARS = PLAY_VARS + ("DRIFT_IN", "DRIFT_DELAY", "DRIFT_SIGMA", "DRIFT_WEBER"
 #     simulator's spread gives exactly 100, 60, 25).
 # The plugins send every press at once (duelbot.drive: no press_q hold; the rocket's only with RL_QL).
 FIRE_QL = float(os.environ.get("FIRE_QL") or 0.0) > 0
+# (KNOCK_QL, 2026-11-13; docs/research/MECHANICS.md section 7.1; weaponlab set 6, data/weaponlab6) the small kicks as Quake Live gives
+# them: the lightning, the machine guns and each shotgun pellet push by int(damage x g_knockback_<weapon>) points (LG 1.75, MG 1,
+# HMG 1, SG 1 a pellet; 5 u/s a point), and get NO no-friction time: on the ground friction eats 15 u/s a frame from the hit frame
+# on (measured: a tick 34.9, 19.9, 4.9). Q3 floors that time at 50 ms; the game behaves as if a time under 50 ms (2 x the points)
+# is not set at all (inferred: the rail's 136 ms and the rocket's 180 ms keep their speed, as measured). Measured in the air: 47.5 / 23.8 / 38.0 / 357 u/s horizontal (a lightning tick, a bullet, a heavy bullet, a full
+# shotgun shot, aimed 18-44 degrees up); the old W_KNOCK factors (1.167, 0.4, 0.625, 0.85) were fitted to the speed left after the
+# hit frame's ground friction and gave 33 / 9.5 / 24 / 303 in the air. Off = the simulator before, to the bit.
+KNOCK_QL = float(os.environ.get("KNOCK_QL") or 0.0) > 0
+KNOCK_QL_F = {2: 1.75, 3: 1.0, 7: 1.0, 4: 1.0}           # LG, MG, HMG, SG (the weapon indices: RL, RG, LG, MG, SG, GL, PG, HMG, G)
+# (KNOCK_NOW, 2026-11-13; weaponlab set 7, data/weaponlab7) an instant hit (rail, lightning, machine guns, shotgun, gauntlet) moves
+# its target in the hit frame, as the game does: the shooter's shot comes in his own frame before the target's move, so the target's
+# whole frame is moved with the kick (measured: in the hit frame the target goes velocity x 25 ms, its new velocity, for the lightning,
+# the machine gun and the rail). A rocket does not (its explosion comes after the players' moves: measured, no move in its hit frame),
+# so projectiles stay as they are. The simulator moves everyone first and shoots after; under KNOCK_NOW a player hit this frame is
+# put back to the frame's start, given the frame's kicks and moved again with the same commands (the same as the first move when
+# nothing else changed him this frame, checked each time; if something did, the kick goes on the frame's end as before). Off = the
+# simulator before, to the bit.
+KNOCK_NOW = float(os.environ.get("KNOCK_NOW") or 0.0) > 0
 HS_W = np.array([k_ != "proj" for k_ in W_KIND], bool)    # (FIRE_QL) the instant weapons
 FIRE_MZ, FIRE_FLY = 5.0, 0.050                            # (FIRE_QL) the plasma's and the grenade's muzzle and first flight
 PLAY_VARS = PLAY_VARS + ("FIRE_QL",)
@@ -3004,9 +3130,214 @@ BRAIN_READERS = ("legs_look", "hunt", "contest", "rule_hunt", "open", "blind")
 BRAIN_ERR_BINS = ("0-2s", "2-5s", "5-10s", "10s+")
 PLAY_VARS = PLAY_VARS + ("BRAIN_READ", "BRAIN_KNOWN", "SM_ITEMS")
 PLAY_VARS = PLAY_VARS + ("SPACE_IN", "SPACE_GATE")                   # (2.0b)
+# (2.1, docs/runs/2.1/INSTRUCTION.md; owner, 2026-11-10: "It decides between a suite of questions, recurrently, with instructions that
+# feed to hand for execution") INSTR=1 (a PLAY_VAR): the instruction the strategy head sends the hands, given every head tick through
+# instr_in() (the trainer, a drill, a check's hook, a game server's plugin): a verb (INS_VERBS), a place (a target of INTENTS and / or
+# a point of the map), a point to watch or shoot, a weapon, and the seconds until the enemy is expected at the point. Everything about
+# the enemy in it is the giver's belief (the brain's), never the truth. While a seat is under one:
+#   his target is the instruction's (read at once and held, as force_intent); a place that is a point of the map goes to his way and
+#   the point to his legs' look through _bel_src, as the order's of 1.7 did;
+#   its state (INS_ON_WAY, INS_DOING, INS_DONE, INS_FAILED: _ins_step, from what he sees and knows only) is kept every frame;
+#   the last N_INS inputs (group "b21 instruction") carry it: the verb (8, one of them "none"); doing, done, failed (3); how long he
+#   has been on it (seconds / 10, at most 2); the place (5: from him, turned to his facing: forward, left / 1000 within -2 .. 2, up /
+#   200 within -3 .. 3; the seconds of walking there / 10, at most 2; a place is given); the point (5: sideways from his crosshair /
+#   180 degrees, up or down / 90, its distance / 1000, at most 3; inside his field of view; his eye has a clear line to it); the weapon
+#   asked for (NW) and that it is in his hand (1); the firing solution on the point for that weapon (7: there is one (rockets, plasma,
+#   grenades within reach); the flight time / 2, at most 2; where to aim, sideways / 180 and up or down / 90 (the grenade's arc in
+#   it); the time the enemy is expected there is known; that time / 4, at most 2; the flight time less it / 2 within -1 .. 1: 0 = it
+#   lands as he arrives).
+# Off, or a seat under none: the columns are zeros and nothing else is changed (no draw is made, nothing kept that anything reads).
+INSTR = float(os.environ.get("INSTR") or 0.0) > 0
+# DESC_OX=1 (2.2a, docs/runs/2.2/DESIGN.md; the outlook that scores a description of a play): the order's map numbers (sim/order_maps/<map>.npz)
+# are loaded without COMBAT or INSTR, so order_feat() gives the 17 targets' numbers (the way's seconds from him and from where he believes the
+# enemy, the place's height, range and direction, its sight of the enemy's coming places, the item's state as he knows it) and the situation
+# (contact, his health and armor, the weapon in his hand) for the trainer's description of each target. A read only: nothing of the game reads
+# them without COMBAT or INSTR (off and on: the simulator to the bit; proven by a fixed-seed replay, docs/runs/2.2/2.2a)
+DESC_OX = float(os.environ.get("DESC_OX") or 0.0) > 0
+# INS_BIND=1 (2.1a; the owner, 2026-11-12: "I think that makes sense"; a PLAY_VAR): THE WEAPON ASKED FOR IS BINDING. While a seat is
+# under an instruction that names a weapon he owns with ammunition (the gauntlet: owned), his weapon key's action is that weapon's
+# (ins_bind_act(): 0 keep where it is in his hand, 1 + the weapon else), set after his own draw and before the finger limits, so
+# the hand reads it at its own rate and the game's weapon-switch time stays. An instruction that names no weapon, or "none": his
+# own choice stands. For as long as the instruction stands (the head re-reads every HEAD_EVERY frames). env.ins_bind_a [n]: the
+# action set this frame (-1: his own stood), for the trainer's mask (the weapon key gets no policy gradient and no entropy bonus on
+# those frames: 1.7c's path, b_wd); stats["ins_bind"]: [his hand's readings alive, of them bound, of them the binding was not his
+# own pick, weapon changes]. Off, or INSTR off: nothing of it runs (bit-identical).
+INS_BIND = float(os.environ.get("INS_BIND") or 0.0) > 0
+
+
+def ins_bind_act(ins_v, ins_w, has, ammo, weapon, alive):
+    """(INS_BIND) THE ONE DEFINITION of the binding, for the simulator's step, the checks' player (through step) and the server's
+    pass (plugins/netpass.py bind_weapon): ins_v [n] the verb (0: none), ins_w [n] the weapon asked for (-1: none), has [n, NW],
+    ammo [n, NW], weapon [n] the one in his hand, alive [n] -> [n] int64 the weapon key's action the instruction sets (0: keep, the
+    asked weapon is in his hand; 1 + the weapon), -1 where his own choice stands"""
+    w = np.asarray(ins_w, np.int64)
+    wc = np.clip(w, 0, NW - 1)
+    ar = np.arange(len(w))
+    ok = ((np.asarray(ins_v) > 0) & (w >= 0) & np.asarray(has).astype(bool)[ar, wc]
+          & ((np.asarray(ammo)[ar, wc] > 0) | (wc == G)) & np.asarray(alive).astype(bool))
+    return np.where(ok, np.where(np.asarray(weapon, np.int64) == wc, 0, 1 + wc), -1).astype(np.int64)
+# (2.1, second pass; owner, 2026-11-11) the verb "check": go where he can see the place the brain expects the enemy at, to find out
+# (doing: on his way; done: his eye has a clear line to that place, or the enemy is noticed in view; it never fails by itself).
+# And a sixth field, quiet (0 or 1): asked to be quiet (the last input of N_INS, "quiet asked"); nothing forces the walk key and
+# nothing pays for it: what it is worth is the hands' to learn from the game's pay.
+INS_VERBS = ("none", "go", "contest", "hold", "spam", "push", "cut", "out", "check")
+INS_GO, INS_CONTEST, INS_HOLD, INS_SPAM, INS_PUSH, INS_CUT, INS_OUT, INS_CHECK = range(1, 9)
+INS_ON_WAY, INS_DOING, INS_DONE, INS_FAILED = range(4)
+INS_GO_R, INS_CONTEST_R, INS_HOLD_R, INS_HOLD_OFF, INS_CUT_R = 36.0, 96.0, 48.0, 128.0, 96.0    # units: reached, on the ground, in place, pushed off
+INS_SPAM_R, INS_SPAM_RANGE = 200.0, 1500.0                 # (the order's of 1.7: at the place to fire from, or the point in sight within reach)
+INS_CUT_LATE, INS_OUT_T, INS_OUT_D = 2.0, 1.0, 400.0       # seconds past the forecast; seconds out of sight and units away for "broken off"
+INS_MOVED = 64.0                                           # a fixed place or point given this far from the last one is another instruction
+# (2.1, third pass; the owner, 2026-11-11) THE FINISH TIME, from FIN_RATE (see there) and his BELIEF of the enemy's stack, never the
+# truth (_fin_belief: a life on the brain with an answer: the brain's stack band odds times BRAIN_BAND_MID, the spread of those odds;
+# any other seat: the stack belief EN_STACK keeps from what he dealt, heard and saw, and its spread; neither: no belief):
+#   seconds to finish him with a weapon = the believed stack / FIN_RATE[weapon, the band of the distance] (the distance: to the enemy
+#     in his view, else to where he believes him, else the middle band); the cautious one: the believed stack plus its spread;
+#   seconds of fire he has = its ammunition x its refire time (the gauntlet: without end).
+# Scales: a finish time / FIN_T, at most 2 (2 too: a weapon he cannot use, a rate of 0, no belief); seconds of fire / FIN_FIRE_T, at
+# most 2. For the hands, N_FIN more inputs at the group's end (after "quiet asked"): the weapon asked for (3: finish, cautious,
+# seconds of fire; zeros under no instruction or none asked), the weapon in his hand (3: live for every living seat with INSTR on,
+# under an instruction or not: what lets the hands learn to let go of the trigger), "he has a belief of the stack" (1).
+# For the head and the appraisals: FIN_F numbers a weapon in every candidate row (INS_FEAT's last 3 x NW; the same in a seat's rows).
+FIN_T, FIN_FIRE_T, FIN_MID = 5.0, 10.0, 600.0
+N_FIN = 7
+FIN_F = 3
+# THE WAKE (the same pass: "oh the enemy is weak (i heard them scream e.g.) let me switch to lg and finish them off"): a pain sound of
+# the enemy heard, or his believed stack fallen by INS_WAKE_DROP (25: one band of the pain sound's four) or more since the last wake
+# or since the instruction was given, is a wake: for the HEAD_EVERY frames after it instr_state()'s seventh number is 1 (so exactly
+# one reading of the head sees it), and the readers end the keep there as for "done" and "failed" (the head draws anew; it may draw
+# the same again). Its eighth number: how far the believed stack has fallen since the instruction was given (/ 100, at most 2).
+INS_WAKE_DROP = float(os.environ.get("INS_WAKE_DROP") or 25.0)
+INS_SIG = 8
+INS_SIG_WAKE = 6
+INS_WAKE_GAP = 20                                          # frames (0.5 s: the game plays a player's pain sound at most twice a second)
+HEAD_EVERY = 8                                             # frames between the head's ticks (0.2 s)
+# THE PATTERN'S MOMENTS (the frozen moments that teach it, sim/branch.py; instr_pattern()): 1 = within INS_PAT_SECS of a chunk hit of
+# his on the living enemy (INS_CHUNK points or more in one frame: a rocket, a rail, a grenade, a close shotgun) or of a pain sound
+# heard, the enemy alive and within INS_PAT_NEAR units by his belief (or in view); 2 = a fight's start with both stacks high: the
+# enemy in his view for under INS_PAT_SECS after INS_PAT_UNSEEN seconds or more out of it, his own stack and his believed stack of
+# the enemy both INS_PAT_HIGH or more. From his senses and his belief only. (A chunk hit is booked by note_dealt: EN_STACK.)
+INS_CHUNK, INS_PAT_SECS, INS_PAT_NEAR, INS_PAT_UNSEEN, INS_PAT_HIGH = 40.0, 1.0, 1500.0, 2.0, 150.0
+N_INS = len(INS_VERBS) + 3 + 1 + 5 + 5 + NW + 1 + 7 + 1 + N_FIN
+PLAY_VARS = PLAY_VARS + ("INSTR", "FIN_RATE", "INS_WAKE_DROP", "INS_BIND", "INS_WAY", "INS_NO_NONE")
+PLAY_VARS = PLAY_VARS + ("DESC_OX",)                       # (2.2a: a network whose desc term plays reads order_feat(): its checks and servers load the map's numbers)
+# (2.1) THE CANDIDATES: what the head may choose among at a tick, INS_C rows a seat in a fixed order (a row means the same thing at
+# every tick: the head's last choice is "row c", and a held instruction stays in its row): go to each item (INS_GO_TG), contest the
+# mega, the red and the yellows (INS_CONTEST_TG), hold each of the map's holding places watching its best opening, spam the
+# INS_BLOCKS' four points nearest where the brain expects the enemy, push, cut him off 1, 2 or 4 s ahead, break off by the three best
+# ways out, "none" (no instruction: he plays by his own target), and a spare row that is never valid. The weapon is a second choice
+# of the head's, among those he owns with ammunition (instr_feat's third answer). instr_feat() makes the rows and their numbers
+# (INS_FEAT: all from his own place and stack, the item belief's books, the brain's places and the map's own numbers; nothing of
+# the pros' habits: CLAUDE.md rule 12) and keeps the rows; instr_pick() gives a seat the row and the weapon chosen through
+# instr_in(); force_instr [n, 2] (row, weapon; -1: not forced) overrides whatever is passed (a frozen moment's branch, a drill).
+# (second pass) after the first 32 rows, which stay where they were: check x 3 (the brain's places 1, 2, 4 s ahead); and, valid only
+# for INS_SPAWN_SECS after the enemy's death (he knows it: the game tells every player), the SPAWN_K spawn points of the far half
+# from where he stands now (the simulator's own rule, _spawn: the enemy comes back at a random one of the half of the map's spawn
+# points farthest from his enemy at that moment) nearest him by his way: "spush" x 3 (push: rush that spawn point) and "sspam" x 3
+# (spam: from the nearest point by his way that sees it within reach, on that spawn point; the time the enemy is expected there:
+# what is left of the respawn's wait). ins_cspawn [n, INS_C] says which of env.spawns a row is about (-1: none).
+INS_BLOCKS = (("go", 7), ("contest", 4), ("hold", 8), ("spam", 4), ("push", 1), ("cut", 3), ("out", 3), ("none", 1), ("spare", 1),
+              ("check", 3), ("spush", 3), ("sspam", 3))
+INS_BLOCK_VERB = {"spush": "push", "sspam": "spam"}
+INS_ROW0 = {k_: sum(m_ for _, m_ in INS_BLOCKS[:j_]) for j_, (k_, _) in enumerate(INS_BLOCKS)}
+INS_C = sum(m_ for _, m_ in INS_BLOCKS)
+INS_ROW_VERB = np.concatenate([np.full(m_, INS_VERBS.index(INS_BLOCK_VERB.get(k_, k_)) if INS_BLOCK_VERB.get(k_, k_) in INS_VERBS else 0, np.int64)
+                               for k_, m_ in INS_BLOCKS])
+SPAWN_K = 3
+INS_SPAWN_SECS = float(os.environ.get("INS_SPAWN_SECS") or 5.0)
+INS_QUIET_VERBS = (INS_GO, INS_HOLD, INS_CUT, INS_CHECK)   # the verbs a drill may ask quiet with
+INS_NONE_ROW = INS_ROW0["none"]
+INS_GO_TG = (1, 2, 3, 4, 5, 6, 7)                          # INTENTS: MH, RA, RL, RG, LG, YA, YA2
+INS_CONTEST_TG = (1, 2, 6, 7)                              # MH, RA, YA, YA2
+INS_SPAM_W = (RL, GL, PG)
+# INS_WAY=1 (2.1a; the owner, 2026-11-12: spam is denial; "he needs to learn (by being punished by spam) to not go through say a TP at
+# certain points where he expects the enemy is watching it"; "Just make sure he has the right inputs to properly value these things";
+# a PLAY_VAR: it changes what the head reads): THE RECEIVER'S SIDE, three more numbers at the END of every row with a place, from
+# his belief only (the brain's place for the enemy now and its places 1, 2, 4 s ahead: _cmb_ahead, the belief without the forecast):
+#   way_seen    his way to the row's place passes one of the map's spam points (a doorway, a corridor, a teleporter's end:
+#               om["spam_pos"]) that one of those believed places has a line to within INS_SPAM_RANGE. "Passes": the walking time
+#               to the point plus the point's to the place is within INS_WAY_TOL seconds of the walking time to the place
+#   way_seen_t  his seconds of walking to the first such point (/ 10, at most 2; 2: none)
+#   way_tele    that point is a teleporter's end
+# Table lookups only (the map's all-pairs walking times and sight lines): no path is traced. Off: the rows are as before (INS_F
+# unchanged, nothing computed). What the rows had already: seen_me (the place sees where he stands), sees_1/2/4 (the place sees
+# where the enemy is expected), tele (a spam ROW's own point is a teleporter's end), known (the brain's chance the enemy knows
+# where he is).
+INS_WAY = float(os.environ.get("INS_WAY") or 0.0) > 0
+# INS_NO_NONE=1 (2.1a; the owner, 2026-11-12: "The head DOES NOT WORK if it's allowed to pick 'none' as an option and return the
+# decision to the hands"; a PLAY_VAR): the row "none" is never offered: its `valid` is 0 in the candidates (_instr_feat), which is
+# the ONE mask every reader takes (the row log-probabilities of the trainer, the checks' player and the server pass; the branches'
+# candidates; the lesson's softmax over the offered rows). The row keeps its place (no resize). A seat with no valid real row at a
+# tick is offered nothing and keeps the order he is on; env.ins_norow counts them: [living network seat-readings, of them with no
+# valid real row, of those on a map without its tables]. The weapon's "none" is not touched. Off: as before, to the bit.
+INS_NO_NONE = float(os.environ.get("INS_NO_NONE") or 0.0) > 0
+INS_WAY_TOL = 0.5                                          # seconds (decided at the build: a point within half a second of his shortest way)
+INS_WAY_FEAT = ("way_seen", "way_seen_t", "way_tele") if INS_WAY else ()
+INS_FEAT = tuple("v_" + v_ for v_ in INS_VERBS) + (
+    "valid",                                               # the row can be chosen now
+    "on_now",                                              # it is the instruction he is under (the row "none": he is under none)
+    "t_me", "t_en", "lead",                                # seconds of walking to the place: his, the enemy's from his believed place (/ 10, at most 2; 2 with no belief); the enemy's less his (/ 10, -2 .. 2)
+    "height", "range", "fwd", "left",                      # the place from him: its height (/ 200, -3 .. 3), its distance, forward and left of his facing (/ 1000, within 3)
+    "sees_1", "sees_2", "sees_4",                          # the place sees where the brain expects the enemy in 1, 2, 4 s (the belief without the brain's forecast)
+    "seen_me",                                             # the place sees where he stands now
+    "item_up", "item_back",                                # an item's row: there by what he knows; the seconds until it is back (/ 30, at most 2)
+    "door", "corridor", "width", "tele",                   # a spam point's or a way out's own map numbers (a doorway; a corridor; its width / 1000; a teleporter's end)
+    "pt_given", "pt_range", "pt_line",                     # the point to watch or shoot: there is one; its distance from his eye (/ 1000, at most 3); the place sees it
+    "when_ok", "when",                                     # the seconds until the enemy is expected at the point: known; / 4, at most 2
+    "spawn_row",                                           # the row is about a spawn point (ins_cspawn says which)
+    "unsure", "known", "spawn_odds") + tuple(              # ZEROS here: the trainer fills them from the brain (INS_FILL): how spread its place odds are; its chance that the enemy knows where he is; its odds that the enemy comes back at the row's spawn point
+    "{}_{}".format(k_, w_) for w_ in WEAPONS for k_ in ("fin", "fin_hi", "fire")) + INS_WAY_FEAT   # (third pass) THE FINISH TIME of every weapon: seconds to finish him, the cautious one, seconds of fire he has (see FIN_T)
+INS_F = len(INS_FEAT)
+INS_FILL = {k_: INS_FEAT.index(k_) for k_ in ("unsure", "known", "spawn_odds")}
+INS_FIN0 = INS_FEAT.index("fin_" + WEAPONS[0])             # a row's finish numbers begin here: FIN_F a weapon, in WEAPONS' order
+assert INS_C == 41 and INS_F == 37 + FIN_F * NW + len(INS_WAY_FEAT) and INS_NONE_ROW == 30 and INS_FIN0 == 37
+DRILL_INS_QUIET = float(os.environ.get("DRILL_INS_QUIET") or 0.25)   # (live) the chance a drill of a verb of INS_QUIET_VERBS asks quiet
+assert 0.0 <= DRILL_INS_QUIET <= 1.0, "DRILL_INS_QUIET within 0 .. 1"
+INS_DRILL_WAIT = 20.0                                      # seconds a seat drawn for a drill waits for a verb it can be given; then no drill
+DRILL_INS_P = float(os.environ.get("DRILL_INS_P") or 0.0)   # (live: live_values' rules; the drills, see _ins_drill_step)
+# DRILL_INS_RATE (2.1a, live; found by the two-update trial of 2026-11-12: a drill only after a game's start is 0.15% of a seat's time,
+# far too little for the hands to learn to follow): the chance A SECOND that a network seat alive in a game, in no drill and not
+# waiting for one, begins one in the middle of the game (the same script, window and force). The share of a seat's time in a
+# drill is about rate x INS_DRILL_SECS / (1 + rate x INS_DRILL_SECS): 0.02 with 8 s is 14%. 0: none, and no draw is made.
+DRILL_INS_RATE = float(os.environ.get("DRILL_INS_RATE") or 0.0)
+assert 0.0 <= DRILL_INS_RATE <= 1.0, "DRILL_INS_RATE within 0 .. 1"
+INS_DRILL_SECS = float(os.environ.get("INS_DRILL_SECS") or 8.0)
+DRILL_INS_VERBS = {k_.strip(): float(x_) for k_, x_ in (p_.split(":") for p_ in (os.environ.get("DRILL_INS_VERBS") or "").split(",") if ":" in p_)}
+assert 0.0 <= DRILL_INS_P <= 1.0 and 1.0 <= INS_DRILL_SECS <= 60.0 and all(k_ in INS_VERBS[1:] and x_ >= 0 for k_, x_ in DRILL_INS_VERBS.items()),     "DRILL_INS_P within 0 .. 1, INS_DRILL_SECS within 1 .. 60, DRILL_INS_VERBS verb:share pairs"
+# (2.0d, docs/runs/2.0/2.0d/CARD.md item 9; the owner, 2026-11-13: "add inputs for helping to dodge"; "Dodging inputs are good")
+# DODGE_IN=1 (a PLAY_VAR: a network trained with it plays with it; off: the columns are zeros, nothing is kept, no random number is
+# drawn, the simulator bit-identical) the last N_DG inputs (group "b20d dodge"), for being shot at. All from his own senses: the
+# enemy as he sees him (the same old sighting and place as his other enemy inputs: opp_hist's pick), his own movement, what he feels.
+# "Around the enemy" = the horizontal turn seen from the enemy, + counter-clockwise from above (to the enemy's left); the aim and the
+# crossing share that sign, so "his aim on my +side and I move +" is moving into it.
+#   dg_aim_lr    where the enemy's aim passes him, sideways: the miss at his distance, units / 100 (-3 .. 3; a body is 30 wide).
+#                From the enemy's facing (yaw, pitch) as seen at the sighting, with a drifting error of SM_FACE_DEG (SM_FACE_TAU),
+#                none while a beam of the enemy's is drawn this frame (the lightning, the rail: it shows the aim). Aimed away (the
+#                aim's point is behind the enemy's eye): +-3 by the side. Only while the enemy is in view; 0 otherwise
+#   dg_aim_ud    the same, up-down: the aim's height against his body's middle at that point, units / 100 (-3 .. 3)
+#   dg_cross     how fast he crosses the enemy's line of fire as the enemy sees it: degrees a second around the enemy (his own
+#                velocity less the enemy's as he reads it, the enemy's at the believed place) / 100, -3 .. 3. While the enemy is in
+#                view or was within 5 s (as his other enemy inputs); 0 otherwise
+#   dg_cross_d   dg_cross less dg_cross DG_BACK seconds ago (/ 100, -3 .. 3): a reversal reads about twice his crossing
+#   dg_hurt_s    the damage he took, a sum fading with DG_TAU_S seconds (/ 50, at most 2)
+#   dg_hurt_l    the same with DG_TAU_L seconds (/ 200, at most 2)
+#   dg_lg_hit    the share of the enemy's lightning ticks he perceived (the enemy in view, or the tick hit him) that hit him, both
+#                counts fading with DG_TAU_LG seconds; 0 while under half a tick is counted
+# Every column times DODGE_G (live, 0 .. 1; unset 1; a PLAY_VAR: a save plays at its gate): 2.0d opens it over updates 30 to 60, the
+# network's weights on them starting at zero (slow twice, as 2.0b's SPACE_GATE). The histories and sums run whatever the gate.
+# The step books, a frame: which seats fired the lightning or the rail (dg_fire, dg_fire_lg) and the lightning ticks that hit each seat
+# (dg_lghit). The plugins call observe() only: a server playing such a network must set those three (not built: no server before it).
+N_DG = 7
+DODGE_IN = float(os.environ.get("DODGE_IN") or 0.0) > 0
+DG_BACK, DG_TAU_S, DG_TAU_L, DG_TAU_LG = 0.25, 0.5, 2.0, 1.0
+DG_COLS = ("dg_aim_lr", "dg_aim_ud", "dg_cross", "dg_cross_d", "dg_hurt_s", "dg_hurt_l", "dg_lg_hit")
+assert len(DG_COLS) == N_DG
+_dgg = (os.environ.get("DODGE_G") or "").strip()
+DODGE_G = float(_dgg) if _dgg else 1.0
+assert 0.0 <= DODGE_G <= 1.0, "DODGE_G must be within 0 .. 1"
+PLAY_VARS = PLAY_VARS + ("DODGE_IN", "DODGE_G")
 N_FFA = 2 * 11 + 2                                     # two more enemies in view (11 each), enemies in view, players
-OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT
-CELL_COLS = None                                           # no learned cell table in the network any more
+OBS_DIM = OBS_BASE + N_EXTRA + N_FIGHT + N_MEM + N_ROUTE + N_FFA + N_PAD + N_EAR + N_MORE + N_DENSE + N_V9 + N_INTENT + N_DROP + N_V14 + N_V15 + N_V02 + N_B2 + N_B3 + N_ES + N_RAIM + N_PREF + N_EMG + N_DRIFT + N_ITEMS + N_ORD + N_YT + N_SP + N_SPT + N_INS + N_DG
+CELL_COLS = None                                          # no learned cell table in the network any more
 # Stage B, part 1 (docs/design/V02_STAGE_B.md): what the trainer's --aux lesson is made of. step() gives info["aux"], one row
 # a player, as the game truly stands AFTER the step (the frame the returned inputs show) and what happened IN the step.
 # Never an input, never paid; nothing in the simulator reads it. "The enemy" is the one his enemy inputs are about: the
@@ -3151,6 +3482,44 @@ SPACE_TRUTH = float(os.environ.get("SPACE_TRUTH") or 0.0) > 0
 SP_Z = 24
 if SPACE_TRUTH:
     AUX_COLS = AUX_COLS + ("sp_ok", "sp_thr", "sp_put", "sp_edge", "sp_agg") + tuple("sp_z{}".format(k_) for k_ in range(SP_Z))
+# (2.1, docs/runs/2.1/SIM_PARTS.md) KNOWN_TRUTH=1 (a training switch, off by default; off: info["aux"] as above and nothing else
+# changes) adds the truth of the brain's question "does the enemy know where I am", this frame (no hindsight). Labels only, never
+# inputs, never paid, never read by the simulator itself:
+#   en_knows  1: the enemy has him noticed in view, or the enemy's own picture of him is no older than KNOWN_T seconds (his last
+#             sighting or sound of him) and lies within KNOWN_R units of where he truly is: the enemy's last known place of him, or
+#             the place the enemy's readers believe him at (the rule's belief or, for a life on the brain, the brain's)
+#   en_heard  1: the enemy heard him (a footstep or a jump placed by its sound, not seen) within the last second
+# SPAWN_TRUTH=1 (the same kind of switch; it needs RESPAWN_QL, the wait before a respawn) adds the truth of "where does he respawn":
+#   en_spawn  on the frame the enemy is back at a spawn point after a death: that point's number in env.spawns; else -1
+#   en_dead_t the seconds since the enemy last died (0 on the frame after; capped at 99; 99 before any death)
+KNOWN_TRUTH = float(os.environ.get("KNOWN_TRUTH") or 0.0) > 0
+KNOWN_R, KNOWN_T = 300.0, 3.0
+SPAWN_TRUTH = float(os.environ.get("SPAWN_TRUTH") or 0.0) > 0
+SPAWN_MAX = 32                                             # a padding size for the brain's answer over a map's spawn points (the twelve maps have 6 to 14)
+if KNOWN_TRUTH:
+    AUX_COLS = AUX_COLS + ("en_knows", "en_heard")
+if SPAWN_TRUTH:
+    AUX_COLS = AUX_COLS + ("en_spawn", "en_dead_t")
+# HEAD_PAY_TRUTH=1 (2.1; the owner, 2026-11-11: "the strategy head should be paid for improving the things that lead it to think it has
+# a higher win chance ... it should absolutely not be paid for doing damage. The hands get paid for doing that"; the same kind of
+# switch: a label, never an input, never paid, nothing of the game changes) adds what the HEAD's side learns from:
+#   win_raw   this frame's change in his chance of winning the game as the win judge reads it (wb_raw: the win part at a gain of 1,
+#             kept up whatever WIN_W, WIN_ADD and FADE_V are; a game's end in it; 0 outside whole games and late rounds, and without
+#             a judge or a win-chance table). No entry of the pay table is in it: frags, stacks and weapons reach it through the judge.
+HEAD_PAY_TRUTH = float(os.environ.get("HEAD_PAY_TRUTH") or 0.0) > 0
+if HEAD_PAY_TRUTH:
+    AUX_COLS = AUX_COLS + ("win_raw",)
+# JUDGE_ITEMS=<file.json> (1.9a; the owner, 2026-11-12: "Judge with items. As long as the head understands the value of items, we're good";
+# "the judge just pays the head") the HEAD's win_raw reads the judge with the next mega's and red armor's race in it (sim/win_judge.py
+# chance_items: the stack each would bring, by the judge's own value of a stack, weighted by the chance each player gets there first and
+# by how soon it is back; its numbers fitted by tools/run/fit_items.py on his own games). The hands' win part (wb_raw, WIN_ADD) is the
+# judge as before. Unset: win_raw is wb_raw, as before. A label, never an input; nothing of the game changes.
+JUDGE_ITEMS = os.environ.get("JUDGE_ITEMS") or ""
+# FOLLOW_PAY (1.9a; live; 0 = off) the hands' pay a second while the instruction he is under is being carried out (its state "doing":
+# docs/runs/2.1/INSTRUCTION.md's table: at the hold's place with its weapon, on the contested item's ground, at the spam's place with its
+# weapon and the point in reach, the enemy in view under push, at the cut-off's place, on his way to check). Temporary: it teaches the hands
+# what an instruction asks; faded out at the run's end. Paid by the simulator into his own pay, so the head's stream (win_raw) never sees it.
+FOLLOW_PAY = float(os.environ.get("FOLLOW_PAY") or 0.0)
 AUX_ITEM_CAP = 40.0
 AUX_BANDS = (75.0, 125.0, 200.0)
 # classname -> (kind, value, respawn seconds, cap or amount, slot label)
@@ -3894,6 +4263,7 @@ class DuelEnv:
         self.flinch = np.zeros(self.n, np.float32)        # extra error on that direction after being hit, degrees
         ng_ = len(self._mates(0)) + 1                       # players per group
         self.it_t = np.full((self.n, 2), 99.0, np.float32)  # seconds since mega / red armor were last known taken (99 = not known)
+        self.race_n = np.zeros((self.n, 2), np.int64)       # (1.9a, the item race: the truth) how many megas / red armors each player has taken
         self.bel_t = np.full((self.n, len(ROUTE_ITEMS)), 99.0, np.float32)   # the same for every route goal (ITEM_BELIEF)
         self.bel_prev = None                                # the goals' true state at the last look (to notice a pickup)
         self.bel_tick = 0
@@ -3940,6 +4310,13 @@ class DuelEnv:
         self.keep_in = None                                 # (1.4c) the keep column of this frame (None: the lock rule)
         self.keep_live = np.zeros(self.n, bool)             # (1.4c) the readings his keep choice decided
         self.kown = np.zeros(self.n, bool)                  # (1.7a) this second of his readings is the keep choice's (the coin at his last lock reading)
+        self.kqown = np.zeros(self.n, bool)                 # (2.1, KEEP_ZONE) ... and its quiet readings the quiet layer's (the quiet coin there)
+        self.ks_b0 = np.zeros((self.n, 3), np.float32)      # (2.1, KEEP_SIG) his belief of the enemy's place when the target was chosen,
+        self.ks_b0k = np.zeros(self.n, bool)                # whether he had one, his believed stack of the enemy then and whether he had one,
+        self.ks_s0 = np.zeros(self.n, np.float32)           # the signals made at the last head's tick (held between ticks)
+        self.ks_s0k = np.zeros(self.n, bool)
+        self.ks_out = np.zeros((self.n, KSIG), np.float32)
+        self.ks_tick = 0
         self.intent_arr = np.zeros(self.n, bool)            # (1.7a) his target is arrived, not ended: the enemy hunted in view, the holding place stood at
         self.arr_t = np.zeros(self.n, np.float32)           # (1.7a) seconds since the arrival
         self.khit_t = np.full(self.n, 99.0, np.float32)     # (1.7a) seconds since he was hit with the enemy out of his view
@@ -3959,6 +4336,61 @@ class DuelEnv:
         self.cmb_ok = np.zeros(self.n, bool)
         self.cmb_lk = np.zeros((self.n, 3), np.float32)     # ... its point for his look, and whether it gives one
         self.cmb_lok = np.zeros(self.n, bool)
+        self.ins_v = np.zeros(self.n, np.int64)             # (2.1, INSTR) the verb of the instruction he is under (0: none)
+        self.ins_tg = np.full(self.n, -1, np.int64)         # ... its place as a target of INTENTS (-1: a point only, or none)
+        self.ins_p = np.zeros((self.n, 3), np.float32)      # ... its place as a point of the map, and whether one is given
+        self.ins_pok = np.zeros(self.n, bool)
+        self.ins_o = np.zeros((self.n, 3), np.float32)      # ... its point to watch or shoot, and whether one is given
+        self.ins_ook = np.zeros(self.n, bool)
+        self.ins_w = np.full(self.n, -1, np.int64)          # ... the weapon asked for (-1: none)
+        self.ins_when = np.full(self.n, -1.0, np.float32)   # ... seconds until the enemy is expected at the point (under 0: not known), counted down
+        self.ins_when0 = np.full(self.n, -1.0, np.float32)  # ... the same as it was given first
+        self.ins_t = np.zeros(self.n, np.float32)           # ... seconds he has been on it
+        self.ins_st = np.zeros(self.n, np.int64)            # ... its state (INS_ON_WAY ...)
+        self.ins_in = np.zeros(self.n, bool)                # ... he has been in place since it was given
+        self.ins_cur = np.full(self.n, -1, np.int64)        # ... the candidates' row it was chosen as (-1: none, or given without a row)
+        self.ins_b0 = np.zeros((self.n, 3), np.float32)     # ... where he believed the enemy when it was given, and whether he believed a place
+        self.ins_b0k = np.zeros(self.n, bool)
+        self.ins_cok = np.zeros((self.n, INS_C), bool)      # the candidates of the last instr_feat(): valid,
+        self.ins_ctg = np.full((self.n, INS_C), -1, np.int64)       # the target of INTENTS (-1: none),
+        self.ins_cp = np.zeros((self.n, INS_C, 3), np.float32)      # the place and whether there is one,
+        self.ins_cpk = np.zeros((self.n, INS_C), bool)
+        self.ins_co = np.zeros((self.n, INS_C, 3), np.float32)      # the point and whether there is one,
+        self.ins_cog = np.zeros((self.n, INS_C), bool)
+        self.ins_cwh = np.full((self.n, INS_C), -1.0, np.float32)   # the seconds until the enemy is expected at the point (under 0: not known)
+        self.force_instr = np.full((self.n, 2), -1, np.int64)       # (row, weapon) a seat is held to (-1: not forced): a frozen moment's branch, a drill
+        self.force_quiet = np.full(self.n, -1, np.int64)    # ... and the quiet field it is held to (-1: not forced)
+        self.ins_q = np.zeros(self.n, np.int64)             # (2.1) the instruction asks quiet
+        self.ins_cspawn = np.full((self.n, INS_C), -1, np.int64)    # the candidates' spawn point (env.spawns' number; -1: the row is not about one)
+        self.ins_spk = np.full(self.n, -1, np.int64)        # the spawn point of the instruction he is under (-1: none)
+        self.ins_dead_t = np.full(self.n, 99.0, np.float32) # seconds since his enemy last died (99: not yet, or long ago)
+        self.ins_dw = np.zeros(self.n, bool)                # ... the enemy was waiting to respawn at the last frame
+        self.ins_heard_t = np.full(self.n, 99.0, np.float32)        # seconds since HE last heard the enemy (not seen: placed by a sound)
+        self.ins_noise = np.full(self.n, 99.0, np.float32)  # seconds since he last made a footstep or a jump (HEAR_FIX's events; a readout)
+        self.ins_s0 = np.zeros(self.n, np.float32)          # (third pass, the wake) the most he has believed the enemy's stack to be since the last wake (or since the instruction was given)
+        self.ins_s00 = np.zeros(self.n, np.float32)         # ... his belief of it when the instruction was given
+        self.ins_sok = np.zeros(self.n, bool)               # ... he has had a belief of it since then
+        self.ins_wake_f = np.full(self.n, 9999, np.int64)   # ... frames since the last wake
+        self.ins_norow = np.zeros(3, np.float64)            # (INS_NO_NONE) the readings counted: living network seats, with no valid real row, on a map without tables
+        self.ins_bind_a = np.full(self.n, -1, np.int64)     # (INS_BIND) the weapon key's action the instruction set this frame (-1: his own)
+        self.ins_bind_n = np.zeros(4, np.float64)           # ... this frame's counts (stats["ins_bind"])
+        self.intent_ins = np.zeros(self.n, bool)            # (INSTR) his target was set by an instruction at the last intend()
+        self.ins_pain_p = np.full(self.n, 99.0, np.float32) # ... the pain sound's clock at the last frame (a clock that went back: a pain sound heard)
+        self.ins_chunk_t = np.full(self.n, 99.0, np.float32)        # (the pattern's moments) seconds since his last chunk hit on the living enemy
+        self.ins_vis_t = np.zeros(self.n, np.float32)       # ... seconds the enemy has been in his view without a break (0: not in it)
+        self.ins_gap = np.zeros(self.n, np.float32)         # ... the seconds he was out of it before that
+        self.ins_unseen = np.zeros(self.n, np.float32)      # ... seconds the enemy has been out of his view
+        self.last_spawn = np.full(self.n, -1, np.int64)     # the spawn point (env.spawns' number) he last started from
+        self.ins_spn = None                                 # the spawn points' walking points, and from which points each is seen within reach
+        self.ins_spfire = None
+        self.ins_drill = np.zeros(self.n, bool)             # (DRILL_INS_P) the seat is in a drill: its instruction is the script's, not the head's
+        self.ins_drill_t = np.zeros(self.n, np.float32)     # ... seconds of it left
+        self.ins_drill_arm = np.zeros(self.n, bool)         # ... drawn for one, waiting for a verb it can be given
+        self.ins_drill_w = np.zeros(self.n, np.float32)     # ... seconds it still waits
+        self.ins_rt = np.zeros(self.M, np.float32)          # ... each match's clock at the last frame (a clock that went back: a start)
+        self.ins_rt_ok = False
+        self.ins_dtick = 0
+        self.ins_rng = np.random.default_rng(int(seed) + 772101)    # the drills' own stream
         self.int_tick = 0
         self.intent_seek = 0.0                              # reward per second of the chosen way gained
         self.item_loss = 0.5                                # an enemy's mega or red costs this share of its pickup reward
@@ -4077,8 +4509,9 @@ class DuelEnv:
                         for j_ in range(self.hold_n):
                             self.intent_gi[HOLD_INTENT + j_] = self.hold_g0 + j_
                         self.hold_tg = [[float(x_) for x_ in p_] for p_ in self.hold_pos]
+        self.bsp_path = bsp                                 # (1.9a: item_race finds the map's walking table by it)
         self.om = None                                      # (1.7, COMBAT) the map's numbers for the order (tools/order_maps.py)
-        if COMBAT and self.route is not None:
+        if (COMBAT or INSTR or DESC_OX) and self.route is not None:     # (2.1, INSTR: the seconds of walking to the instruction's place; 2.2a: DESC_OX)
             of_ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "order_maps", os.path.splitext(os.path.basename(bsp))[0].lower() + ".npz")
             if os.path.exists(of_):
                 z_ = np.load(of_)
@@ -4538,6 +4971,7 @@ class DuelEnv:
         self.fire_q = np.zeros(n, bool)                 # shots triggered last frame (they leave this frame)
         self.fire_w = np.zeros(n, np.int64)
         self.opp_hist = []                              # delayed opponent state (reaction time)
+        self.dg_st = None                               # (DODGE_IN) its histories and fading sums, made by _dodge
         self.stats = dict(frags=0, suicides=0, dmg=0.0, self_dmg=0.0, jerk=0.0,
                           pick_hp=0, pick_ar=0, pick_mega=0, pick_ra=0, pick_wp=0, pick_am=0,
                           arena=np.zeros(8),              # frags, player-frames, sum of speed, frames with the enemy in view, damage,
@@ -4749,6 +5183,9 @@ class DuelEnv:
         self.intent[i], self.intent_t[i], self.intent_new[i], self.intent_done[i] = 0, 0.0, True, False
         if COMBAT:                                           # (1.7) a new life ends the order with the target (its inputs and the
             self.cmb_k[i] = 0                                # legs' look point read the kind before the next reading)
+        if INSTR:                                            # (2.1) and the instruction
+            self.ins_v[i], self.ins_tg[i], self.ins_cur[i] = 0, -1, -1
+            self.ins_q[i], self.ins_spk[i] = 0, -1
         self.way[i], self.wt_from[i] = 0, -1                # (WAYS, WAY_MEASURE)
         self.pad[i], self.pad_lift[i], self.ear_t[i] = 0.0, 0, 99.0
         self.walk_last[i] = False
@@ -5438,6 +5875,13 @@ class DuelEnv:
                 pt_, pk_ = (self.cmb_rt, self.cmb_ok) if key == "hunt" else (self.cmb_lk, self.cmb_lok)
                 bel = np.where(on_[:, None], pt_[:self.n], np.asarray(bel, np.float32)).astype(np.float32)
                 ok = np.where(on_, pk_[:self.n], np.asarray(ok, bool))
+        if INSTR and key in ("hunt", "legs_look") and bel is not None and ok is not None and len(bel) == self.n:
+            on_ = self.ins_v[:self.n] > 0                    # (2.1) a seat under an instruction: its place for his way (a point of the
+            on_ = on_ & ((self.ins_pok[:self.n] & (self.ins_tg[:self.n] == EN_INTENT)) if key == "hunt" else self.ins_ook[:self.n])   # map), its point for his legs' look
+            if on_.any():
+                pt_ = self.ins_p if key == "hunt" else self.ins_o
+                bel = np.where(on_[:, None], pt_[:self.n], np.asarray(bel, np.float32)).astype(np.float32)
+                ok = np.asarray(ok, bool) | on_
         return bel, ok
 
     def _bel_base(self, key, rows=None):
@@ -5789,12 +6233,14 @@ class DuelEnv:
             if len(far):
                 k = int(self.rng.choice(far))
         p = self.spawns[k]
+        self.last_spawn[i] = k                               # (2.1, SPAWN_TRUTH) the label "where he came back"
         self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), float(self.spawn_yaw[k]))
         self._fresh(i, float(self.spawn_yaw[k]))
 
     def _spawn_at(self, i, k):
         """player i starts at spawn point k"""
         p = self.spawns[k]
+        self.last_spawn[i] = k                               # (2.1, SPAWN_TRUTH) the label "where he came back"
         self.w.reset(i, (p[0], p[1], p[2] + 9.0), (0, 0, 0), float(self.spawn_yaw[k]))
         self._fresh(i, float(self.spawn_yaw[k]))
 
@@ -7522,8 +7968,51 @@ class DuelEnv:
         seconds since he heard the enemy (a sound, a pickup, a pain sound), seconds since he was hit with the enemy out of view]"""
         n = self.n
         snd_ = np.minimum(np.minimum(self.ear_t[:n], self.snd_t[:n].min(1)), self.pain_t[:n])
-        return np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n], self.intent_arr[:n], self.arr_t[:n],
-                         snd_, self.khit_t[:n]], 1).astype(np.float32)
+        kf_ = np.stack([self.intent_t[:n], (self.seen_t[:n] < CONTACT_S), self.intent[:n], self.intent_arr[:n], self.arr_t[:n],
+                        snd_, self.khit_t[:n]], 1).astype(np.float32)
+        if KEEP_SIG:                                         # (2.1) the target's change signals after the seven
+            kf_ = np.concatenate([kf_, self.keep_sig()], 1)
+        return kf_
+
+    def _ks_belief(self):
+        """(2.1, KEEP_SIG) his belief of the enemy's place [n, 3], whether he has one [n], his believed stack of the enemy [n] and
+        whether he has one [n]: reads only (the readers' counters put back), no draw"""
+        bel, bok = self._ins_bel()
+        st, _, sk, _ = self._fin_belief()
+        return bel, bok, np.asarray(st, np.float32), np.asarray(sk, bool)
+
+    def keep_sig(self):
+        """(2.1, KEEP_SIG) [n, KSIG] the change signals of his target (see KEEP_SIG): the item there or back in time, an item, the
+        belief's shift since the choice, the enemy's pain sound within the head's tick, the believed stack's fall since the choice.
+        All but the pain sound are made every HEAD_EVERY frames and held between (the head reads them at its tick)."""
+        n = self.n
+        if len(self.ks_out) != n:
+            self.ks_out = np.zeros((n, KSIG), np.float32)
+        self.ks_tick += 1
+        if self.ks_tick % HEAD_EVERY == 1 or HEAD_EVERY <= 1:
+            out = np.zeros((n, KSIG), np.float32)
+            tg = self.intent[:n]
+            it = (tg >= 1) & (tg < EN_INTENT)
+            out[:, 1] = it
+            R = self.route
+            if it.any() and R is not None and self.route_item:
+                ar = np.arange(n)
+                nh = R.locate(self.state[:n, :3].astype(np.float32))
+                gi = self._trip_goal(np.where(it, tg, 0), nh, who=ar)
+                grp = ar // (self._others_arr().shape[1] + 1)
+                okg = it & (gi >= 0) & (gi < len(R.T)) & (gi < len(self.route_item))
+                for gg_ in np.unique(gi[okg]):
+                    w_ = okg & (gi == gg_)
+                    up_, back_ = (np.asarray(x_)[:n] for x_ in self._goal_state(int(gg_), grp))
+                    out[w_, 0] = (up_[w_].astype(bool) | (back_[w_] <= R.T[int(gg_), nh[w_]])).astype(np.float32)
+            bel, bok, st, sk = self._ks_belief()
+            b0k = self.ks_b0k[:n]
+            out[:, 2] = np.where(bok & b0k, np.minimum(np.linalg.norm(bel - self.ks_b0[:n], axis=1) / 1000.0, 2.0), np.where(bok != b0k, 2.0, 0.0))
+            out[:, 4] = np.where(sk & self.ks_s0k[:n], np.clip((self.ks_s0[:n] - st) / 100.0, 0.0, 2.0), 0.0)
+            self.ks_out = out
+        out = self.ks_out.copy()
+        out[:, 3] = np.asarray(self.pain_t, np.float32)[:n] < HEAD_EVERY * DT
+        return out * (self.hp[:n] > 0)[:, None]
 
     def intend(self, choice, who, way=None):
         """the intention head: read once a second per player (staggered), at once after a spawn; held in between.
@@ -7545,13 +8034,26 @@ class DuelEnv:
             ci_ = np.array(CMB_C0)[co_] + np.minimum(cc_, np.maximum(np.array(CMB_SLOTS)[co_] - 1, 0))
             okc_ = np.where(co_ > 0, self.cmb_cok[np.arange(n), np.minimum(ci_, CMB_NEW - 1)], True)
             co_ = np.where(okc_, co_, 0)                               # (a candidate that was none: the target as chosen)
+            if KEEP_ZONE:                                              # (2.1) the quiet layer's draw and its coin (taken with the keep coin)
+                kqd_ = has_ & ((k_ & 512) > 0)
+                self.kqown = np.where(lock_, has_ & ((k_ & 1024) > 0), self.kqown[:n]) & has_
+            else:
+                kqd_ = np.zeros(n, bool)
+                self.kqown = np.zeros(n, bool)
         else:
-            kd_ = kr_ = np.zeros(n, bool)
+            kd_ = kr_ = kqd_ = np.zeros(n, bool)
             self.kown = np.zeros(n, bool)
+            self.kqown = np.zeros(n, bool)
             cq_, co_, cc_, ci_ = np.zeros(n, bool), np.zeros(n, np.int64), np.zeros(n, np.int64), np.zeros(n, np.int64)
         self.intent_arr = self.intent_arr[:n] & ~self.intent_new[:n] & ~self.intent_gone[:n] & (self.intent[:n] > 0)   # (a reading at once ends an arrival)
-        kread_ = who & self.kown & (kr_ | self.intent_new)   # (1.7a) the keep choice's readings: five a second in its seconds
-        live = (who & ~self.kown & (lock_ | self.intent_new)) | kread_
+        if KEEP_ZONE:                                        # (2.1) where the keep choice decides: in contact and at an arrival its zone
+            zone_ = (self.seen_t[:n] < CONTACT_S) | self.intent_arr     # layer; in quiet the quiet layer where its coin says so, else the lock rule
+            own_ = self.kown & (zone_ | self.kqown)
+        else:
+            zone_ = None
+            own_ = self.kown
+        kread_ = who & own_ & (kr_ | self.intent_new)        # (1.7a) the keep choice's readings: five a second in its seconds
+        live = (who & ~own_ & (lock_ | self.intent_new)) | kread_
         ct_on = CONTACT_FREE > 0 or self.contact_seat is not None
         if ct_on:                                            # (CONTACT_FREE) a contact begins: drawn once, a reading at once if it is free
             if self.ct_in is None or len(self.ct_in) != n:
@@ -7561,7 +8063,7 @@ class DuelEnv:
             p_ = CONTACT_FREE if self.contact_seat is None else self.contact_seat[:n]
             self.ct_free = np.where(new_, self.ct_rng.random(n) < p_, self.ct_free & in_)
             self.ct_in = in_
-            live = live | (who & new_ & self.ct_free & ~self.kown)   # (1.7a: in the keep choice's seconds its own readings)
+            live = live | (who & new_ & self.ct_free & ~own_)   # (1.7a: in the keep choice's seconds its own readings)
         choice = np.asarray(choice, np.int64)
         if not EN_ON:                                        # (the enemy as a target: only with the switch, FIGHT_TARGET or HUNT)
             choice = np.where(choice == EN_INTENT, 0, choice)
@@ -7589,8 +8091,13 @@ class DuelEnv:
         ended_ = (self.intent == 0) | (self.intent_done & ~self.intent_arr) | self.intent_gone | self.intent_new   # (1.7a) an arrival is not an end
         lrn_ = kread_ & ~ended_                              # (1.4c, 1.7a) the keep choice: a seat's own decision at a reading not forced
         rule_may_ = may
-        may = np.where(lrn_, kd_, np.where(kread_, True, may))     # (its forced readings count, as the lock rule's)
-        self.keep_live = lrn_
+        if KEEP_ZONE:                                        # (2.1) the zone layer's draw in contact and at an arrival, the quiet layer's in quiet
+            may = np.where(lrn_, np.where(zone_, kd_, kqd_), np.where(kread_, True, may))
+            self.keep_live = (lrn_ & zone_).astype(np.int8) + 2 * (lrn_ & ~zone_).astype(np.int8)
+            self.keep_rec = (zone_.copy(), forced_.copy(), rule_may_.copy(), kread_.copy(), lrn_.copy(), own_.copy(), kqd_.copy(), kd_.copy())   # (a record for the tests)
+        else:
+            may = np.where(lrn_, kd_, np.where(kread_, True, may))     # (its forced readings count, as the lock rule's)
+            self.keep_live = lrn_
         rd_ = live & ~forced_                                # (stats["keep"]) the readings not forced: who decided, what came of it
         held_ = rd_ & ~may                                   # ... held (the rule's lock or his keep)
         diff_ = choice != self.intent
@@ -7616,12 +8123,25 @@ class DuelEnv:
                              (lrn_ & ~ct_now_ & heard_).sum(), (rk_ & ~ct_now_ & heard_).sum(), (lrn_ & ~ct_now_ & ~heard_).sum(),
                              (rk_ & ~ct_now_ & ~heard_).sum()], np.float64)
             self.stats["keep2"] = k2_
+        if INSTR:                                            # (1.9a, the copy lesson) the target his own network chose at its last reading
+            ot_ = getattr(self, "ins_own_tg", None)          # (before any instruction or force is put in its place): what the head's
+            if ot_ is None or len(ot_) != n:                 # scorer is first taught to give (a record: nothing of the game reads it)
+                ot_ = np.full(n, -1, np.int64)
+            self.ins_own_tg = np.where(live, choice, ot_)
         fi_ = getattr(self, "force_intent", None)       # (2.0c, tools/run/branch_hook.py: a measurement) a seat's target forced while
         if fi_ is not None:                              # its entry is 0 or more: read at once and held; not there: nothing changes
             f_ = who & (np.asarray(fi_[:n]) >= 0)
             choice = np.where(f_, np.asarray(fi_[:n], np.int64), choice)
             live, may = live | f_, may | f_
+        if INSTR:                                            # (2.1) a seat under an instruction: its target, read at once and held
+            f_ = who & (self.ins_v[:n] > 0) & (self.ins_tg[:n] >= 0)
+            self.intent_ins = np.where(who, f_, self.intent_ins[:n])
+            if f_.any():
+                choice = np.where(f_, self.ins_tg[:n], choice)
+                live, may = live | f_, may | f_
         live = live & may
+        if KEEP_ZONE:
+            self.keep_rec2 = (live.copy(), may.copy(), np.asarray(choice).copy())   # (a record for the tests: the reading as applied)
         changed = live & ((choice != self.intent) | (co_ != self.cmb_k[:n]) | ((co_ > 0) & (cc_ != self.cmb_c[:n])))   # (1.7: another order is another target)
         same_ = kread_ & ended_ & live & ~changed & (self.intent > 0)    # (1.7a) a forced reading of the keep choice that drew the
         #                                                                  same target: a new choice of it (the lock rule keeps "reached")
@@ -7635,6 +8155,23 @@ class DuelEnv:
         self.intent_arr = self.intent_arr & ~changed & ~same_
         self.arr_t = np.where(self.intent_arr, self.arr_t[:n] + DT, 0.0).astype(np.float32)
         self.intent_live, self.intent_changed = live, changed
+        if KEEP_ZONE:                                        # (2.1, stats["keep3"]) by zone: seat-frames; readings not forced; of them changed (the
+            k3_ = self.stats.get("keep3")                    # lock rule's or a layer's); in contact or arrived, then in quiet; then the layers' own
+            if k3_ is None or len(k3_) != 10:                # decisions and their re-decides: zone, quiet
+                k3_ = np.zeros(10)
+            qz_ = who & ~zone_
+            zz_ = who & zone_
+            k3_ += np.array([zz_.sum(), (rd_ & zz_).sum(), (changed & rd_ & zz_).sum(), qz_.sum(), (rd_ & qz_).sum(), (changed & rd_ & qz_).sum(),
+                             (lrn_ & zone_).sum(), (lrn_ & zone_ & kd_).sum(), (lrn_ & ~zone_).sum(), (lrn_ & ~zone_ & kqd_).sum()], np.float64)
+            self.stats["keep3"] = k3_
+        if KEEP_SIG:                                         # (2.1) what he believed when the target was chosen: the signals' reference
+            nw_ = changed | same_
+            if nw_.any():
+                bel_, bok_, st_, sk_ = self._ks_belief()
+                self.ks_b0 = np.where(nw_[:, None], bel_, self.ks_b0[:n]).astype(np.float32)
+                self.ks_b0k = np.where(nw_, bok_, self.ks_b0k[:n])
+                self.ks_s0 = np.where(nw_, st_, self.ks_s0[:n]).astype(np.float32)
+                self.ks_s0k = np.where(nw_, sk_, self.ks_s0k[:n])
         if COMBAT:                                           # (1.7) the order he follows; the drawn target not applied under an order
             on_ = live & (co_ > 0)
             self.cmb_k = np.where(live, co_, self.cmb_k[:n])
@@ -8085,7 +8622,9 @@ class DuelEnv:
                               self._v02(pos, eye, rot, c, si, known, opp), self._b2(pos, c, si), self._b3(pos), self._es(opp),
                               self._raim(eye, yaw, pit, fdir, known, opp_vel, visible, opp, known_a), self._pref(pos, eye, yaw, pit, visible),
                               self._emerge(eye, yaw, pit, visible), self._drift(ey, ep_, visible, pos, known, opp), self._sm(pos, rot),
-                              self._ord(pos, eye, yaw, pit), self._yt(), self._sp(pos, c, si, known, visible, opp)], 1)
+                              self._ord(pos, eye, yaw, pit), self._yt(), self._sp(pos, c, si, known, visible, opp),
+                              self._ins(pos, eye, yaw, pit, rot),
+                              self._dodge(pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick if self.focus_on else None)], 1)
         return obs.astype(np.float32)
 
     def _ffa(self, pos, eye, rot, yaw, pit):
@@ -8122,6 +8661,87 @@ class DuelEnv:
             out[:, 11 * j:11 * j + 11] = blk * on[:, None]
         out[:, 16] = acq.sum(1) / 5.0
         out[:, 17] = (G - 2) / 4.0
+        return out
+
+    def _dodge(self, pos, vel, known, opp_vel, visible, seen_t, opp, rf_, pick):
+        """(2.0d, DODGE_IN) the inputs of N_DG (see there). Keeps its own history of every player's facing and place (beside
+        opp_hist and as long, as sm_hist), the crossing of the last DG_BACK seconds and the fading sums; a random stream of its
+        own (the simulator's is not touched). Called once a frame by observe()"""
+        n = self.n
+        out = np.zeros((n, N_DG), np.float32)
+        if not DODGE_IN:
+            return out
+        g = self.dg_st
+        nb_ = max(1, int(round(DG_BACK / DT)))
+        if g is None or len(g["face"]) != n:
+            g = self.dg_st = dict(hist=[], face=np.zeros((n, 2), np.float32), cross=[], hs=np.zeros(n, np.float32),
+                                  hl=np.zeros(n, np.float32), lgn=np.zeros(n, np.float32), lgh=np.zeros(n, np.float32),
+                                  rng=np.random.default_rng(int(self.rng.bit_generator.state["state"]["state"] % (2 ** 63))
+                                                            if "state" in self.rng.bit_generator.state.get("state", {}) else 0))
+        ar = np.arange(n)
+        o_ = np.asarray(opp, np.int64).reshape(-1)[:n]
+        # the enemy's facing and place at the sighting his other inputs are read from
+        g["hist"].append((self.yaw[:n].astype(np.float32).copy(), self.pitch[:n].astype(np.float32).copy(),
+                          self.state[:n, :3].astype(np.float32).copy()))
+        L_ = max(1, len(self.opp_hist))
+        while len(g["hist"]) > L_:
+            g["hist"].pop(0)
+        while len(g["hist"]) < L_:
+            g["hist"].insert(0, g["hist"][0])
+        pk = np.asarray(pick, np.int64) if pick is not None else np.broadcast_to(np.maximum(0, L_ - 1 - np.asarray(rf_, np.int64)), (n,))
+        pk = np.clip(pk, 0, L_ - 1)
+        H = [np.stack([h_[k_] for h_ in g["hist"]]) for k_ in range(3)]
+        rho = math.exp(-DT / max(SM_FACE_TAU, 1e-3))
+        g["face"] = (rho * g["face"] + math.sqrt(1.0 - rho * rho) * SM_FACE_DEG * g["rng"].normal(0, 1, (n, 2))).astype(np.float32)
+        beam = np.asarray(getattr(self, "dg_fire", np.zeros(n, bool)), bool)[:n][o_]
+        err = np.where(beam[:, None], 0.0, g["face"])
+        ey_ = np.radians(H[0][pk, o_] + err[:, 0])
+        ep_ = np.radians(H[1][pk, o_] + err[:, 1])
+        epos = H[2][pk, o_]
+        eeye = epos + np.array([0, 0, VIEW_H], np.float32)
+        fd = np.stack([np.cos(ep_) * np.cos(ey_), np.cos(ep_) * np.sin(ey_), -np.sin(ep_)], 1)
+        me = pos[:n] + np.array([0, 0, 4.0], np.float32)
+        r = me - eeye
+        rh = np.hypot(r[:, 0], r[:, 1]) + 1e-6
+        u = np.stack([-r[:, 1] / rh, r[:, 0] / rh], 1)        # around the enemy, + counter-clockwise
+        t = (r * fd).sum(1)
+        miss = eeye + fd * np.maximum(t, 0.0)[:, None] - me
+        lr = np.where(t > 0, (miss[:, :2] * u).sum(1) / 100.0, 3.0 * np.sign((fd[:, :2] * u).sum(1) + 1e-9))
+        ud = np.where(t > 0, miss[:, 2] / 100.0, 0.0)
+        live = (self.hp[:n] > 0) & (self.hp[o_] > 0)
+        vis = np.asarray(visible, bool)[:n] & live
+        out[:, 0] = np.clip(lr, -3, 3) * vis
+        out[:, 1] = np.clip(ud, -3, 3) * vis
+        # his crossing of the enemy's line of fire, from where he believes the enemy is
+        rk = pos[:n] - np.asarray(known, np.float32)[:n]
+        rkh2 = rk[:, 0] ** 2 + rk[:, 1] ** 2 + 1.0
+        rv = vel[:n] - np.asarray(opp_vel, np.float32)[:n] * vis[:, None]
+        cr = np.degrees((rk[:, 0] * rv[:, 1] - rk[:, 1] * rv[:, 0]) / rkh2) / 100.0
+        sens = live & (np.asarray(seen_t)[:n] < 5)
+        cr = np.where(sens, cr, 0.0).astype(np.float32)
+        g["cross"].append(cr)
+        while len(g["cross"]) > nb_ + 1:
+            g["cross"].pop(0)
+        out[:, 2] = np.clip(cr, -3, 3)
+        out[:, 3] = np.clip(cr - g["cross"][0], -3, 3) * sens
+        # what he feels: damage taken (this frame's, as fb has it) and the enemy's lightning ticks he perceived
+        tk_ = np.asarray(self.fb[:n, 1], np.float32) * 100.0
+        g["hs"] = (g["hs"] * math.exp(-DT / DG_TAU_S) + tk_).astype(np.float32)
+        g["hl"] = (g["hl"] * math.exp(-DT / DG_TAU_L) + tk_).astype(np.float32)
+        hit_ = np.asarray(getattr(self, "dg_lghit", np.zeros(n)), np.float32)[:n]
+        shot_ = np.asarray(getattr(self, "dg_fire_lg", np.zeros(n, bool)), bool)[:n][o_]
+        seen_ = (shot_ & np.asarray(visible, bool)[:n]) | (hit_ > 0)
+        g["lgn"] = (g["lgn"] * math.exp(-DT / DG_TAU_LG) + np.maximum(seen_.astype(np.float32), hit_)).astype(np.float32)
+        g["lgh"] = (g["lgh"] * math.exp(-DT / DG_TAU_LG) + hit_).astype(np.float32)
+        out[:, 4] = np.where(g["hs"] >= 0.5, np.minimum(g["hs"] / 50.0, 2.0), 0.0)      # (a sum under half a point reads none)
+        out[:, 5] = np.where(g["hl"] >= 0.5, np.minimum(g["hl"] / 200.0, 2.0), 0.0)
+        out[:, 6] = np.where(g["lgn"] >= 0.5, np.minimum(g["lgh"] / np.maximum(g["lgn"], 1e-6), 1.0), 0.0)
+        # (the beams and hits are this frame's: spent once read, so an observe() without a step reads none)
+        self.dg_fire = np.zeros(n, bool)
+        self.dg_fire_lg = np.zeros(n, bool)
+        self.dg_lghit = np.zeros(n, np.float32)
+        if DODGE_G < 1.0:                                    # (the live gate; at 1 the columns as they are, to the bit)
+            out *= np.float32(DODGE_G)
         return out
 
     # ------------------------------------------------------------------------------------------- 2.0b: the table of the map
@@ -8283,6 +8903,824 @@ class DuelEnv:
             kn_ = (bt_ < 90.0).astype(np.float32)
             out[:, 2 * j_] = kn_
             out[:, 2 * j_ + 1] = np.minimum(np.maximum(bt_, 0.0) / 25.0, 2.0) * kn_
+        return out
+
+    def instr_in(self, verb, target, place, point, weapon, when, who=None, quiet=None):
+        """(2.1, INSTR) the instruction of every seat in `who` (default: all), as the head gave it at its tick: verb [n] (INS_VERBS;
+        0: none), target [n] (a target of INTENTS: an item, a holding place, the enemy; -1: none), place [n, 3] and point [n, 3]
+        (map coordinates; a row of nan: none), weapon [n] (-1: none), when [n] (seconds until the enemy is expected at the point;
+        under 0: not known). A place with no target goes to his way as the enemy's believed place does (the target becomes the
+        enemy). Another verb, target or weapon, or a fixed place or point moved by more than INS_MOVED, is another instruction (its
+        clock and state begin again); the places and points that follow the belief (push, cut off, break off; contest's point) may
+        move with it. Nothing about the enemy may come from the truth: the giver's own belief."""
+        if not INSTR:
+            return
+        n = self.n
+        who = np.ones(n, bool) if who is None else np.asarray(who, bool)[:n]
+        v = np.clip(np.asarray(verb, np.int64)[:n], 0, len(INS_VERBS) - 1)
+        p, o = np.asarray(place, np.float32)[:n], np.asarray(point, np.float32)[:n]
+        pok, ook = np.isfinite(p).all(1) & (v > 0), np.isfinite(o).all(1) & (v > 0)
+        p, o = np.where(pok[:, None], p, 0.0).astype(np.float32), np.where(ook[:, None], o, 0.0).astype(np.float32)
+        tg = np.where(v > 0, np.asarray(target, np.int64)[:n], -1)
+        tg = np.where((tg < 0) & pok, EN_INTENT, tg)         # a point of the map: his way leads to it as to the enemy's believed place
+        w = np.where(v > 0, np.asarray(weapon, np.int64)[:n], -1)
+        wh = np.where(v > 0, np.asarray(when, np.float32)[:n], -1.0).astype(np.float32)
+        q_ = np.zeros(n, np.int64) if quiet is None else (np.asarray(quiet, np.int64)[:n] > 0).astype(np.int64)
+        self.ins_q = np.where(who, np.where(v > 0, q_, 0), self.ins_q[:n])     # (quiet asked or not: the same instruction either way)
+        fixed_p = np.isin(v, (INS_GO, INS_CONTEST, INS_HOLD, INS_SPAM))
+        fixed_o = v == INS_SPAM                              # (a hold's opening may change with the belief: the same hold)
+        new = who & ((v != self.ins_v[:n]) | (tg != self.ins_tg[:n]) | (w != self.ins_w[:n]) | (pok != self.ins_pok[:n]) | (ook != self.ins_ook[:n])
+                     | (fixed_p & pok & (np.linalg.norm(p - self.ins_p[:n], axis=1) > INS_MOVED))
+                     | (fixed_o & ook & (np.linalg.norm(o - self.ins_o[:n], axis=1) > INS_MOVED)))
+        self.ins_v = np.where(who, v, self.ins_v[:n])
+        self.ins_tg = np.where(who, tg, self.ins_tg[:n])
+        self.ins_p = np.where(who[:, None], p, self.ins_p[:n]).astype(np.float32)
+        self.ins_pok = np.where(who, pok, self.ins_pok[:n])
+        self.ins_o = np.where(who[:, None], o, self.ins_o[:n]).astype(np.float32)
+        self.ins_ook = np.where(who, ook, self.ins_ook[:n])
+        self.ins_w = np.where(who, w, self.ins_w[:n])
+        self.ins_when = np.where(who, wh, self.ins_when[:n]).astype(np.float32)
+        self.ins_when0 = np.where(new, wh, self.ins_when0[:n]).astype(np.float32)
+        self.ins_t = np.where(new, 0.0, self.ins_t[:n]).astype(np.float32)
+        self.ins_st = np.where(new, INS_ON_WAY, self.ins_st[:n])
+        self.ins_in = self.ins_in[:n] & ~new
+        self.ins_cur = np.where(who, -1, self.ins_cur[:n])   # (instr_pick() sets the row after this)
+        if new.any():
+            bel_, bok_ = self._ins_bel()
+            self.ins_b0 = np.where(new[:, None], bel_, self.ins_b0[:n]).astype(np.float32)
+            self.ins_b0k = np.where(new, bok_, self.ins_b0k[:n])
+            st_, _, sk_, _ = self._fin_belief()              # (third pass, the wake) his belief of the enemy's stack as it is given
+            self.ins_s00 = np.where(new, st_, self.ins_s00[:n]).astype(np.float32)
+            self.ins_s0 = np.where(new, st_, self.ins_s0[:n]).astype(np.float32)
+            self.ins_sok = np.where(new, sk_, self.ins_sok[:n])
+
+    def _ins_step(self):
+        """(2.1, INSTR) every frame, after his target is read: the clocks and the state of the instruction each seat is under
+        (docs/runs/2.1/INSTRUCTION.md's table), from what he sees and knows only (his sight of the enemy, his own place and weapon,
+        his target's own "taken" and the item belief's books). A done or failed instruction stays as it is until another is
+        given; his death ends it. Pays nothing, draws nothing."""
+        n = self.n
+        v = self.ins_v[:n]
+        dead = (v > 0) & ~(self.hp[:n] > 0)
+        if dead.any():
+            self.ins_v = np.where(dead, 0, v)
+            self.ins_tg = np.where(dead, -1, self.ins_tg[:n])
+            self.ins_cur = np.where(dead, -1, self.ins_cur[:n])
+            self.ins_q = np.where(dead, 0, self.ins_q[:n])
+            self.ins_spk = np.where(dead, -1, self.ins_spk[:n])
+            v = self.ins_v
+        on = v > 0
+        if not on.any():
+            return
+        ar = np.arange(n)
+        self.ins_t = np.where(on, self.ins_t[:n] + DT, self.ins_t[:n]).astype(np.float32)
+        self.ins_when = np.where(on & (self.ins_when[:n] >= 0), np.maximum(self.ins_when[:n] - DT, 0.0), self.ins_when[:n]).astype(np.float32)
+        pos = self.state[:n, :3]
+        d = np.where(self.ins_pok[:n], np.linalg.norm(pos - self.ins_p[:n], axis=1), 1e9)
+        vis = np.asarray(self.visible, bool)[:n]
+        w = self.ins_w[:n]
+        wc = np.clip(w, 0, NW - 1)
+        inhand = (w < 0) | (self.weapon[:n] == w)
+        tg = self.ins_tg[:n]
+        mine = (tg >= 0) & (self.intent[:n] == tg)
+        took = mine & self.intent_done[:n] & (tg >= 1) & (tg < EN_INTENT)          # he took the item it is about
+        lost = np.zeros(n, bool)                                                   # ... or knows it taken since it was given, not by him
+        if ITEM_BELIEF and self.route_item:
+            gi = np.asarray(self.intent_gi)[np.clip(tg, 0, len(self.intent_gi) - 1)]
+            ok = on & (tg >= 1) & (tg < EN_INTENT) & (gi >= 0) & (gi < self.bel_t.shape[1])
+            lost = ok & (self.bel_t[ar, np.clip(gi, 0, self.bel_t.shape[1] - 1)] < self.ins_t) & ~took
+        doing, done, failed = np.zeros(n, bool), np.zeros(n, bool), np.zeros(n, bool)
+        m = on & (v == INS_GO)
+        done |= m & (took | (d < INS_GO_R))
+        failed |= m & lost
+        m = on & (v == INS_CONTEST)
+        doing |= m & (d < INS_CONTEST_R)
+        done |= m & took
+        failed |= m & lost
+        m = on & (v == INS_HOLD)
+        doing |= m & (d < INS_HOLD_R) & inhand
+        failed |= m & self.ins_in[:n] & (d > INS_HOLD_OFF)
+        m = on & (v == INS_SPAM)
+        at = m & (d < INS_SPAM_R)
+        far = np.nonzero(m & ~at & self.ins_ook[:n])[0]
+        if len(far):                                         # (not at the place to fire from: the point in sight within reach will do)
+            eye_ = self._eye(self.state[far])
+            near_ = np.linalg.norm(self.ins_o[far] - eye_, axis=1) < INS_SPAM_RANGE
+            if near_.any():
+                at[far[near_][self._los(eye_[near_], self.ins_o[far][near_])]] = True
+        doing |= at & inhand
+        failed |= m & (w >= 0) & ~(self.has[ar, wc] & (self.ammo[ar, wc] > 0))
+        m = on & (v == INS_PUSH)
+        doing |= m & vis
+        done |= m & ~(self.hp[self._others_arr()[:n, 0]] > 0)
+        m = on & (v == INS_CUT)
+        doing |= m & (d < INS_CUT_R)
+        done |= m & self.ins_in[:n] & vis
+        failed |= m & (self.ins_when0[:n] >= 0) & (self.ins_t > self.ins_when0[:n] + INS_CUT_LATE) & ~vis & ~done
+        m = on & (v == INS_OUT)
+        away = np.ones(n, bool)
+        if m.any():
+            bel, bok = self._ins_bel()
+            away = ~bok | (np.linalg.norm(pos - bel, axis=1) > INS_OUT_D)
+        done |= m & ~vis & (self.seen_t[:n] >= INS_OUT_T) & away
+        m = on & (v == INS_CHECK)                            # (second pass) check: on his way until he has looked
+        doing |= m
+        ck = np.nonzero(m & self.ins_ook[:n] & ~vis)[0]
+        if len(ck):
+            done[ck] = self._los(self._eye(self.state[ck]), self.ins_o[ck])
+        done |= m & vis
+        self.ins_in = self.ins_in[:n] | (on & doing)
+        st = self.ins_st[:n]
+        ended = on & ((st == INS_DONE) | (st == INS_FAILED))  # (kept: an end is not taken back)
+        new = np.where(done, INS_DONE, np.where(failed, INS_FAILED, np.where(doing, INS_DOING, INS_ON_WAY)))
+        self.ins_st = np.where(on & ~ended, new, st)
+
+    def _ins_clock(self):
+        """(2.1; INSTR, KNOWN_TRUTH, SPAWN_TRUTH) every frame, before the instruction's state: the clocks the spawn rows and the
+        labels read: seconds since his enemy died (he knows a death: the game tells every player; RESPAWN_QL's wait is the mark),
+        seconds since he heard the enemy (the last frame's senses: placed by a sound, not seen), seconds since he made a
+        footstep or a jump. Reads the game; keeps only these."""
+        n = self.n
+        foe = self._others_arr()[:n, 0]
+        dw = (self.rsp_wait[foe] > 0) if RESPAWN_QL else np.zeros(n, bool)
+        self.ins_dead_t = np.where(dw & ~self.ins_dw[:n], 0.0, np.minimum(self.ins_dead_t[:n] + DT, 99.0)).astype(np.float32)
+        self.ins_dw = dw
+        hn = (self.seen_t[:n] <= 0.0) & ~np.asarray(getattr(self, "acquired", np.zeros(self.n, bool)), bool)[:n]
+        self.ins_heard_t = np.where(hn, 0.0, np.minimum(self.ins_heard_t[:n] + DT, 99.0)).astype(np.float32)
+        self.ins_noise = np.where(np.asarray(self.hf_ev, bool)[:n], 0.0, np.minimum(self.ins_noise[:n] + DT, 99.0)).astype(np.float32)
+        if INSTR:                                            # (third pass) the pattern's clocks and the wake: from his senses and his belief
+            vis = np.asarray(self.visible, bool)[:n]
+            self.ins_gap = np.where(vis & (self.ins_vis_t[:n] <= 0), self.ins_unseen[:n], self.ins_gap[:n]).astype(np.float32)
+            self.ins_vis_t = np.where(vis, np.minimum(self.ins_vis_t[:n] + DT, 99.0), 0.0).astype(np.float32)
+            self.ins_unseen = np.where(vis, 0.0, np.minimum(self.ins_unseen[:n] + DT, 99.0)).astype(np.float32)
+            self.ins_chunk_t = np.minimum(self.ins_chunk_t[:n] + DT, 99.0).astype(np.float32)
+            pt = np.asarray(self.pain_t, np.float32)[:n]
+            pain = pt < self.ins_pain_p[:n] - 1e-6           # the clock went back: he heard the enemy's pain sound
+            self.ins_pain_p = pt.copy()
+            on = self.ins_v[:n] > 0
+            wf = np.minimum(self.ins_wake_f[:n] + 1, 9999)
+            if on.any():
+                st, _, sk, _ = self._fin_belief()
+                had = self.ins_sok[:n]
+                drop = on & sk & had & (self.ins_s0[:n] - st >= INS_WAKE_DROP)
+                wake = on & (drop | (pain & (wf >= INS_WAKE_GAP)))   # (a pain sound: not twice within INS_WAKE_GAP frames, the game's own 0.5 s)
+                self.ins_s0 = np.where(on & sk, np.where(wake | ~had, st, np.maximum(self.ins_s0[:n], st)), self.ins_s0[:n]).astype(np.float32)
+                self.ins_s00 = np.where(on & sk & ~had, st, self.ins_s00[:n]).astype(np.float32)
+                self.ins_sok = had | (on & sk)
+                wf = np.where(wake, 0, wf)
+            self.ins_wake_f = wf
+
+    def _fin_belief(self):
+        """(2.1, the finish time) his BELIEF of the enemy's stack, never the truth -> (stack [n], its spread [n], he has one [n],
+        the distance's band [n] of FIN_BANDS). A life on the brain (BRAIN_READ): the brain's stack band odds times BRAIN_BAND_MID
+        and the spread of those odds (no answer: no belief); any other seat: the stack belief of EN_STACK (what he dealt, heard and
+        saw) and its spread; neither: none. The distance: to the enemy in his view, else to where he believes him, else FIN_MID.
+        A read: the readers' counters are put back."""
+        n = self.n
+        ar = np.arange(n)
+        foe = self._others_arr()[:n, 0]
+        st, sd, ok = np.zeros(n, np.float32), np.zeros(n, np.float32), np.zeros(n, bool)
+        eh = getattr(self, "es_h", None)
+        if EN_STACK and eh is not None and len(eh) == n:
+            so = self._slot(foe)
+            st = (self.es_h[ar, so] + self.es_a[ar, so]).astype(np.float32)
+            sd = np.sqrt(np.maximum(self.es_vh[ar, so] + self.es_va[ar, so], 0.0)).astype(np.float32)
+            ok = np.ones(n, bool)
+        bl = getattr(self, "brain_life", None)
+        if BRAIN_READ and bl is not None and len(bl) == n and np.asarray(bl, bool).any():
+            on = np.asarray(bl, bool)
+            b = np.asarray(self.brain_band, np.float64)[:n]
+            tot = b.sum(1)
+            bo = on & np.asarray(self.brain_ok, bool)[:n] & (tot > 1e-6)
+            m = (b @ BRAIN_BAND_MID.astype(np.float64)) / np.maximum(tot, 1e-6)
+            v = (b @ (BRAIN_BAND_MID.astype(np.float64) ** 2)) / np.maximum(tot, 1e-6) - m * m
+            st = np.where(on, np.where(bo, m, 0.0), st).astype(np.float32)
+            sd = np.where(on, np.where(bo, np.sqrt(np.maximum(v, 0.0)), 0.0), sd).astype(np.float32)
+            ok = np.where(on, bo, ok)
+        pos = self.state[:n, :3].astype(np.float32)
+        vis = np.asarray(getattr(self, "visible", np.zeros(n, bool)), bool)[:n]
+        bel, bok = self._ins_bel()
+        d = np.where(vis, np.linalg.norm(pos - pos[foe], axis=1), np.where(bok, np.linalg.norm(pos - bel, axis=1), FIN_MID))
+        return st, sd, ok, np.digitize(d, FIN_BANDS).astype(np.int64)
+
+    def _fin(self):
+        """(2.1, the finish time; see FIN_T) -> (fin [n, NW], fin_hi [n, NW], fire [n, NW], he has a belief [n]), as the inputs
+        carry them: seconds to finish the enemy with each weapon / FIN_T and the cautious one (his believed stack plus its spread),
+        at most 2 (2: a weapon he cannot use, a rate of 0, no belief); seconds of fire he has with it / FIN_FIRE_T, at most 2 (the
+        gauntlet he owns: 2). A dead seat: zeros."""
+        n = self.n
+        st, sd, ok, band = self._fin_belief()
+        alive = self.hp[:n] > 0
+        has = self.has[:n].astype(bool)
+        am = np.asarray(self.ammo[:n], np.float32)
+        isg = (np.arange(NW) == G)[None, :]
+        use = has & ((am > 0) | isg) & alive[:, None]
+        rate = np.asarray(FIN_RATE, np.float32)[:, band].T    # [n, NW]
+        can = use & ok[:, None] & (rate > 0)
+        r_ = np.maximum(rate, 1e-6)
+        fin = np.where(can, np.minimum(st[:, None] / r_ / FIN_T, 2.0), 2.0)
+        fhi = np.where(can, np.minimum((st + sd)[:, None] / r_ / FIN_T, 2.0), 2.0)
+        fire = np.where(use, np.where(isg, 2.0, np.minimum(am * W_REFIRE[None, :] / FIN_FIRE_T, 2.0)), 0.0)
+        af = alive[:, None]
+        return (fin * af).astype(np.float32), (fhi * af).astype(np.float32), (fire * af).astype(np.float32), ok & alive
+
+    def instr_pattern(self):
+        """(2.1, INSTR; see INS_CHUNK) the moments of the owner's pattern, for the frozen moments that teach the weapon -> [n] int8:
+        1 = just after a chunk hit of his or a pain sound heard, the enemy alive and near; 2 = a fight's start with both stacks
+        high; 0 = neither. From his senses and his belief only. A read."""
+        n = self.n
+        out = np.zeros(n, np.int8)
+        if not INSTR:
+            return out
+        foe = self._others_arr()[:n, 0]
+        alive = (self.hp[:n] > 0) & (self.hp[foe] > 0)
+        st, _, ok, _ = self._fin_belief()
+        vis = np.asarray(self.visible, bool)[:n]
+        bel, bok = self._ins_bel()
+        pos = self.state[:n, :3].astype(np.float32)
+        near = vis | (bok & (np.linalg.norm(pos - bel, axis=1) < INS_PAT_NEAR))
+        hit = np.minimum(self.ins_chunk_t[:n], np.asarray(self.pain_t, np.float32)[:n]) < INS_PAT_SECS
+        out[alive & near & hit] = 1
+        mine = np.asarray(self.hp[:n], np.float32) + np.asarray(self.armor[:n], np.float32)
+        start = alive & vis & (self.ins_vis_t[:n] < INS_PAT_SECS) & (self.ins_gap[:n] >= INS_PAT_UNSEEN) & (mine >= INS_PAT_HIGH) & ok & (st >= INS_PAT_HIGH)
+        out[start & (out == 0)] = 2
+        return out
+
+    def _ins_bel(self):
+        """(2.1) where he believes the enemy [n, 3] and that he believes a place [n], read for the instruction (the readers'
+        counters as without the reading)"""
+        n = self.n
+        br_ = self.stats.get("brain_read")
+        br_ = None if br_ is None else np.copy(br_)
+        try:
+            bel, bok = self._bel_base("hunt", np.zeros(0, np.int64))
+        finally:
+            if br_ is not None:
+                self.stats["brain_read"] = br_
+            else:
+                self.stats.pop("brain_read", None)
+        if bel is None or bok is None or len(bel) != n:
+            return np.zeros((n, 3), np.float32), np.zeros(n, bool)
+        return np.asarray(bel, np.float32)[:n], np.asarray(bok, bool)[:n]
+
+    def instr_feat(self):
+        """(2.1, INSTR) every seat's candidate instructions of this tick and their numbers, for the head and the appraisals ->
+        X [n, INS_C, INS_F] float32 (columns INS_FEAT; an invalid row: its verb alone), ok [n, INS_C] (the row can be chosen),
+        wok [n, NW] (a weapon he owns with ammunition: the head's second choice). The rows are kept (ins_c*) for instr_pick().
+        A read: nothing of the game changes, the readers' counters are put back, no draw is made."""
+        br_ = self.stats.get("brain_read")
+        br_ = None if br_ is None else np.copy(br_)
+        try:
+            return self._instr_feat()
+        finally:
+            if br_ is not None:
+                self.stats["brain_read"] = br_
+            else:
+                self.stats.pop("brain_read", None)
+
+    def _instr_feat(self):
+        n = self.n
+        C = INS_C
+        X = np.zeros((n, C, INS_F), np.float32)
+        ok = np.zeros((n, C), bool)
+        tg = np.full((n, C), -1, np.int64)
+        P, pk = np.zeros((n, C, 3), np.float32), np.zeros((n, C), bool)
+        O, og = np.zeros((n, C, 3), np.float32), np.zeros((n, C), bool)
+        wh = np.full((n, C), -1.0, np.float32)
+        csp = np.full((n, C), -1, np.int64)
+        ar = np.arange(n)
+        alive = self.hp[:n] > 0
+        wok = self.has[:n].astype(bool) & ((self.ammo[:n] > 0) | (np.arange(NW)[None, :] == G)) & alive[:, None]
+        F = {f_: j_ for j_, f_ in enumerate(INS_FEAT)}
+        X[:, np.arange(C), INS_ROW_VERB] = 1.0
+        X[:, INS_ROW0["spare"], 0] = 0.0
+        R, om = self.route, self.om
+        cur = np.where(self.ins_v[:n] > 0, self.ins_cur[:n], -1)
+        if INSTR:
+            ok[:, INS_NONE_ROW] = alive & (not INS_NO_NONE)
+        if INSTR and R is not None and om is not None:
+            s = self.state[:n]
+            pos = s[:, :3].astype(np.float32)
+            eye = self._eye(s)
+            nh = R.locate(pos)
+            fut, fok, bel, bok, pred, pok = self._cmb_ahead()
+            nb = R.locate(bel)
+            npd = R.locate(pred.reshape(-1, 3)).reshape(n, 3)
+            V, WT = om["vis"], om["walk"]
+            yaw = np.radians(self.yaw[:n])
+            cy, sy = np.cos(yaw), np.sin(yaw)
+            grp = ar // (self._others_arr().shape[1] + 1)
+            ws_n = ws_w = None                               # (INS_WAY) the map's spam points the believed enemy has a line to within reach
+            if INS_WAY and len(om["spam_pos"]):
+                ws_p = np.asarray(om["spam_pos"], np.float32)
+                ws_n = np.asarray(om["spam_node"], np.int64)
+                ws_k = np.asarray(om["spam_kind"]) == 1      # a teleporter's end
+                ws_w = bok[:, None] & V[ws_n[None, :], nb[:, None]] & (np.linalg.norm(ws_p[None] - bel[:, None, :], axis=2) < INS_SPAM_RANGE)
+                for h_ in range(pred.shape[1]):
+                    ws_w = ws_w | (pok[:, None] & V[ws_n[None, :], npd[:, h_, None]]
+                                   & (np.linalg.norm(ws_p[None] - pred[:, h_, None, :], axis=2) < INS_SPAM_RANGE))
+                ws_a = WT[ws_n[None, :], nh[:, None]]        # [n, S] his seconds of walking to each point
+
+            def fill(r0, pts, nodes, valid, t_me=None):
+                """rows r0.. of every seat: places pts [n, m, 3], their walking points [n, m], valid [n, m]"""
+                rr = slice(r0, r0 + pts.shape[1])
+                tm = WT[nodes, nh[:, None]] if t_me is None else t_me
+                valid = np.asarray(valid, bool) & (tm < 1e4)
+                te = np.where(bok[:, None], WT[nodes, nb[:, None]], 60.0)
+                P[:, rr], pk[:, rr], ok[:, rr] = pts, valid, valid
+                X[:, rr, F["t_me"]] = np.clip(tm / 10.0, 0.0, 2.0)
+                X[:, rr, F["t_en"]] = np.clip(te / 10.0, 0.0, 2.0)
+                X[:, rr, F["lead"]] = np.clip((np.minimum(te, 20.0) - np.minimum(tm, 20.0)) / 10.0, -2.0, 2.0)
+                d = pts - eye[:, None, :]
+                X[:, rr, F["height"]] = np.clip((pts[..., 2] - pos[:, None, 2]) / 200.0, -3.0, 3.0)
+                X[:, rr, F["range"]] = np.clip(np.linalg.norm(d, axis=2) / 1000.0, 0.0, 3.0)
+                X[:, rr, F["fwd"]] = np.clip((cy[:, None] * d[..., 0] + sy[:, None] * d[..., 1]) / 1000.0, -3.0, 3.0)
+                X[:, rr, F["left"]] = np.clip((-sy[:, None] * d[..., 0] + cy[:, None] * d[..., 1]) / 1000.0, -3.0, 3.0)
+                for h_, f_ in enumerate(("sees_1", "sees_2", "sees_4")):
+                    X[:, rr, F[f_]] = V[nodes, npd[:, h_, None]] * pok[:, None]
+                X[:, rr, F["seen_me"]] = V[nodes, nh[:, None]]
+                if INS_WAY:                                  # (the receiver's side) a watched spam point on his way to the place
+                    X[:, rr, F["way_seen_t"]] = 2.0
+                    if ws_n is not None:
+                        t0_ = WT[nodes, nh[:, None]]                                   # [n, m] the walking time to the place
+                        on_ = ((ws_a[:, None, :] + WT[nodes[:, :, None], ws_n[None, None, :]] <= t0_[:, :, None] + INS_WAY_TOL)
+                               & (t0_[:, :, None] < 1e4) & ws_w[:, None, :])               # [n, m, S]
+                        ta_ = np.where(on_, ws_a[:, None, :], np.inf)
+                        j_ = ta_.argmin(2)
+                        tb_ = np.take_along_axis(ta_, j_[:, :, None], 2)[:, :, 0]
+                        hit_ = np.isfinite(tb_)
+                        X[:, rr, F["way_seen"]] = hit_
+                        X[:, rr, F["way_seen_t"]] = np.where(hit_, np.clip(tb_ / 10.0, 0.0, 2.0), 2.0)
+                        X[:, rr, F["way_tele"]] = hit_ & ws_k[j_]
+
+            def point(r0, pts, given, when=None):
+                """the rows' point to watch or shoot [n, m, 3], whether there is one [n, m], the enemy's seconds to it [n, m]"""
+                rr = slice(r0, r0 + pts.shape[1])
+                given = np.asarray(given, bool)
+                O[:, rr], og[:, rr] = np.where(given[..., None], pts, 0.0), given
+                X[:, rr, F["pt_given"]] = given
+                X[:, rr, F["pt_range"]] = np.clip(np.linalg.norm(pts - eye[:, None, :], axis=2) / 1000.0, 0.0, 3.0) * given
+                pn_ = R.locate(pts.reshape(-1, 3)).reshape(pts.shape[:2])
+                X[:, rr, F["pt_line"]] = V[R.locate(P[:, rr].reshape(-1, 3)).reshape(pts.shape[:2]), pn_] * given
+                if when is not None:
+                    kn = given & (when >= 0) & (when < 30.0)
+                    wh[:, rr] = np.where(kn, when, -1.0)
+                    X[:, rr, F["when_ok"]] = kn
+                    X[:, rr, F["when"]] = np.clip(when / 4.0, 0.0, 2.0) * kn
+
+            # go and contest: the items (the instance his way finds first), by what he knows of them
+            ng = len(INS_GO_TG)
+            gp = np.repeat(pos[:, None, :], ng, 1).copy()
+            gv = np.zeros((n, ng), bool)
+            gup, gback = np.zeros((n, ng), np.float32), np.zeros((n, ng), np.float32)
+            for j_, k_ in enumerate(INS_GO_TG):
+                gi_ = self._trip_goal(np.full(n, k_), nh, who=ar)
+                ok_ = gi_ >= 0
+                if ok_.any():
+                    g_ = np.maximum(gi_, 0)
+                    gp[:, j_] = np.where(ok_[:, None], R.goals[g_], pos)
+                    gv[:, j_] = ok_
+                    it_ = np.minimum(g_, len(self.route_item) - 1)
+                    for gg_ in np.unique(it_[ok_]):
+                        w_ = ok_ & (it_ == gg_)
+                        up_, back_ = (np.asarray(x_) for x_ in self._goal_state(int(gg_), grp))
+                        gup[w_, j_] = up_[w_].astype(np.float32)
+                        gback[w_, j_] = np.minimum(back_[w_] / 30.0, 2.0)
+            gn = R.locate(gp.reshape(-1, 3)).reshape(n, ng)
+            r0 = INS_ROW0["go"]
+            fill(r0, gp, gn, gv)
+            X[:, r0:r0 + ng, F["item_up"]], X[:, r0:r0 + ng, F["item_back"]] = gup, gback
+            tg[:, r0:r0 + ng] = np.asarray(INS_GO_TG)[None, :]
+            cj = [INS_GO_TG.index(k_) for k_ in INS_CONTEST_TG]
+            r0 = INS_ROW0["contest"]
+            fill(r0, gp[:, cj], gn[:, cj], gv[:, cj])
+            X[:, r0:r0 + len(cj), F["item_up"]], X[:, r0:r0 + len(cj), F["item_back"]] = gup[:, cj], gback[:, cj]
+            tg[:, r0:r0 + len(cj)] = np.asarray(INS_CONTEST_TG)[None, :]
+            point(r0, np.repeat(pred[:, :1, :], len(cj), 1), np.repeat(pok[:, None], len(cj), 1))   # (where the brain expects him in a second)
+            # hold: the map's holding places, each watching its best opening: of the map's doorways and corridors (the spam points)
+            # its place sees, the one nearest where the brain expects him in a second (without a belief: nearest the place)
+            H = min(int(self.hold_n), HOLD_SLOTS)
+            S = len(om["spam_pos"])
+            r0 = INS_ROW0["hold"]
+            if H:
+                hp_ = np.repeat(np.asarray(self.hold_pos[:H], np.float32)[None], n, 0)
+                hn_ = np.repeat(np.asarray(self.hold_node[:H], np.int64)[None], n, 0)
+                fill(r0, hp_, hn_, np.ones((n, H), bool))
+                tg[:, r0:r0 + H] = HOLD_INTENT + np.arange(H)[None, :]
+                if S:
+                    sp_all = np.asarray(om["spam_pos"], np.float32)
+                    sn_all = np.asarray(om["spam_node"], np.int64)
+                    see = V[np.asarray(self.hold_node[:H], np.int64)[:, None], sn_all[None, :]]          # [H, S]
+                    ref = np.where(pok[:, None, None], np.repeat(pred[:, :1, :], H, 1), hp_)             # [n, H, 3]
+                    dd = np.linalg.norm(sp_all[None, None, :, :] - ref[:, :, None, :], axis=3)           # [n, H, S]
+                    dd = np.where(see[None, :, :], dd, 1e9)
+                    pick = dd.argmin(2)
+                    has_ = np.take_along_axis(dd, pick[..., None], 2)[..., 0] < 1e8
+                    point(r0, sp_all[pick], has_, np.where(bok[:, None], WT[sn_all[pick], nb[:, None]], -1.0))
+            # spam: the points nearest the brain's places ahead (else the belief), each with the place to fire from nearest him by
+            # his way; the point he is on stays in its row, with its place to fire from
+            r0 = INS_ROW0["spam"]
+            K = INS_BLOCKS[3][1]
+            can_ = wok[:, list(INS_SPAM_W)].any(1)
+            if S:
+                dmin = np.linalg.norm(np.asarray(om["spam_pos"], np.float32)[None, :, None, :] - pred[:, None, :, :], axis=3).min(2)   # [n, S]
+                k_ = min(K, S)
+                order = np.argsort(dmin, axis=1)
+                pick = order[:, :k_].copy()
+                pin = np.nonzero((cur >= r0) & (cur < r0 + k_) & (self.ins_v[:n] == INS_SPAM) & self.ins_ook[:n])[0]
+                for i_ in pin:
+                    star = int(np.linalg.norm(np.asarray(om["spam_pos"], np.float32) - self.ins_o[i_], axis=1).argmin())
+                    rest = [int(x_) for x_ in order[i_] if int(x_) != star][:k_ - 1]
+                    rest.insert(min(int(cur[i_]) - r0, len(rest)), star)
+                    pick[i_] = rest
+                Fm = om["spam_fire"][pick]                                   # [n, k, nodes]
+                tm = np.where(Fm, WT[:, nh].T[:, None, :], np.inf)
+                fn = tm.argmin(2)
+                ft = tm.min(2)
+                fplace = np.asarray(R.nodes, np.float32)[fn]
+                for i_ in pin:                                               # (his place to fire from is kept)
+                    j_ = int(cur[i_]) - r0
+                    if j_ < k_ and self.ins_pok[i_]:
+                        fplace[i_, j_] = self.ins_p[i_]
+                        ft[i_, j_] = WT[R.locate(self.ins_p[i_][None])[0], nh[i_]]
+                sv = np.isfinite(ft) & (ft < 1e4) & pok[:, None] & can_[:, None]
+                sp = np.asarray(om["spam_pos"], np.float32)[pick]
+                fill(r0, fplace, R.locate(fplace.reshape(-1, 3)).reshape(n, k_), sv, t_me=np.where(np.isfinite(ft), ft, 60.0))
+                rr = slice(r0, r0 + k_)
+                kd_ = om["spam_kind"][pick]
+                X[:, rr, F["door"]] = kd_ == 0
+                X[:, rr, F["corridor"]] = om["spam_corr"][pick]
+                X[:, rr, F["width"]] = np.minimum(om["spam_width"][pick] / 1000.0, 1.0)
+                X[:, rr, F["tele"]] = kd_ == 1
+                point(r0, sp, np.ones((n, k_), bool), np.where(bok[:, None], WT[np.asarray(om["spam_node"], np.int64)[pick], nb[:, None]], -1.0))
+            # push: the enemy where he believes him
+            r0 = INS_ROW0["push"]
+            fill(r0, bel[:, None, :], nb[:, None], bok[:, None])
+            point(r0, bel[:, None, :], bok[:, None])
+            # cut off: the brain's places for him 1, 2, 4 s ahead; the point: where he believes him now
+            r0 = INS_ROW0["cut"]
+            fill(r0, fut, R.locate(fut.reshape(-1, 3)).reshape(n, 3), np.repeat(fok[:, None], 3, 1))
+            point(r0, np.repeat(bel[:, None, :], 3, 1), np.repeat(bok[:, None], 3, 1), np.repeat(np.array([[1.0, 2.0, 4.0]], np.float32), n, 0))
+            # break off: the ways out and the health and armor items (up, or due within his way) that the brain's places ahead do
+            # not see, the three whose way favours him most; the way out he is on stays in its row
+            r0 = INS_ROW0["out"]
+            K = INS_BLOCKS[6][1]
+            op, on_, okd = [np.asarray(om["out_pos"], np.float32).reshape(-1, 3)], [np.asarray(om["out_node"], np.int64)], [np.asarray(om["out_kind"], np.int64)]
+            oit = [gi_ for gi_, lab_ in enumerate(self.route_goal) if lab_ in ("MH", "RA", "YA", "YA2")]
+            if oit:
+                op.append(np.asarray(R.goals[oit], np.float32))
+                on_.append(R.locate(R.goals[oit]))
+                okd.append(np.full(len(oit), 4, np.int64))
+            op, on_, okd = np.concatenate(op), np.concatenate(on_), np.concatenate(okd)
+            if len(op):
+                n0 = len(om["out_pos"])
+                tm = WT[on_][:, nh].T                                        # [n, k]
+                te = np.where(bok[:, None], WT[on_][:, nb].T, 60.0)
+                seen = V[on_][:, npd.reshape(-1)].reshape(len(on_), n, 3).any(2).T & pok[:, None]
+                okit = np.ones((n, len(on_)), bool)
+                for j_, gi_ in enumerate(oit):
+                    up_, back_ = (np.asarray(x_)[:n] for x_ in self._goal_state(gi_, grp))
+                    okit[:, n0 + j_] = up_.astype(bool) | (back_ <= tm[:, n0 + j_])
+                sc = np.where(~seen & okit & (tm < 1e4), te - tm, -1e9)
+                k_ = min(K, len(op))
+                order = np.argsort(-sc, axis=1)
+                pick = order[:, :k_].copy()
+                pin = np.nonzero((cur >= r0) & (cur < r0 + k_) & (self.ins_v[:n] == INS_OUT) & self.ins_pok[:n])[0]
+                for i_ in pin:
+                    star = int(np.linalg.norm(op - self.ins_p[i_], axis=1).argmin())
+                    rest = [int(x_) for x_ in order[i_] if int(x_) != star][:k_ - 1]
+                    rest.insert(min(int(cur[i_]) - r0, len(rest)), star)
+                    pick[i_] = rest
+                ov = np.take_along_axis(sc, pick, 1) > -1e8
+                ov[pin, np.minimum(cur[pin] - r0, k_ - 1)] = True            # (the one he is on: his to keep, whatever it scores now)
+                fill(r0, op[pick], on_[pick], ov)
+                rr = slice(r0, r0 + k_)
+                X[:, rr, F["door"]] = okd[pick] == 1
+                X[:, rr, F["tele"]] = okd[pick] == 3
+                point(r0, np.repeat(pred[:, :1, :], k_, 1), np.repeat(pok[:, None], k_, 1))
+                for j_, gi_ in enumerate(oit):                              # (an item's numbers as a target's)
+                    ii_, jj_ = np.nonzero(pick == n0 + j_)
+                    if len(ii_):
+                        up_, back_ = (np.asarray(x_)[:n] for x_ in self._goal_state(gi_, grp))
+                        X[ii_, r0 + jj_, F["item_up"]] = up_[ii_].astype(np.float32)
+                        X[ii_, r0 + jj_, F["item_back"]] = np.minimum(back_[ii_] / 30.0, 2.0)
+            # (second pass) check: for the brain's places 1, 2, 4 s ahead (the belief without its forecast), the walking point
+            # nearest him by his way that has a line to that place; the point: the place to look at
+            r0 = INS_ROW0["check"]
+            tall = WT[:, nh].T                                               # [n, nodes]: his seconds to every walking point
+            cn, ct = np.zeros((n, 3), np.int64), np.full((n, 3), np.inf, np.float32)
+            for h_ in range(3):
+                cost = np.where(V[:, npd[:, h_]].T, tall, np.inf)
+                cn[:, h_] = cost.argmin(1)
+                ct[:, h_] = cost.min(1)
+            cv = np.isfinite(ct) & (ct < 1e4) & pok[:, None]
+            fill(r0, np.asarray(R.nodes, np.float32)[cn], cn, cv, t_me=np.where(np.isfinite(ct), ct, 60.0))
+            point(r0, pred, np.repeat(pok[:, None], 3, 1), np.repeat(np.array([[1.0, 2.0, 4.0]], np.float32), n, 0))
+            # the spawn points, for INS_SPAWN_SECS after the enemy's death: the far half from where he stands now (the rule's
+            # visible part), the SPAWN_K nearest him by his way; the one he is on stays in its row
+            SP = np.asarray(self.spawns, np.float32)
+            if RESPAWN_QL and len(SP):
+                if self.ins_spn is None:
+                    self.ins_spn = R.locate(SP)
+                    nd_ = np.asarray(R.nodes, np.float32)
+                    self.ins_spfire = V[:, self.ins_spn].T & (np.linalg.norm(nd_[None, :, :] - SP[:, None, :], axis=2) < INS_SPAM_RANGE)   # [spawns, nodes]
+                sn = self.ins_spn
+                foe = self._others_arr()[:n, 0]
+                sw = alive & (self.ins_dead_t[:n] < INS_SPAWN_SECS)
+                left = (self.rsp_wait[foe] * DT).astype(np.float32)          # what is left of his wait (0: he is back)
+                dsp = np.linalg.norm(SP[None, :, :] - pos[:, None, :], axis=2)
+                far = dsp > np.median(dsp, axis=1, keepdims=True)
+                tsp = np.where(far, WT[sn][:, nh].T, np.inf)                 # [n, spawns]
+                k_ = min(SPAWN_K, len(SP))
+                order = np.argsort(tsp, axis=1)
+                for b_, vb_ in (("spush", INS_PUSH), ("sspam", INS_SPAM)):
+                    r0 = INS_ROW0[b_]
+                    pick = order[:, :k_].copy()
+                    pin = np.nonzero((cur >= r0) & (cur < r0 + k_) & (self.ins_spk[:n] >= 0) & (self.ins_spk[:n] < len(SP)))[0]
+                    for i_ in pin:
+                        star = int(self.ins_spk[i_])
+                        rest = [int(x_) for x_ in order[i_] if int(x_) != star][:k_ - 1]
+                        rest.insert(min(int(cur[i_]) - r0, len(rest)), star)
+                        pick[i_] = rest
+                    pv = np.isfinite(np.take_along_axis(tsp, pick, 1)) & sw[:, None]
+                    pv[pin, np.minimum(cur[pin] - r0, k_ - 1)] = sw[pin]     # (the one he is on: his to keep while the window lasts)
+                    rr = slice(r0, r0 + k_)
+                    if vb_ == INS_PUSH:
+                        fill(r0, SP[pick], sn[pick], pv)
+                    else:
+                        tm = np.where(self.ins_spfire[pick], tall[:, None, :], np.inf)
+                        fn, ft = tm.argmin(2), tm.min(2)
+                        fill(r0, np.asarray(R.nodes, np.float32)[fn], fn, pv & np.isfinite(ft) & can_[:, None], t_me=np.where(np.isfinite(ft), ft, 60.0))
+                    point(r0, SP[pick], np.ones((n, k_), bool), np.repeat(left[:, None], k_, 1))
+                    X[:, rr, F["spawn_row"]] = 1.0
+                    csp[:, rr] = pick
+        ok &= alive[:, None]
+        ok[:, INS_ROW0["spare"]] = False
+        if INSTR:                                            # (INS_NO_NONE: the proof there is a real row) living network seats with none valid
+            lv_ = alive & (self.script[:n] == 0)
+            nr_ = lv_ & ~ok[:, INS_ROW_VERB > 0].any(1)
+            self.ins_norow = self.ins_norow + np.array([float(lv_.sum()), float(nr_.sum()), float(nr_.sum()) if (R is None or om is None) else 0.0])
+        if INSTR:                                            # (third pass) the finish time of every weapon, the same in a seat's rows
+            fin_, fhi_, fire_, _ = self._fin()
+            X[:, :, INS_FIN0:INS_FIN0 + FIN_F * NW] = np.stack([fin_, fhi_, fire_], 2).reshape(n, 1, FIN_F * NW)
+        X[..., len(INS_VERBS):] *= ok[..., None]                             # an invalid row: its verb alone
+        X[..., F["valid"]] = ok
+        w_ = np.nonzero(cur >= 0)[0]
+        X[w_, cur[w_], F["on_now"]] = 1.0
+        X[:, INS_NONE_ROW, F["on_now"]] = (cur < 0) & ok[:, INS_NONE_ROW]
+        self.ins_cok, self.ins_ctg, self.ins_cp, self.ins_cpk = ok.copy(), tg, P, pk & ok
+        self.ins_co, self.ins_cog, self.ins_cwh = O, og & ok, wh
+        self.ins_cspawn = np.where(ok, csp, -1)
+        return X, ok, wok
+
+    def instr_pick(self, c, w, who=None, q=None):
+        """(2.1, INSTR) the head's choice at its tick: for every seat in `who` (default: all) the candidates' row c [n] (of the
+        last instr_feat(); -1, the row "none" or a row that is not valid: no instruction) and the weapon w [n] (-1, or one he
+        does not own with ammunition: none asked for). A seat that is forced (force_instr [n, 2] at 0 or more) takes the forced
+        row and weapon whatever is passed, in `who` or not. Given through instr_in(); ins_cur keeps the row."""
+        if not INSTR:
+            return
+        n = self.n
+        ar = np.arange(n)
+        who = np.ones(n, bool) if who is None else np.asarray(who, bool)[:n].copy()
+        c = np.asarray(c, np.int64)[:n].copy()
+        w = np.asarray(w, np.int64)[:n].copy()
+        fi = np.asarray(self.force_instr)[:n]
+        f = fi[:, 0] >= 0
+        c, w, who = np.where(f, fi[:, 0], c), np.where(f, fi[:, 1], w), who | f
+        q = np.zeros(n, np.int64) if q is None else np.asarray(q, np.int64)[:n].copy()      # (second pass) quiet asked; force_quiet
+        fq = np.asarray(self.force_quiet)[:n]                                              # [n] at 0 or 1 holds a seat to it
+        q = np.where(fq >= 0, fq, q)
+        cc = np.clip(c, 0, INS_C - 1)
+        good = (c >= 0) & (c < INS_C) & self.ins_cok[ar, cc] & (INS_ROW_VERB[cc] > 0)
+        verb = np.where(good, INS_ROW_VERB[cc], 0)
+        wc = np.clip(w, 0, NW - 1)
+        w = np.where((w >= 0) & (w < NW) & self.has[ar, wc].astype(bool) & ((self.ammo[ar, wc] > 0) | (wc == G)), w, -1)
+        place = np.where((good & self.ins_cpk[ar, cc])[:, None], self.ins_cp[ar, cc], np.nan).astype(np.float32)
+        pt = np.where((good & self.ins_cog[ar, cc])[:, None], self.ins_co[ar, cc], np.nan).astype(np.float32)
+        self.instr_in(verb, np.where(good, self.ins_ctg[ar, cc], -1), place, pt, w, np.where(good, self.ins_cwh[ar, cc], -1.0), who, quiet=q)
+        self.ins_cur = np.where(who, np.where(good, c, -1), self.ins_cur[:n])
+        self.ins_spk = np.where(who, np.where(good, self.ins_cspawn[ar, cc], -1), self.ins_spk[:n])
+
+    def instr_state(self):
+        """(2.1, INSTR) the change signals of the instruction each seat is under, for the head and the keep choice -> [n, INS_SIG]:
+        doing, done, failed (0 or 1); how long he has been on it (seconds / 10, at most 2); how far his belief of the enemy's
+        place has moved since it was given (units / 1000, at most 2; 2 when a belief came or went); an item's instruction: the
+        item is there, or back within his way to it, by what he knows (0 or 1); (third pass) THE WAKE (INS_SIG_WAKE: a pain sound
+        heard or his believed stack of the enemy fallen by INS_WAKE_DROP, within the last HEAD_EVERY frames: 0 or 1); how far that
+        believed stack has fallen since the instruction was given (/ 100, 0 .. 2). Zeros under none. A read."""
+        n = self.n
+        out = np.zeros((n, INS_SIG), np.float32)
+        if not INSTR:
+            return out
+        on = self.ins_v[:n] > 0
+        if not on.any():
+            return out
+        st = self.ins_st[:n]
+        out[:, 0], out[:, 1], out[:, 2] = st == INS_DOING, st == INS_DONE, st == INS_FAILED
+        out[:, 3] = np.minimum(self.ins_t[:n] / 10.0, 2.0)
+        bel, bok = self._ins_bel()
+        b0k = self.ins_b0k[:n]
+        out[:, 4] = np.where(bok & b0k, np.minimum(np.linalg.norm(bel - self.ins_b0[:n], axis=1) / 1000.0, 2.0), np.where(bok != b0k, 2.0, 0.0))
+        tg = self.ins_tg[:n]
+        R = self.route
+        it = on & (tg >= 1) & (tg < EN_INTENT)
+        if it.any() and R is not None and self.route_item:
+            ar = np.arange(n)
+            nh = R.locate(self.state[:n, :3].astype(np.float32))
+            gi = self._trip_goal(np.where(it, tg, 0), nh, who=ar)
+            grp = ar // (self._others_arr().shape[1] + 1)
+            okg = it & (gi >= 0) & (gi < len(R.T)) & (gi < len(self.route_item))
+            for gg_ in np.unique(gi[okg]):
+                w_ = okg & (gi == gg_)
+                up_, back_ = (np.asarray(x_)[:n] for x_ in self._goal_state(int(gg_), grp))
+                out[w_, 5] = (up_[w_].astype(bool) | (back_[w_] <= R.T[int(gg_), nh[w_]])).astype(np.float32)
+        out[:, INS_SIG_WAKE] = self.ins_wake_f[:n] < HEAD_EVERY
+        st_, _, sk_, _ = self._fin_belief()
+        out[:, INS_SIG_WAKE + 1] = np.where(sk_ & self.ins_sok[:n], np.clip((self.ins_s00[:n] - st_) / 100.0, 0.0, 2.0), 0.0)
+        return out * on[:, None]
+
+    def instr_bind(self):
+        """(INS_BIND) [n] the weapon key's action each seat's instruction sets now (ins_bind_act(): the one definition), -1 where
+        his own choice stands; all -1 with the switch or INSTR off"""
+        n = self.n
+        if not (INSTR and INS_BIND):
+            return np.full(n, -1, np.int64)
+        return ins_bind_act(self.ins_v[:n], self.ins_w[:n], self.has[:n], self.ammo[:n], self.weapon[:n], self.hp[:n] > 0)
+
+    def _ins_drill_end(self, seats):
+        """(DRILL_INS_P) these seats' drills and waits are over: the force lifted, the script's instruction taken away"""
+        seats = np.asarray(seats, np.int64)
+        if not len(seats):
+            return
+        n = self.n
+        was = np.zeros(n, bool)
+        was[seats] = self.ins_drill[seats]
+        self.force_instr[seats] = -1
+        self.force_quiet[seats] = -1
+        self.ins_drill[seats], self.ins_drill_arm[seats] = False, False
+        self.ins_drill_t[seats], self.ins_drill_w[seats] = 0.0, 0.0
+        if was.any():
+            none = np.full((n, 3), np.nan, np.float32)
+            self.instr_in(np.zeros(n, np.int64), np.full(n, -1, np.int64), none, none, np.full(n, -1, np.int64), np.full(n, -1.0, np.float32), was)
+
+    def _ins_drill_step(self):
+        """(2.1, DRILL_INS_P) the drills: a game's start is followed, with that chance, by a drill for one network seat of the
+        match: at the first head tick (every 8 frames) at which a verb can be given (it waits INS_DRILL_WAIT seconds at most)
+        the script draws a verb (DRILL_INS_VERBS' shares over the verbs with a valid row), a row of it and a weapon he owns
+        with ammunition (a spam: rockets, grenades or plasma), and the seat is held to it (force_instr) for INS_DRILL_SECS
+        seconds or until he dies; then he is under none. The row is given again at every head tick (a place that follows the
+        belief moves with it). Paid by the game's pay alone. Its own random stream; ins_drill [n] says who is in one."""
+        n = self.n
+        gs = self._others_arr().shape[1] + 1
+        rt = np.asarray(self.round_t, np.float32)
+        if not self.ins_rt_ok or len(self.ins_rt) != len(rt):
+            self.ins_rt, self.ins_rt_ok = rt.copy(), True
+        start = rt < self.ins_rt - 1.0
+        self.ins_rt = rt.copy()
+        for m in np.nonzero(start)[0]:
+            seats = np.arange(int(m) * gs, (int(m) + 1) * gs)
+            self._ins_drill_end(seats)
+            if DRILL_INS_P > 0 and self.kind[m] == NORMAL and self.ins_rng.random() < DRILL_INS_P:
+                net = seats[self.script[seats] == 0]
+                if len(net):
+                    s_ = int(self.ins_rng.choice(net))
+                    self.ins_drill_arm[s_], self.ins_drill_w[s_] = True, INS_DRILL_WAIT
+        if DRILL_INS_RATE > 0:                               # (2.1a) a drill begun in the middle of a game: armed, the script draws at the next tick
+            free_ = ((self.script[:n] == 0) & (self.hp[:n] > 0) & ~self.ins_drill[:n] & ~self.ins_drill_arm[:n]
+                     & (np.repeat(np.asarray(self.kind), gs)[:n] == NORMAL))
+            if free_.any():
+                new_ = free_ & (self.ins_rng.random(n) < DRILL_INS_RATE * DT)
+                self.ins_drill_arm = self.ins_drill_arm[:n] | new_
+                self.ins_drill_w = np.where(new_, INS_DRILL_WAIT, self.ins_drill_w[:n]).astype(np.float32)
+        act, arm = self.ins_drill[:n], self.ins_drill_arm[:n]
+        if not (act.any() or arm.any()):
+            return
+        alive = self.hp[:n] > 0
+        self.ins_drill_t = np.where(act, self.ins_drill_t[:n] - DT, self.ins_drill_t[:n]).astype(np.float32)
+        self._ins_drill_end(np.nonzero(act & ((self.ins_drill_t <= 0) | ~alive))[0])
+        self.ins_drill_w = np.where(arm, self.ins_drill_w[:n] - DT, self.ins_drill_w[:n]).astype(np.float32)
+        self.ins_drill_arm = self.ins_drill_arm[:n] & (self.ins_drill_w > 0)
+        self.ins_dtick += 1
+        if self.ins_dtick % 8 or not (self.ins_drill.any() or self.ins_drill_arm.any()):
+            return
+        X, ok, wok = self.instr_feat()
+        for s_ in np.nonzero(self.ins_drill_arm & alive)[0]:
+            rows = np.nonzero(ok[s_] & (INS_ROW_VERB > 0))[0]
+            if not wok[s_, list(INS_SPAM_W)].any():
+                rows = rows[INS_ROW_VERB[rows] != INS_SPAM]
+            if not len(rows):
+                continue
+            vs = np.unique(INS_ROW_VERB[rows])
+            p_ = np.array([float(DRILL_INS_VERBS.get(INS_VERBS[int(v_)], 1.0 if not DRILL_INS_VERBS else 0.0)) for v_ in vs])
+            if p_.sum() <= 0:
+                continue
+            v_ = int(self.ins_rng.choice(vs, p=p_ / p_.sum()))
+            c_ = int(self.ins_rng.choice(rows[INS_ROW_VERB[rows] == v_]))
+            wc = np.nonzero(wok[s_])[0]
+            if v_ == INS_SPAM:
+                wc = wc[np.isin(wc, INS_SPAM_W)]
+            w_ = int(self.ins_rng.choice(wc)) if len(wc) else -1
+            self.force_instr[s_] = (c_, w_)
+            self.force_quiet[s_] = int(v_ in INS_QUIET_VERBS and self.ins_rng.random() < DRILL_INS_QUIET)
+            self.ins_drill[s_], self.ins_drill_arm[s_] = True, False
+            self.ins_drill_t[s_], self.ins_drill_w[s_] = INS_DRILL_SECS, 0.0
+        d = self.ins_drill[:n].copy()
+        if d.any():
+            self.instr_pick(np.full(n, -1, np.int64), np.full(n, -1, np.int64), who=d)
+
+    def _ins(self, pos, eye, yaw, pit, rot):
+        """(2.1, INSTR) the inputs of N_INS (see there). Reads only; keeps nothing."""
+        n = self.n
+        out = np.zeros((n, N_INS), np.float32)
+        if not INSTR:
+            return out
+        ar = np.arange(n)
+        c1 = N_INS - N_FIN                                   # (third pass) the finish time: the weapon in his hand, for every living seat
+        fin_, fhi_, fire_, fok_ = self._fin()
+        hw_ = np.clip(self.weapon[:n], 0, NW - 1)
+        tail = np.stack([fin_[ar, hw_], fhi_[ar, hw_], fire_[ar, hw_], fok_.astype(np.float32)], 1)
+        out[:, c1 + 3:] = tail
+        v = self.ins_v[:n]
+        on = v > 0
+        if not on.any():
+            return out
+        f = on.astype(np.float32)
+        c = 0
+        out[ar, v] = 1.0                                     # the verb ("none" for a seat under none: zeroed below)
+        c += len(INS_VERBS)
+        st = self.ins_st[:n]
+        out[:, c], out[:, c + 1], out[:, c + 2] = st == INS_DOING, st == INS_DONE, st == INS_FAILED
+        out[:, c + 3] = np.minimum(self.ins_t[:n] / 10.0, 2.0)
+        c += 4
+        pok = self.ins_pok[:n]
+        pf = pok.astype(np.float32)
+        rel = self.ins_p[:n] - pos
+        r_ = rot(rel)
+        out[:, c] = np.clip(r_[:, 0] / 1000.0, -2.0, 2.0) * pf
+        out[:, c + 1] = np.clip(r_[:, 1] / 1000.0, -2.0, 2.0) * pf
+        out[:, c + 2] = np.clip(rel[:, 2] / 200.0, -3.0, 3.0) * pf
+        if self.om is not None and self.route is not None and pok.any():
+            w_ = np.nonzero(pok)[0]
+            R = self.route
+            out[w_, c + 3] = np.minimum(self.om["walk"][R.locate(pos[w_]), R.locate(self.ins_p[w_])] / 10.0, 2.0)
+        out[:, c + 4] = pf
+        c += 5
+        ook = self.ins_ook[:n]
+        of = ook.astype(np.float32)
+        pt = self.ins_o[:n]
+        ey, ep = self._aim_at(eye, pt, yaw, pit)
+        dist = np.linalg.norm(pt - eye, axis=1)
+        out[:, c] = np.clip(ey / 180.0, -1.0, 1.0) * of
+        out[:, c + 1] = np.clip(ep / 90.0, -1.0, 1.0) * of
+        out[:, c + 2] = np.minimum(dist / 1000.0, 3.0) * of
+        out[:, c + 3] = (np.abs(ey) < math.degrees(FOV_H)) & (np.abs(ep) < math.degrees(FOV_V)) & ook
+        if ook.any():
+            w_ = np.nonzero(ook)[0]
+            out[w_, c + 4] = self._v02_clear(eye[w_], pt[w_])
+        c += 5
+        w = self.ins_w[:n]
+        hw = np.nonzero(on & (w >= 0))[0]
+        out[hw, c + np.clip(w[hw], 0, NW - 1)] = 1.0
+        c += NW
+        out[:, c] = (w >= 0) & (self.weapon[:n] == w)
+        c += 1
+        # the firing solution on the point: rockets and plasma fly straight (the flight time alone); a grenade's low arc as _v15's
+        # (the game lofts it by 0.2), within reach or none
+        fly = np.zeros(n, np.float32)
+        ay, ap = ey.copy(), ep.copy()
+        sol = np.zeros(n, bool)
+        for wp_ in (RL, PG):
+            m = ook & (w == wp_)
+            fly[m] = dist[m] / float(P_SPEED[wp_])
+            sol |= m
+        m = ook & (w == GL)
+        if m.any():
+            to = pt - eye
+            D = np.hypot(to[:, 0], to[:, 1]) + 1e-6
+            v_, g_ = float(P_SPEED[GL]), float(P_GRAV[GL])
+            disc = v_ ** 4 - g_ * (g_ * D * D + 2.0 * to[:, 2] * v_ * v_)
+            th = np.arctan2(v_ * v_ - np.sqrt(np.maximum(disc, 0.0)), g_ * D)
+            reach = m & (disc >= 0.0)
+            ap = np.where(reach, np.degrees(-(th - 0.2 * np.cos(th)) - pit), ap)
+            fly = np.where(reach, D / np.maximum(v_ * np.cos(th), 1.0), fly).astype(np.float32)
+            sol |= reach
+        sf = sol.astype(np.float32)
+        wk = (self.ins_when[:n] >= 0) & ook
+        wn = np.maximum(self.ins_when[:n], 0.0)
+        out[:, c] = sf
+        out[:, c + 1] = np.minimum(fly / 2.0, 2.0) * sf
+        out[:, c + 2] = np.clip(ay / 180.0, -1.0, 1.0) * sf
+        out[:, c + 3] = np.clip(ap / 90.0, -1.0, 1.0) * sf
+        out[:, c + 4] = wk
+        out[:, c + 5] = np.minimum(wn / 4.0, 2.0) * wk
+        out[:, c + 7] = self.ins_q[:n] > 0                   # (second pass) quiet asked
+        out[:, c + 6] = np.clip((fly - wn) / 2.0, -1.0, 1.0) * sf * wk
+        wa_ = np.clip(w, 0, NW - 1)                          # (third pass) the finish time of the weapon asked for
+        aw_ = (w >= 0).astype(np.float32)
+        out[:, c1], out[:, c1 + 1], out[:, c1 + 2] = fin_[ar, wa_] * aw_, fhi_[ar, wa_] * aw_, fire_[ar, wa_] * aw_
+        out = out * f[:, None]
+        out[:, c1 + 3:] = tail                               # (live under an instruction or not)
         return out
 
     def _ord(self, pos, eye, yaw, pit):
@@ -8754,6 +10192,8 @@ class DuelEnv:
         does it for the hits of each frame; a game server's plugin calls it with the game's count of what he dealt."""
         if EN_STACK and dmg > 0:
             self.es_dmg[i, self._slot(v)] += float(dmg)
+        if INSTR and dmg >= INS_CHUNK:                       # (2.1, the pattern's moments) a chunk hit of his on the living enemy
+            self.ins_chunk_t[i] = 0.0
 
     def _es_take(self, j, k, kind, val, cap):
         """player j saw or heard player k (by place in the group) take a health or armor item of value val to cap"""
@@ -9676,8 +11116,19 @@ class DuelEnv:
         """player i's weapon wpn hits player v for dmg, pushing along kdir"""
         if RESPAWN_QL and self.rsp_wait[v] > 0:             # (RESPAWN_QL) a body waiting to respawn: the shot stops on it, nothing more
             return
-        kf = W_KNOCK[wpn]
-        self.w.knockback(int(v), np.asarray(kdir, np.float32) * (1000.0 * kf * dmg / 200.0), int(min(200, dmg)))
+        if KNOCK_QL and wpn in KNOCK_QL_F:                  # (KNOCK_QL) per bullet, tick or pellet, as the game: int points, no floor
+            kb1 = min(200, int(float(W_DMG[wpn]) * KNOCK_QL_F[wpn]))
+            n_ = max(1, int(round(float(dmg) / float(W_DMG[wpn]))))
+            kick_ = (1, np.asarray(kdir, np.float32) * (5.0 * kb1 * n_), 2 * kb1 if 2 * kb1 >= 50 else 0)
+        else:
+            kf = W_KNOCK[wpn]
+            kick_ = (0, np.asarray(kdir, np.float32) * (1000.0 * kf * dmg / 200.0), int(min(200, dmg)))
+        if KNOCK_NOW and getattr(self, "kn_hit", None) is not None and bool(np.any(kick_[1] != 0)):
+            if int(v) not in self.kn_hit:                   # (KNOCK_NOW) his frame's end before the first kick: kept, and its numbers
+                self.w.keep_one(int(v))
+                self.kn_hit[int(v)] = (self.w.state()[int(v)].copy(), [])
+            self.kn_hit[int(v)][1].append(kick_)
+        self._kick(int(v), kick_)
         took_h = self._damage(v, dmg)
         st["dmg_taken"][v] += took_h
         if int(i) != int(v):                                # (DMG_ENEMY_ONLY)
@@ -9685,11 +11136,44 @@ class DuelEnv:
         self.stats["dmg_h"] += float(dmg) * (self.script[i] == 0)
         self.stats["dmg_from_script"] += float(dmg) * (self.script[v] == 0 and self.script[i] != 0)
         st["attacker"][v] = i
+        if DODGE_IN and wpn == LG and int(i) != int(v):     # (DODGE_IN) a lightning tick on him
+            st.setdefault("dg_lg", []).append(int(v))
         if wpn == RG and int(i) != int(v):                  # (RAIL_FAR_PAY) the rail hits of this frame: (shooter, victim)
             st.setdefault("rail", []).append((int(i), int(v)))
         self._book(st, i, v, dmg, wpn)
         st["kicked"] = True
         self.stats["dmg"] += dmg
+
+    def _kick(self, v, kick_):
+        if kick_[0]:
+            self.w.knockback_t(v, kick_[1], kick_[2])
+        else:
+            self.w.knockback(v, kick_[1], kick_[2])
+
+    def _knock_now(self):
+        """(KNOCK_NOW) each player an instant hit kicked this frame: his frame moved again from its start with the kicks; only where his
+        first move is reproduced exactly (nothing else moved him this frame), else the kicks stay on the frame's end"""
+        done_ = False
+        for v, (pre_, kicks_) in self.kn_hit.items():
+            self.w.restore_one(v, 0)
+            for ang_, ms_ in self.kn_subs:
+                self.w.step_one(v, self.kn_moves[v], ang_[v], ms_)
+            again_ = self.w.state()[v]
+            if np.array_equal(again_, pre_):
+                self.w.restore_one(v, 0)
+                for k_ in kicks_:
+                    self._kick(v, k_)
+                for ang_, ms_ in self.kn_subs:
+                    self.w.step_one(v, self.kn_moves[v], ang_[v], ms_)
+                done_ = True
+                self.stats["knock_now"] = self.stats.get("knock_now", 0) + 1
+            else:
+                self.w.restore_one(v, 1)
+                for k_ in kicks_:
+                    self._kick(v, k_)
+                self.stats["knock_now_off"] = self.stats.get("knock_now_off", 0) + 1
+        self.kn_hit = None
+        return done_
 
     def _book(self, st, i, v, dmg, wpn):
         """player i did dmg to player v: booked per attacker (until 2026-10-08 a victim had one attacker per frame, the
@@ -10297,6 +11781,11 @@ class DuelEnv:
         # (WIN_W / FADE_V, v0.5.1) the blend's own chance, kept up in every game whatever the switches (they are live)
         self.wb_tab, self.wb_scale = None, 0.0
         self.wb_p = np.full(self.M, 0.5, np.float64)
+        self.wh_raw = np.zeros(self.n, np.float64)           # (1.9a, JUDGE_ITEMS) the head's win part of this frame: the judge with the items
+        self.wh_off = np.zeros(self.M, np.float64)           # ... the items' part of the chance as last counted (the chance with them less without)
+        self.wh_tick = np.full(self.M, -10, np.int64)        # ... the game's frame it was counted on (another than the frame before: a new start)
+        self.ji_P = None                                     # (JUDGE_ITEMS) the items' numbers (sim/win_judge.py items_load)
+        self._ir_nodes = None
         self.wb_raw = np.zeros(self.n, np.float64)           # this frame's win part at G = 1, per player
         self.wb_cb = np.zeros(self.n, np.float64)            # this frame's combat pay (frags, deaths, damage), per player
         self.wb_gm = np.zeros(self.n, bool)                  # this frame: a game under way in his match
@@ -10325,6 +11814,8 @@ class DuelEnv:
                 if WIN_JUDGE:                               # (WIN_JUDGE) the judge in the table's place, its own scale
                     import win_judge as wj_
                     self.wb_judge = wj_.load(WIN_JUDGE)[0]
+                    if JUDGE_ITEMS:                          # (1.9a) the head's judge reads the items' race
+                        self.ji_P = wj_.items_load(JUDGE_ITEMS)
                     z1_, w0_, s0_ = np.ones(1), np.zeros((1, 3)), wj_.parts(np.full(1, wj_.SPAWN), np.zeros(1), np.zeros(1, bool))
                     p1_ = float(wj_.chance(self.wb_judge, z1_, z1_ * GAME_LEN, s0_, w0_, s0_, w0_)[0])
                     assert p1_ > 0.5, "WIN_JUDGE: a lead of 1 must be worth more than a level score"
@@ -10337,6 +11828,48 @@ class DuelEnv:
         if self.wb_tab is None:
             raise RuntimeError("WIN_W / FADE_V: no win_chance.json (or no whole games: GAME_P / LATE_P)")
         return True
+
+    def item_race(self, idx):
+        """(1.9a, JUDGE_ITEMS; the self-play rows of tools/run/ws_eval.py) the next mega's and red armor's race for players idx, the
+        truth: -> dict(present [k, 2] the map has it, tsp [k, 2] seconds until it is back (0: up), walk [k, 2] his seconds of walking
+        to it on the route field (dead: his respawn's wait + the judge's dead_walk; no way: 60), took [k, 2] how many he has
+        taken). A read: nothing changes"""
+        idx = np.atleast_1d(np.asarray(idx, np.int64))
+        k = len(idx)
+        g_ = self._others_arr().shape[1] + 1
+        m = idx // g_
+        far_ = float(self.ji_P.get("far", 60.0)) if self.ji_P is not None else 60.0
+        dw_ = float(self.ji_P.get("dead_walk", 8.0)) if self.ji_P is not None else 8.0
+        pres, tsp, walk = np.zeros((k, 2), bool), np.zeros((k, 2), np.float64), np.full((k, 2), far_, np.float64)
+        R = self.route                                   # (his seconds to it on the route field: the way he would take, its jumps, pads and
+        nh = R.locate(self.state[idx, :3].astype(np.float32)) if R is not None else None    # teleporters in it; R.T)
+        for j_, (lab_, it_) in enumerate(zip(("MH", "RA"), self.big_ids)):
+            if it_ < 0:
+                continue
+            pres[:, j_] = True
+            tsp[:, j_] = np.where(self.item_up[m, it_], 0.0, self.item_t[m, it_])
+            if nh is not None and lab_ in self.route_goal:
+                wt_ = np.asarray(R.T[self.route_goal.index(lab_), nh], np.float64)
+                walk[:, j_] = np.where(wt_ < 1e4, np.minimum(wt_, far_), far_)
+        dead_ = (self.hp[idx] <= 0) | (self.rsp_wait[idx] > 0)
+        walk = np.where(dead_[:, None], np.minimum(np.asarray(self.rsp_wait[idx], np.float64)[:, None] + dw_, far_), walk)
+        return dict(present=pres, tsp=tsp, walk=walk, took=np.asarray(self.race_n[idx]).copy())
+
+    def _wb_items_off(self, m, left):
+        """(1.9a, JUDGE_ITEMS) the items' part of the head's chance for the first seat of matches m: the judge with the items' race
+        less the judge without it (the same stacks, weapons, lead and time as _wb_chance)"""
+        import win_judge as wj_
+        g_ = self._others_arr().shape[1] + 1
+        a_, b_ = m * g_, m * g_ + 1
+        d_ = (self.frags_r[a_] - self.frags_r[b_]).astype(np.float64)
+        left = np.maximum(np.broadcast_to(np.asarray(left, np.float64), m.shape), 0.0)
+        dead_ = (self.hp <= 0) | (self.rsp_wait > 0)
+        w_ = lambda i_: np.where(dead_[i_][:, None], 0.0, self.has[i_][:, [RL, LG, RG]].astype(np.float64))     # noqa: E731
+        hp_, ar_ = np.asarray(self.hp, np.float64), np.asarray(self.armor, np.float64)
+        p1_ = wj_.chance_items(self.wb_judge, self.ji_P, d_, left, hp_[a_], ar_[a_], dead_[a_], w_(a_), hp_[b_], ar_[b_], dead_[b_], w_(b_),
+                               self.item_race(a_), self.item_race(b_))
+        p0_ = wj_.chance(self.wb_judge, d_, left, wj_.parts(hp_[a_], ar_[a_], dead_[a_]), w_(a_), wj_.parts(hp_[b_], ar_[b_], dead_[b_]), w_(b_))
+        return p1_ - p0_
 
     def _wb_chance(self, m, left):
         """(WIN_W) the blend's chance for the first seat of matches m with `left` seconds to play: W(lead, left) of
@@ -10582,6 +12115,7 @@ class DuelEnv:
             self.win_shadow[:] = 0.0
         self.wb_raw[:] = 0.0
         self.wb_gm[:] = False
+        self.wh_raw[:] = 0.0
         self.wsh_pay[:] = 0.0
         gm = np.nonzero(self.game > 0)[0]
         if not len(gm):
@@ -10611,6 +12145,12 @@ class DuelEnv:
             yb_ = self.wb_scale * (pb_ - self.wb_p[gm])
             self.wb_p[gm] = pb_
             self.wb_raw[ab_], self.wb_raw[bb_] = yb_, -yb_
+            if self.ji_P is not None and self.wb_judge is not None:    # (1.9a, JUDGE_ITEMS) the head's: the same change, and the items' part's
+                off_ = self._wb_items_off(gm, lb_)          # change since the frame before (a game's first counted frame: its base, no pay)
+                cont_ = self.g_tick[gm] == self.wh_tick[gm] + 1
+                yh_ = yb_ + self.wb_scale * np.where(cont_, off_ - self.wh_off[gm], 0.0)
+                self.wh_off[gm], self.wh_tick[gm] = off_, self.g_tick[gm]
+                self.wh_raw[ab_], self.wh_raw[bb_] = yh_, -yh_
             self.wsh_now[:] = np.nan
             if WIN_SHAPE_K > 0:                              # (WIN_SHAPE_K, v0.6.1) the shaping: k (g PSI - PSI before), zero-sum
                 ps_ = self._wsh_psi(gm, lb_)
@@ -10722,6 +12262,11 @@ class DuelEnv:
         y = self.wb_scale * (res - float(self.wb_p[m]))
         self.wb_raw[a_] += y
         self.wb_raw[b_] -= y
+        if self.ji_P is not None and self.wb_judge is not None:    # (1.9a) the head's: the result less its chance with the items' part
+            yh_ = y - self.wb_scale * float(self.wh_off[m])
+            self.wh_raw[a_] += yh_
+            self.wh_raw[b_] -= yh_
+            self.wh_off[m], self.wh_tick[m] = 0.0, -10
         self.wb_p[m] = res
         self.stats["win_end"] += (1.0, abs(y), float(abs(y) > 0.1 * self.wb_scale))
 
@@ -12901,6 +14446,22 @@ class DuelEnv:
                 out[:, C["sp_edge"]] = (T_["put"] - T_["thr"]) * k_
                 out[:, C["sp_agg"]] = T_["agg"] * k_
                 out[:, C["sp_z0"]:C["sp_z0"] + SP_Z] = T_["cov"] * k_[:, None]
+        if KNOWN_TRUTH or SPAWN_TRUTH:                       # (2.1) what the enemy knows of him; where the enemy came back
+            pos_ = s[:n, :3]
+            if KNOWN_TRUTH:
+                fresh_ = self.seen_t[foe] <= KNOWN_T
+                near_ = np.linalg.norm(self.known[foe] - pos_, axis=1) < KNOWN_R
+                bel_, bok_ = self._ins_bel()
+                near_ = near_ | (bok_[foe] & (np.linalg.norm(bel_[foe] - pos_, axis=1) < KNOWN_R))
+                live_ = (self.hp[:n] > 0) & (self.hp[foe] > 0)
+                out[:, C["en_knows"]] = (np.asarray(getattr(self, "acquired", np.zeros(self.n, bool)), bool)[foe] | (fresh_ & near_)) & live_
+                out[:, C["en_heard"]] = (self.ins_heard_t[foe] <= 1.0) & live_
+            if SPAWN_TRUTH:
+                born_ = np.asarray(self.rsp_born, bool)[foe] if RESPAWN_QL else np.zeros(n, bool)
+                out[:, C["en_spawn"]] = np.where(born_, self.last_spawn[foe], -1)
+                out[:, C["en_dead_t"]] = np.minimum(self.ins_dead_t[:n], 99.0)
+        if HEAD_PAY_TRUTH and st is not None and getattr(self, "wb_raw", None) is not None:   # (2.1) the head's pay: the judge's win part of this frame
+            out[:, C["win_raw"]] = np.asarray(self.wh_raw if self.ji_P is not None else self.wb_raw, np.float64)[:n]   # (1.9a: with the items)
         return out
 
     def _fight_step(self, done, out, st, died):
@@ -13061,6 +14622,14 @@ class DuelEnv:
             self.stats["walk_jump"] += int(wj_.sum())
             if WALK_NO_JUMP:
                 walk_no_jump(a)
+        if INSTR and INS_BIND:                               # (2.1a) the weapon the instruction asks for is binding: the key's action set
+            bd_ = np.where(self.script == 0, self.instr_bind(), -1)     # after his own draw, before the finger limits
+            own_ = np.where(a[:, 6] == 0, self.weapon, a[:, 6].astype(np.int64) - 1)
+            to_ = np.where(bd_ == 0, self.weapon, bd_ - 1)
+            rd_ = (self.script == 0) & (self.hp > 0) & (((self.key_tick + 1 + np.arange(len(a))) % KEY_EVERY == 0) if self.key_limits else True)
+            self.ins_bind_n = np.array([rd_.sum(), (rd_ & (bd_ >= 0)).sum(), (rd_ & (bd_ >= 0) & (own_ != to_)).sum(), 0.0], np.float64)
+            a[:, 6] = np.where(bd_ >= 0, bd_, a[:, 6])
+            self.ins_bind_a = bd_
         if self.key_limits:
             self.limit_keys(a)
         human = self.script == 0                            # policy-controlled players (for the statistics)
@@ -13106,6 +14675,12 @@ class DuelEnv:
         self.intend(ch_, human, wy_)
         if COMBAT:                                           # (1.7) the order's points for this frame's ways and looks
             self._cmb_points()
+        if INSTR or KNOWN_TRUTH or SPAWN_TRUTH:              # (2.1) the clocks of the spawn rows and of the labels
+            self._ins_clock()
+        if INSTR:                                            # (2.1) the instruction's clocks and state
+            self._ins_step()
+            if DRILL_INS_P > 0 or DRILL_INS_RATE > 0 or self.ins_drill.any() or self.ins_drill_arm.any():
+                self._ins_drill_step()                       # ... and the drills (DRILL_INS_P)
         if self.ct_free is not None and len(self.ct_free) == n:   # (CONTACT_FREE) the rule's lesson, the openings' too, is silent in a free contact, from its first reading
             self.intent_teach = np.where(self.ct_free & human, -1, self.intent_teach)
         self.intent_live = self.intent_live & ~in_run       # (and the intention head is not trained on those frames)
@@ -13180,6 +14755,9 @@ class DuelEnv:
         if out_ is not None:                                 # (RESPAWN_QL) ... and his weapon key does nothing
             want = np.where(out_, self.weapon, want)
         sw = want != self.weapon
+        if INSTR and INS_BIND:                               # (stats["ins_bind"]) the network seats' weapon changes of this frame
+            self.ins_bind_n[3] = float((sw & (self.script == 0)).sum())
+            self.stats["ins_bind"] = self.stats.get("ins_bind", np.zeros(4)) + self.ins_bind_n
         self.weapon = want
         # as in the game: a weapon change only starts once the reload from the last shot is over
         self.cool = np.where(sw, np.maximum(self.cool, self.fire_cd + SWITCH), self.cool)
@@ -13192,10 +14770,16 @@ class DuelEnv:
         p1 = np.clip(self.pitch * lev + dpit, -89, 89)
         done_ms = 0
         hs_s1 = None                                         # (FIRE_QL) the state after the frame's first substep
+        if KNOCK_NOW:                                        # (KNOCK_NOW) the frame's start, its commands, the players hit
+            self.w.backup()
+            self.kn_moves, self.kn_subs, self.kn_hit = moves, [], {}
         for ms in self.substeps:
             done_ms += ms
             f = done_ms / 25.0
-            self.w.step(moves, np.stack([self.pitch + (p1 - self.pitch) * f, y0 + turn * f], 1).astype(np.float32), ms)
+            ang_ = np.stack([self.pitch + (p1 - self.pitch) * f, y0 + turn * f], 1).astype(np.float32)
+            if KNOCK_NOW:
+                self.kn_subs.append((ang_, ms))
+            self.w.step(moves, ang_, ms)
             if FIRE_QL and hs_s1 is None:
                 hs_s1, hs_yaw1 = self.w.state(), y0 + turn * f
         self.pitch = p1
@@ -13204,6 +14788,16 @@ class DuelEnv:
         reward = -JERK_COST * COST_JERK_W * jerk.astype(np.float32)
         self._pt_begin()
         self._ps("jerk", reward)
+        if INSTR and (FOLLOW_PAY > 0 or (self.ins_v[:self.n] > 0).any()):   # (1.9a, FOLLOW_PAY) carrying out the instruction he is under: a pay
+            nf_ = self.n                                     # a second while its state is "doing" (this frame's _ins_step); a seat under none: 0.
+            fol_ = (self.ins_v[:nf_] > 0) & (self.ins_st[:nf_] == INS_DOING) & (self.hp[:nf_] > 0) & np.asarray(human, bool)[:nf_]
+            if FOLLOW_PAY > 0:                               # (counted whenever an instruction stands, paid only with FOLLOW_PAY above 0)
+                reward = reward + (FOLLOW_PAY * DT) * fol_.astype(np.float32)
+            FP_ = self.stats.get("follow")
+            if FP_ is None:
+                FP_ = self.stats["follow"] = np.zeros(3)
+            c_ = self._counted(np.arange(nf_))
+            FP_ += (float(((self.ins_v[:nf_] > 0) & c_).sum()), float((fol_ & c_).sum()), float(FOLLOW_PAY * DT * (fol_ & c_).sum()))
         wb_on_ = self._wb_on()                               # (WIN_W / FADE_V) the blend this frame (live: read once a frame)
         self.wb_cb[:] = 0.0
         self.r_long = r_long = np.zeros(n, np.float32)      # the game's part of this frame's pay (see r_long in __init__)
@@ -13605,6 +15199,11 @@ class DuelEnv:
                     self.stats[name + "_hits"] += hm
                     self._hit(i, v, wpn, W_DMG[wpn], fdir[i], st)
 
+        if KNOCK_NOW and self.kn_hit:                        # (KNOCK_NOW) the hit players moved again with their kicks, before the projectiles
+            self._knock_now()
+            self.state = s = self.w.state()
+        elif KNOCK_NOW:
+            self.kn_hit = None
         # projectiles fly: direct hits on the opponent, explosions on walls, grenades bounce and time out
         fresh = self.rnew.copy()
         self.rnew[:] = False
@@ -13659,6 +15258,14 @@ class DuelEnv:
         if st["kicked"]:
             self.state = s = self.w.state()                  # knockback changed velocities
         dmg_taken, attacker, kill_w = st["dmg_taken"], st["attacker"], st["kill_w"]
+        if DODGE_IN:                                         # (DODGE_IN) this frame's beams and lightning hits, for _dodge
+            df_ = np.asarray(do_fire, bool)[:n]
+            dw_ = np.asarray(do_w)[:n]
+            self.dg_fire = df_ & ((dw_ == LG) | (dw_ == RG))
+            self.dg_fire_lg = df_ & (dw_ == LG)
+            self.dg_lghit = np.zeros(n, np.float32)
+            for v_ in st.get("dg_lg", ()):
+                self.dg_lghit[v_] += 1.0
 
         # shaping (curriculum): reward damage dealt to the opponent
         hurt = np.nonzero((dmg_taken > 0) & (self.hp > 0))[0]              # pain sounds: the others hear them within earshot
@@ -13820,6 +15427,8 @@ class DuelEnv:
                             PS_[11] += float(self._counted(int(i)))
                     if int(it) in self.big_ids:              # (--aux, "who gets there first") the mega or the red armor: who took it
                         self.aux_take.append((int(i), self.big_ids.index(int(it))))
+                        if i < len(self.race_n):             # (1.9a) the item race's count (a record of the truth: nothing reads it in play)
+                            self.race_n[int(i), self.big_ids.index(int(it))] += 1
                     if WAY_MEASURE and int(it) in self.route_item:
                         self._way_trip(int(i), self.route_item.index(int(it)))
                 own_ = bool(self.jrun[i]) and it == self.jrun_it[i]    # (a jump run: his target stays for the other seats' tries)
@@ -14061,14 +15670,17 @@ class DuelEnv:
             self.intent_fast = np.where(claw | self.intent_done, 0.0, fast_).astype(np.float32)
             self.intent_paid = np.where(claw | self.intent_done, 0.0, self.intent_paid).astype(np.float32)
             pay_now = self.intent_seek * worth * gain / self.intent_phi0 * pay
-            reward += pay_now - INTENT_SWITCH * (self.intent_changed & (prev_int > 0) & ~in_run)
+            sw_chg = self.intent_changed                     # (2.1a, INSTR) a change of target the instruction made is the head's decision:
+            if INSTR:                                        # the hands are not charged the switch cost for it (no instruction: as before)
+                sw_chg = sw_chg & ~self.intent_ins[:len(sw_chg)]
+            reward += pay_now - INTENT_SWITCH * (sw_chg & (prev_int > 0) & ~in_run)
             self._pt("way", ar, pay_now)
-            r_long += pay_now - INTENT_SWITCH * (self.intent_changed & (prev_int > 0) & ~in_run)
+            r_long += pay_now - INTENT_SWITCH * (sw_chg & (prev_int > 0) & ~in_run)
             self.intent_paid = (self.intent_paid + pay_now).astype(np.float32)
             if WAYS:
                 self.stats["way_pay"][0] += float(pay_now[self._counted(ar)].sum())
             if self.hold_n:                                  # (leaving a holding place costs nothing, as leaving "nothing")
-                free_ = INTENT_SWITCH * (self.intent_changed & (prev_int >= HOLD_INTENT) & ~in_run)
+                free_ = INTENT_SWITCH * (sw_chg & (prev_int >= HOLD_INTENT) & ~in_run)
                 reward += free_
                 r_long += free_
             if PACE_PAY or SPEED_PAY or SPEED_PAY_RUN:       # faster than running pace on his way, nobody about (see PACE_PAY, SPEED_PAY)

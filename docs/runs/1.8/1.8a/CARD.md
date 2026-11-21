@@ -9,7 +9,7 @@ update 10, 53% at 50, 56% at the end; rockets 37% to 26%), under an aim model wh
 smallest. The family: [README](../README.md). The aim: [design/AIM3.md](../../../design/AIM3.md). What comes after:
 [2.1](../../2.1/DESIGN.md).*
 
-**BUILT AND TESTED ON THE CLEANED INPUTS (2026-11-11 evening); NOT STARTED: the owner's review and go, from a new session.**
+**STOPPED 2026-11-12 11:28 by the owner at update 197 ("Stop 1.8b now and save it"); the end is the save of update 190 (`keep/policy_end_18a.pt` + opt), the stage of the teacher and speed pay done; the keep choice and the strategy-input fade never opened. Results: [RUNS.md](../../../RUNS.md) #47.** STARTED 2026-11-11 14:00 (owner: "Go ahead and start it"): phase 1 for 900 minutes, the restart at update 150 unattended (`-AutoRestart 1050`). [RUNS.md](../../../RUNS.md) #47.** Built and tested on the cleaned inputs the same day.
 What changed since the morning's build: the start is on the cleaned input list 18 ([design/INPUTS_CLEANUP.md](../../../design/INPUTS_CLEANUP.md),
 "As built"), AIM3 is tuned ([design/AIM3.md](../../../design/AIM3.md) section 9), the schedule is the condensed one with the head at 80
 updates, and the last stage (the strategy inputs out of the hands) is built. Every test below was run again on that start.
@@ -17,7 +17,9 @@ updates, and the last stage (the strategy inputs out of the hands) is built. Eve
 **Marks:** ✅ exists and was tested in its own run · ⏳ to build and test before a go · 🧪 measured in the run · ❓ the owner's to decide
 
 **Started from:** b1.2d's end (`data/sim_runs/duel_gru_b1_2d/keep/policy_end_b12d.pt` + `opt_end_b12d.pt`; 980 inputs), widened to the
-simulator's 1,053 (`tools/b18_init.py`), brought to **the cleaned list 18** (`tools/inputs18.py`: 876 inputs, 177 dead ones cut and folded,
+simulator's 1,053 (`tools/b18_init.py`), brought to **the cleaned list 18** (`tools/inputs18.py`: 804 inputs, 249 cut: 177 dead by construction, folded, and 72 rule-made ones of v0.2 to v0.3.6 that no network
+has read since b1.1, the pre-fire and the emergence among them: owner, 11-11, "remove the ones that are dead or so outdated they no longer
+fit the plan"; kept in the tail: the guessing lesson's four marks,
 the hands' encoder the first 796, the brain the first 691, every input re-measured to its right size, the optimizer's moments with them),
 then the strategy head (1.3b's form, with 89 columns of its own) and the keep choice (1.7a's form) added at zero effect. The simulator:
 `sim/duel_env_ffa18.py` (the group module giving that list).
@@ -45,7 +47,7 @@ then the strategy head (1.3b's form, with 89 columns of its own) and the keep ch
 | The switch cost out, a weapon he holds choosable (`INTENT_SWITCH=0`, `WEAPON_OWN=1`) | 1.4b ✅ | at the restart, update 150 (as in 1.4b: after the head has the credit) |
 | The item rule's lesson out (`INTENT_TEACH_W` 1 → 0) and the speed pay in games out (`SPEED_PAY` 0.125 → 0) | 1.6a ✅ (level; the speed held) | together over updates 160 to 190, as 1.6a did (its 40 updates were level throughout) |
 | The keep choice in place of the 8-second lock (`KEEP_G` 0 → 0.975) | 1.7a's updates 10 to 90 ✅ (63% against 1.6a's end) | attached at share 0 from update 0; over updates 210 to 250, then held |
-| **The strategy inputs out of the hands** (owner, 11-11: "Once we get the head back in, those inputs can go from the hands. Put that at the end of this 1.8 run"): the clock and score (8), the mega's and red's timers and who has them, when he last took each item (12), the game's three: faded in the hands, the head keeps them | the input clean-up ⏳ to build (a second fade group, as v0.4.2's rule fade) | over updates 270 to 310, held to 330; removed from the hands' list after the run |
+| **The strategy inputs out of the hands** (owner, 11-11: "Once we get the head back in, those inputs can go from the hands. Put that at the end of this 1.8 run"): the clock and score (8), the mega's and red's timers and who has them, when he last took each item (12), the game's three: faded in the hands, the head keeps them | the input clean-up ✅ built (a second fade group, as v0.4.2's rule fade: 29 columns, live `SFADE`); 🧪 never trained at full size | over updates 270 to 310, held to 330; removed from the hands' list after the run |
 | The 1,053 inputs of today's simulator; the tokens order, timers, space and targets shut (`--gate-open 0`) | 2.0c's start ✅ | all run; so 2.1 needs no widening |
 | Kept as b1.2d has them | | the win pay, the item table, the far-rail pay, the speed pay in item runs, the league's anchors, every delay and every other aim number |
 
@@ -73,7 +75,7 @@ then the strategy head (1.3b's form, with 89 columns of its own) and the keep ch
 | 150 (restart at the save) | the switch cost out, a held weapon choosable: the trainer alone is stopped right after the save of update 150 (`stop_18a.ps1 -Update 150`) and started again from it (`start.ps1 -Restart`); the watcher, the ramp and the logger keep running | | the update-170 check |
 | 160 to 190, held to 210 | the item rule's lesson and the speed pay in games out | **210: "1.6a under AIM3"** | level; megas and reds a minute, big weapons owned |
 | 210 to 250, held to 270 | the keep choice | **270: "1.7a under AIM3"** | games up; quiet re-decisions under 0.08; against 1.7a's update 90 level or better |
-| 270 to 310, held to 330 | the strategy inputs fade out of the hands ⏳ | **330 (the end)** | level; megas and reds head to head; the hands' part of his target scores |
+| 270 to 310, held to 330 | the strategy inputs fade out of the hands | **330 (the end)** | level; megas and reds head to head; the hands' part of his target scores |
 
 Each stage ends on an update the watcher checks (10, 30, 50, ...), so it is read at its end values before the next opens. As first written the
 run was 310 updates (AIM3 over 40, the teacher over 40, the keep choice over 80, no last stage). Condensing, volunteered: fewer checks a
@@ -99,7 +101,7 @@ lightning in hand over 50% (reported, not acted on). Negative frags and lopsided
 
 **Weaknesses, volunteered:**
 - It is a new network, not 1.7a with better aim. The checks against 1.7a's update 90 say how near it lands; 91.5% against b1.2d's end
-  took 1.7a 470 updates, and this run has 310.
+  took 1.7a 470 updates, and this run has 330.
 - The rail is not addressed. b1.2d already holds it 5% of the time (v0.6.0: 22%); nothing in 1.8a puts him where a rail shot is the right
   one. That is 2.1's work, and AIM3 only makes sure his hands can then learn it.
 - Without the head's weapon part his weapon is the hands' alone, as in 1.3b. If 2.1's instruction is late, he has no slow reason for a weapon.
@@ -109,7 +111,7 @@ lightning in hand over 50% (reported, not acted on). Negative frags and lopsided
 
 | | State |
 |---|---|
-| The start (`tests.py start`) | ✅ `tests_start.log`, ALL PASSED (10 checks): b1.2d's end widened answers as b1.2d's end (0 actions differ); the cleaned network answers as the widened one on 3,200 real rows, each through its own list (every first layer's sums the same to 1e-13; in the checks' single precision at most 5 of 44,800 choices may differ, and with the brain's half-precision input rounding 18 do: the two read their inputs on different grids); the list has nothing of the cut groups and keeps the ways, the heavy machine gun, the gauntlet, the grenade arc, the pre-fire and the emergence; the head and the keep choice at zero effect (0 actions differ); the head's 89 columns; the strategy fade's 29 columns, shut |
+| The start (`tests.py start`) | ✅ `tests_start.log`, ALL PASSED (10 checks): b1.2d's end widened answers as b1.2d's end (0 actions differ); the cleaned network answers as the widened one on 3,200 real rows, each through its own list (every first layer's sums the same to 1e-13; in the checks' single precision at most 5 of 44,800 choices may differ, and with the brain's half-precision input rounding 18 do: the two read their inputs on different grids); the list has nothing of the cut groups (the pre-fire and the emergence among them) and keeps the ways, the heavy machine gun, the gauntlet and the grenade arc; its tail is the guessing lesson's four marks and the yellows' four timers; the head and the keep choice at zero effect (0 actions differ); the head's 89 columns; the strategy fade's 29 columns, shut |
 | The settings check against 1.7a's command | ✅ only these differ: the run, the minutes, `--env duel_env_ffa18`, `--brain-fade 0` (nothing left for it to fade), `--gate-open`, `--head2-wpg 0`, `--pass-odds 0`, `--habit-p 0`, `COMBAT=0`, the AIM3 names, and until the restart `INTENT_SWITCH=0.02`, `WEAPON_OWN=0`. `start.ps1` runs it again and refuses on any other |
 | The trainer at a fixed seed, seven small runs (`tests.py ident`) | ✅ `tests_ident.log`, ALL PASSED (40 checks): it repeats itself to the bit; the damage pay 0.005 and zero-sum in the ledger; AIM3's end dials (the lead and the reload with them) change the first update's actions; the head's credit changes nothing before the first learning step; the strategy fade at 1 changes the first update's actions and is in the record; no firing cost |
 | The live file (`tests.py live`) | ✅ `tests_live.log`, ALL PASSED (7 checks): applied before the first rollout; mid values of all ten dials are applied and in the save's record |
@@ -123,6 +125,29 @@ lightning in hand over 50% (reported, not acted on). Negative frags and lopsided
 **Not done, and not needed for the run:** the plugins and the export on the cleaned list (before any server); the latency by input group.
 
 **How it is run:** `start.ps1 -Minutes <n>`; at update 150 `stop_18a.ps1 -Update 150`, then `start.ps1 -Restart -Minutes <n>`; at the end `stop_18a.ps1 -Update 330 -All`. I do the restart and the end by hand while monitoring, on the card's word.
+**The restart unattended** (owner, 11-11: "set it up so the second part starts automatically when the first part ends"):
+`start.ps1 -Minutes <n> -AutoRestart <m>` arms `auto_restart.ps1` (hidden): it waits for the kept save of update 150, runs
+`stop_18a.ps1 -Update 150` and then `start.ps1 -Restart -Minutes <m>`, once, with every check of both scripts; a refusal is written to
+`auto_restart.log` as AUTO RESTART FAILED and nothing is retried. Tested dry (the waiting and the hand-over); the two scripts it calls run
+for the first time in the run. The restart renames phase 1's `live_status.json` (it deleted it before): nothing is deleted.
+
+## The restart (11-12)
+
+**The unattended restart failed at update 150 (03:29):** `stop_18a.ps1` named a variable `$all` beside its parameter `$All` (one name in
+PowerShell), found "0 trainers" and refused; phase 1 ran on until its 900 minutes ended at 05:05 (update 168). On the owner's word
+("Just start it from u150 as planned") phase 2 was started by hand at 07:12 from the save of update 150: phase 1's state after 150 is kept
+in `data/sim_runs/duel_gru_1_8a/phase1_after150/` (its policy and optimizer at 168, its metrics to 168, its live.json, the four snapshots
+after 150), the run's metrics cut back to its first 150 lines, live.json set to the ramp's dials at clock 150; nothing deleted. The stop
+script is fixed (`$procs`).
+
+## The fallback (owner, 2026-11-11, during the run: "keep going as planned but have that as a fallback plan if things don't go well")
+
+If the head's stage fails here (the checks do not rise as 1.3b's did, or the lightning takes his hand again with the credit over updates
+50 to 130): **the head is opened once, in 2.1's form, from the save of update 50** ("b1.2d under AIM3", `keep/policy_u50_18a.pt` with its
+optimizer), with 2.1's changes already in place, not re-run in 1.3b's form. Why it was not the first plan: 2.1 is five new parts, none
+built or tested yet, and opening the head inside it would put the one known gain (1.3b's 89%) and five untested parts in one run. Seen
+before the credit opened: the lightning in his hand in training games rose from 43% to 50% over updates 10 to 39 under AIM3 alone
+(rockets 34% to 29%, rail 6% to 3%), so the head's credit is not the slide's only cause. He decides if and when the fallback is taken.
 
 ## After the run
 

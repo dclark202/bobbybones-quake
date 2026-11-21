@@ -50,7 +50,7 @@ def version_name(run):
     return "v" + m.group(1).replace("_", ".") if m else "v0.1" if run == "duel_gru_v15c" else run
 
 
-ck = torch.load(os.path.join(ROOT, "data", "sim_runs", a.run, a.policy), weights_only=False, map_location="cpu")
+ck = torch.load(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.run, a.policy), weights_only=False, map_location="cpu")
 sd = {k: v.cpu().numpy() for k, v in ck["model"].items()}
 os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 env_vars = dict(ck.get("env_vars") or {})
@@ -64,7 +64,7 @@ legs = {}
 if str(env_vars.get("LEGS", "0")) not in ("0", "", "0.0"):   # a network with legs is nothing without their network
     assert a.legs, "this network has legs (LEGS=1): give --legs <the movement network's run>"
     import shutil
-    shutil.copy(os.path.join(ROOT, "data", "sim_runs", a.legs, "policy.npz"), os.path.join(os.path.dirname(os.path.abspath(a.out)), "legs.npz"))
+    shutil.copy(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.legs, "policy.npz"), os.path.join(os.path.dirname(os.path.abspath(a.out)), "legs.npz"))
     legs = {"legs": np.array("legs.npz"), "legs_run": np.array(a.legs)}
 # (v0.2) the attention part: the layout of the tokens as text ("attn") and its weights under "attn.<name>", as the
 # checkpoint has them. The plugins give both to sim/attn.py's forward_np (plugins/netpass.py); the two value outputs
@@ -74,14 +74,14 @@ if ck.get("attn") is not None:
     attn = {"attn": np.array(json.dumps(ck["attn"]))}
     attn.update({k: v for k, v in sd.items() if k.startswith("attn.")})
     assert "attn.door.weight" in attn, "the checkpoint names an attention part and has no weights for it"
-    assert int(ck["attn"]["obs_dim"]) == sd["enc.0.weight"].shape[1], "the tokens are cut from {} inputs, the network has {}".format(
-        ck["attn"]["obs_dim"], sd["enc.0.weight"].shape[1])
+    _aw = int(ck["inputs"]["n"]) if ck.get("inputs") else sd["enc.0.weight"].shape[1]    # (a cleaned list: the tokens are cut from the
+    assert int(ck["attn"]["obs_dim"]) == _aw, "the tokens are cut from {} inputs, the network has {}".format(ck["attn"]["obs_dim"], _aw)   # whole list, the encoder reads its first n_hands)
 legs_in = {}                                                 # (LEGS_IN, B-253) his legs' branch: its weights as legs_w0 ... legs_bp
 if "legs.0.weight" in sd:                                    # (the movement network's file goes beside it all the same: the simulator
     assert legs, "this network has its legs inside (LEGS_IN): give --legs <the movement network's run> as well"   # finds his ways with it)
     legs_in = {"legs_w0": sd["legs.0.weight"], "legs_b0": sd["legs.0.bias"], "legs_w1": sd["legs.2.weight"], "legs_b1": sd["legs.2.bias"],
                "legs_wp": sd["legs.4.weight"], "legs_bp": sd["legs.4.bias"]}
-    lz_ = np.load(os.path.join(ROOT, "data", "sim_runs", a.legs, "policy.npz"))     # (v0.3.2) the branch reads the inputs the legs' file makes:
+    lz_ = np.load(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "sim_runs", a.legs, "policy.npz"))     # (v0.3.2) the branch reads the inputs the legs' file makes:
     assert int(lz_["w0"].shape[1]) == int(sd["legs.0.weight"].shape[1]), \
         "the branch has {} inputs, the legs' network {} {} (the three of a look point: LEGS_LOOK, movement_env.N_C2)".format(  # 61, or 64
             sd["legs.0.weight"].shape[1], a.legs, lz_["w0"].shape[1])
@@ -158,11 +158,60 @@ if ck.get("head2") is not None:                              # (its value is the
     if a.head2_gate >= 0:
         head2["head2.gate"] = np.array(np.float32(a.head2_gate))
     assert "head2.plan_in.weight" in head2 and "head2.gate" in head2, "the checkpoint names a strategy head and has no weights for it"
+    if ck["head2"].get("slowplan"):                          # (2.1d, the pull) the slow plan inside the head: its layers, strength and horizon go with
+        assert all("head2.plan.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")) and "head2.pull_g" in head2 \
+            and "head2.pull_h" in head2, "the head names the slow plan and the checkpoint has not its weights or its pull"   # the head's (the layout
+        print("the slow plan inside the head (2.1d): horizons {}, the pull's strength {:.4f} on horizon {}, floor {}, refresh every {}".format(   # names
+            ck["head2"]["slowplan"]["horizons"], float(head2["head2.pull_g"]), int(round(float(head2["head2.pull_h"]))),                         # its settings)
+            ck["head2"]["slowplan"]["floor"], ck["head2"]["slowplan"]["every"]))
+    if ck["head2"].get("outlook"):                           # (2.1f) the outlook inside the head: its layers, strength and kind go with the head's
+        assert all("head2.out.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")) and "head2.out_g" in head2             and "head2.out_pick" in head2, "the head names the outlook and the checkpoint has not its weights or its dials"
+        print("the outlook inside the head (2.1f): kinds {}, the term's strength {:.4f}, the kind that plays {} ({})".format(
+            ck["head2"]["outlook"]["kinds"], float(head2["head2.out_g"]), int(round(float(head2["head2.out_pick"]))),
+            ck["head2"]["outlook"]["kinds"][int(round(float(head2["head2.out_pick"])))]))
+    if ck["head2"].get("trk22"):                             # (2.2a) the tracker, the desc outlooks, the second value go with the head's (head2.trk.*,
+        assert all("head2.trk.l{}.{}".format(i_, w_) in head2 for i_ in (1, 2, 3) for w_ in ("weight", "bias")) and "head2.out_src" in head2 \
+            and all("head2.dsc.desc.{}".format(k_) in head2 for k_ in ("l1s.weight", "l1t.weight", "l2.weight", "l3.weight")), \
+            "the head names 2.2a's parts and the checkpoint has not their weights or out_src"     # head2.dsc.*, head2.vw.*); the map sense the desc
+        ms_x = ck.get("map_sense")                           # term reads: the checkpoint's "map_sense" (its layout, its weights); the server needs
+        assert ms_x is not None, "2.2a's desc term reads the map sense: the checkpoint has no map_sense"    # its tables in <QLBOT_ROOT>/data/maps
+        head2["map_sense"] = np.array(json.dumps(ms_x["layout"]))
+        head2.update({"map_sense." + k_: np.asarray(v_.detach().cpu().numpy() if hasattr(v_, "detach") else v_, np.float32) for k_, v_ in ms_x["model"].items()})
+        print("2.2a's parts inside the head: the tracker ({} outputs), the desc outlooks {}, out_src {} ({}); the map sense with it ({} maps)".format(
+            len(ck["head2"]["trk22"]["outs"]), ck["head2"]["desc22"]["sibs"], int(round(float(head2["head2.out_src"]))),
+            "desc" if int(round(float(head2["head2.out_src"]))) == 1 else "the built outlook", len(ms_x["layout"]["maps"])))
+    if ck["head2"].get("slowhalf"):                          # (2.1e) the slow halves inside the head: every half's layers and the three dials go
+        nk_ = len(ck["head2"]["slowhalf"]["clocks"])         # with the head's (the layout names their clocks; the read-back is the inp's columns)
+        assert all("head2.slow.{}.{}.{}".format(k_, l_, w_) in head2 for k_ in range(nk_) for l_ in ("inp", "l2", "l3") for w_ in ("weight", "bias")) \
+            and all("head2.slow.{}.gru.{}".format(k_, w_) in head2 for k_ in range(nk_) for w_ in ("weight_ih", "weight_hh", "bias_ih", "bias_hh")) \
+            and all("head2." + b_ in head2 for b_ in ("slow_mix", "slow_back", "slow_pick")), \
+            "the head names the slow halves and the checkpoint has not their weights or their dials"
+        print("the slow halves inside the head (2.1e): clocks {} head ticks, the pull's source mix {:.4f}, the read-back's gate {:.4f}, the half "
+              "that plays {}".format(ck["head2"]["slowhalf"]["clocks"], float(head2["head2.slow_mix"]), float(head2["head2.slow_back"]),
+                                     int(round(float(head2["head2.slow_pick"])))))
 else:
     assert a.head2_gate < 0, "--head2-gate: this network has no strategy head"
-if head2 and ck.get("passodds") is not None and "passr.l1.weight" in sd:      # (1.7) the brain's pass readout: the order's candidates' odds
+if head2 and (ck.get("head2") or {}).get("keepq") and "head2.keepq.weight" in sd and ck.get("stay") is not None:   # (2.1, sim/stay.py) the stay
+    head2["stay"] = np.array(json.dumps(ck["stay"]["layout"]))     # value the keep choice's quiet layer reads: its layout as text, its weights
+    head2.update({"stay." + k_: np.asarray(v_.detach().cpu().numpy() if hasattr(v_, "detach") else v_, np.float32)   # (the scale among them) under
+                  for k_, v_ in ck["stay"]["model"].items()})                                                         # "stay.<name>"; its Adam stays
+if head2 and ck.get("passodds") is not None and "passr.l1.weight" in sd:     # (1.7) the brain's pass readout: the order's candidates' odds
     head2["passodds"] = np.array(json.dumps(ck["passodds"]))
     head2.update({k: v for k, v in sd.items() if k.startswith("passr.")})
+insx = {}                                                    # (2.1) the head's choice of an instruction: the scorer (inside the head: head2.ins_* of
+if ck.get("ins") is not None and ck.get("appraise") is not None and (ck.get("head2") or {}).get("ins") and "head2.ins_iv.weight" in sd:    # the weights) and the appraisals it reads
+    import sys as _sys_x
+    _sys_x.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import head2 as _head2_x
+    insx = dict(ins=np.array(json.dumps(dict(layout=ck["head2"]["ins"], seen=int(ck["ins"].get("seen", 0)), warm=int(ck["ins"].get("warm", 0)),   # their layouts.
+                                             none_row=int(ck["ins"].get("none_row", -1)), fill=dict(ck["ins"].get("fill") or {})))),                 # plugins/netpass.py does NOT give
+                appraise=np.array(json.dumps(ck["appraise"]["layout"])))                                    # instructions yet (TRAINER_PARTS.md):
+    insx.update({"ins." + k_: v_ for k_, v_ in _head2_x.np_ins_params({k_: v_ for k_, v_ in sd.items() if k_.startswith("head2.ins_")}).items()})   # (under the scorer's short names: plugins/netpass.py's)
+    insx.update({"appraise." + k_: np.asarray(v_) for k_, v_ in ck["appraise"]["model"].items()})
+    for nm_ in ("known", "spawn", "map_sense"):              # (the brain's readouts "does he know where I am" and "where does he respawn"; the
+        if ck.get(nm_) is not None and (nm_ != "map_sense" or int(ck["head2"]["ins"].get("ms", 0) or 0)):    # map sense where the rows read it:
+            insx[nm_] = np.array(json.dumps(ck[nm_]["layout"]))                                              # plugins/netpass.py fills the rows)
+            insx.update({nm_ + "." + k_: np.asarray(v_) for k_, v_ in ck[nm_]["model"].items()})
 rfade = {}                                                   # (v0.4.2a, sim/rule_fade.py) the faded columns and the gate g; plugins/netpass.py
 if ck.get("rule_fade") is not None:                          # fades them as test_suite.Policy does (and with "readers", the simulator's
     rf_ = dict(ck["rule_fade"])                              # readers take the brain's answer: BRAIN_READ in env_vars)
@@ -172,6 +221,23 @@ if ck.get("rule_fade") is not None:                          # fades them as tes
     rfade = {"rule_fade": np.array(json.dumps(rf_))}
 else:
     assert a.rule_fade_g < 0, "--rule-fade-g: this network has no rule fade"
+# (2026-11-11, the cleaned input lists: sim/input_list.py) A network of a list reads its own columns, by name. The file carries where
+# each of them sits in the simulator's full list (input_src), the list's sizes and the names; plugins/netpass.py takes those columns
+# out of the simulator's inputs. The simulator named in the file is the FULL one (duel_env_ffa): the list's own module
+# (duel_env_ffa18) reads docs/INPUTS.csv, which a game server's image does not hold, and the plugins never call step().
+inlist = {}
+if ck.get("inputs"):
+    import csv
+    I_ = dict(ck["inputs"])
+    full_ = {(r["group"], r["input"]): i for i, r in enumerate(csv.DictReader(open(os.path.join(ROOT, "docs", "INPUTS.csv"), encoding="utf-8")))}
+    assert len(full_) >= int(I_["full"]), "docs/INPUTS.csv has {} inputs, the network's list was cut from {}".format(len(full_), I_["full"])
+    src_ = [full_[(g_, n_)] for g_, n_ in ck["input_names"]]
+    assert len(src_) == int(I_["n"]) == len(ck["obs_mean"]) and len(set(src_)) == len(src_), "the list's names and its sizes differ"
+    assert sd["enc.0.weight"].shape[1] == int(I_["n_hands"]), "the encoder reads {} inputs, the list's hands {}".format(
+        sd["enc.0.weight"].shape[1], I_["n_hands"])
+    assert a.env in ("duel_env_ffa", "duel_env_ffa{}".format(I_["list"])), "--env: a network of list {} is exported for duel_env_ffa".format(I_["list"])
+    a.env = "duel_env_ffa"
+    inlist = dict(input_src=np.asarray(src_, np.int64), inputs=np.array(json.dumps(I_)), input_names=np.array(json.dumps(ck["input_names"])))
 np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"], b1=sd["enc.2.bias"],
          wih=sd["gru.weight_ih"], whh=sd["gru.weight_hh"], bih=sd["gru.bias_ih"], bhh=sd["gru.bias_hh"],
          wp=sd["pi.weight"], bp=sd["pi.bias"], obs_mean=ck["obs_mean"], obs_var=ck["obs_var"],
@@ -179,8 +245,8 @@ np.savez(a.out, w0=sd["enc.0.weight"], b0=sd["enc.0.bias"], w1=sd["enc.2.weight"
          action_dims=np.array(ck["action_dims"]), run=np.array(a.run), env=np.array(a.env),
          minutes=np.array(ck.get("minutes", 0.0)), react_ms=np.array(ck.get("react_ms", 150.0)), acquire_ms=np.array(ck.get("acquire_ms", 0.0)), no_walk=np.array(bool(ck.get("no_walk", False))),
          env_vars=np.array(json.dumps(env_vars)), version=np.array(a.version or version_name(a.run)),
-         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **{**mind, **head2}, **rfade, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
-print("wrote", a.out, "obs", ck["obs_dim"], "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
+         updated=np.array(a.updated or datetime.date.today().isoformat()), **attn, **slow, **head, **order, **legs, **legs_in, **uni, **brain, **{**mind, **head2}, **rfade, **inlist, **insx, **({"round_secs": np.array(round_secs)} if round_secs > 0 else {}))
+print("wrote", a.out, "obs", ck["obs_dim"], "(list {}: {} of the simulator's {})".format(I_["list"], I_["n"], I_["full"]) if inlist else "", "actions", ck["action_dims"], "minutes", round(ck.get("minutes", 0.0)), "switches", env_vars,
       "round", round_secs or "plugin default",
       "| attention: {} tokens, door {}".format(ck["attn"]["tokens"], "open" if np.abs(attn["attn.door.weight"]).sum() > 0 else "shut (the part is skipped)") if attn else "",
       "| head: a tick every {} frames, plan_in {}".format(ck["head"]["every"], "open" if np.abs(head["head.plan_in.weight"]).sum() > 0 else "at zero") if head else "",

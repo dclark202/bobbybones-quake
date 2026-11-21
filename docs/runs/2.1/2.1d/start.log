@@ -1,0 +1,85 @@
+11-15 17:07:55 train.cmd, 884 minutes, 1000 updates, head2-lam 0.998, pull horizon 0: wrote train.cmd: --minutes 884 --max-updates 1000 --head2-lam 0.998 --pull 1 --pull-g 0 --pull-h 0 ; aim2_env.cmd: 2.1c's
+11-15 17:07:55 no firing cost in the command: every one at zero
+11-15 17:07:55 allowed arg --max-updates: run '1000' | reference '100'
+11-15 17:07:55 allowed arg --minutes: run '884' | reference '384'
+11-15 17:07:55 allowed arg --pull: run '1' | reference '<unset>'
+11-15 17:07:55 allowed arg --pull-g: run '0' | reference '<unset>'
+11-15 17:07:55 allowed arg --pull-h: run '0' | reference '<unset>'
+11-15 17:07:55 allowed arg --run: run 'duel_gru_2_1d' | reference 'duel_gru_2_1c'
+11-15 17:07:55 settings check: PASS
+11-15 17:07:57 allowed checkpoint AIM3_LEAD: checkpoint '1.0' | command '0'
+11-15 17:07:57 allowed checkpoint AIM3_RELOAD: checkpoint '0.0' | command '1'
+11-15 17:07:57 allowed checkpoint AIM3_SIZE_A: checkpoint '0.39' | command '1'
+11-15 17:07:57 allowed checkpoint AIM3_SIZE_B: checkpoint '0.355' | command '0'
+11-15 17:07:57 allowed checkpoint AIM3_W: checkpoint '1.0' | command '0'
+11-15 17:07:57 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-15 17:07:57 allowed checkpoint DODGE_G: checkpoint '1.0' | command '0'
+11-15 17:07:57 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-15 17:07:57 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.1' | command '0.12'
+11-15 17:07:57 settings check: PASS
+11-15 17:07:59 backup: copied 106 files 0.82 GB to T:\BobbyBones_backup
+11-15 17:08:01 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\policy.pt: the slow plan inside the head (head2.plan.*: 256 -> 128 -> 128 -> 2 horizons [10, 25] x 17 targets; every 5, floor 0.01); pull 0 on horizon 0 (10 ticks); its Adam as top-level plan_opt (kept); |plan.l3.weight| 5.5890
+11-15 17:08:09 plan_init same: same: 400 real rows x 8 seats (400 head ticks, 1776 seat-frames on the held draw): actions that differ at pull 0: 0 of 48000
+11-15 17:08:09 plan_init same: for information: b at pull 1.0 on the same rows: actions that differ 688 of 48000 (the plan's odds not uniform)
+11-15 17:08:09 plan_init same: ALL PASSED
+11-15 17:08:11 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\snapshots\anchor_13b.pt: the head given the slow plan (horizons [10, 25], hid 128) with its last layer at zero (even odds); no pull (strength 0)
+11-15 17:08:13 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\snapshots\anchor_15a.pt: the head given the slow plan (horizons [10, 25], hid 128) with its last layer at zero (even odds); no pull (strength 0)
+11-15 17:08:15 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\snapshots\anchor_16a.pt: the head given the slow plan (horizons [10, 25], hid 128) with its last layer at zero (even odds); no pull (strength 0)
+11-15 17:08:17 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\snapshots\anchor_20e.pt: the head given the slow plan (horizons [10, 25], hid 128) with its last layer at zero (even odds); no pull (strength 0)
+11-15 17:08:18 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\snapshots\anchor_b11.pt: no strategy head in this file, written as it is
+11-15 17:08:20 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\snapshots\anchor_b12d.pt: no strategy head in this file, written as it is
+11-15 17:08:22 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\snapshots\anchor_v060_end.pt: no strategy head in this file, written as it is
+11-15 17:08:24 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\snapshots\anchor_21c.pt: the head given the slow plan (horizons [10, 25], hid 128) with its last layer at zero (even odds); no pull (strength 0)
+11-15 17:08:24 live.json: 2.1d's new name at the start: {"PULL_G": 0.0}; HELD_G as 2.1c's file has it (0.25); every other value as 2.1c's file (46 names)
+11-15 17:08:24 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\live.json
+11-15 17:08:25 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\live.json: accepted
+11-15 17:08:25 the ramp ramp_21d.py: 112 files (clocks 0 to 111), all accepted
+11-15 17:08:25 LIVE ACCEPT: PASS
+11-15 17:08:25 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\keep\policy_end_21c.pt with the slow plan inside the head, pull 0 on horizon 0 (plan_init add), with its optimizer; anchors anchor_13b.pt, anchor_15a.pt, anchor_16a.pt, anchor_20e.pt, anchor_b11.pt, anchor_b12d.pt, anchor_v060_end.pt and anchor_21c.pt (the source), given an even plan; the judge C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\judge\judge_v060_wpn.npz
+11-15 17:08:25 trainer started: cmd 25576, from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1c\keep\policy_end_21c.pt, 884 minutes, at most 1000 updates (--max-updates)
+11-15 17:08:40 live.json applied by the trainer before its first rollout (2026-11-15 17:08:38)
+11-15 17:08:45 watcher 34936 | ramp 37428 (ramp_21d.py: PULL_G 0 to update 10, 0 -> 1.0 over 10 to 30, -> 2.0 over 30 to 50; HELD_G the start's to 50, -> 1.0 by 110; marks 10, 30, 50, 80, 110; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 38228 | all on 0x3C3C
+11-15 17:08:55 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 992 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 69 + hands 512 + goal 19 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 690,012 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp; the slow plan inside (2.1d): 256 -> 128 -> 128 -> 2 horizons [10, 25] x 17 targets, refreshed every 5 keep readings, the pull's floor 0.01
+11-15 17:08:55 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 101 step counts moved to the host)
+11-15 17:08:55 trainer: slow plan INSIDE the head (2.1d): head state 256 -> 128 -> 128 -> 2 horizons x 17 targets (horizons [10, 25] head ticks, refresh every 5 keep readings and at a new draw); its Adam 0.0003 (from the checkpoint); lesson: his own odds BEFORE the pull; THE PULL: his target scores + PULL_G x log(max(odds of horizon 0 (10 ticks), 0.01)), strength 0.0000 now (live PULL_G); the plan's last layer decayed at the live H2_L2 (rule 11)
+11-15 17:08:55 trainer: held draw (2.1c): share 0.0000 of his trips (the rest: the lock rule, INTENT_HOLD)
+11-15 17:08:55 trainer: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 3748758 weights, device cuda, 884.0 min
+11-15 17:08:55 trainer: the dodge token (2.0d): gate 0.00 now (follows live DODGE_G = 0: log of it, shut at 0)
+11-15 18:21:39 restart.ps1 (the trainer only, from the run's last save): -Minutes 810 -Updates 1000 -Lam 0.998 -PullH 0
+11-15 18:21:39 train.cmd, 810 minutes, 1000 updates, head2-lam 0.998, pull horizon 0: wrote train.cmd: --minutes 810 --max-updates 1000 --head2-lam 0.998 --pull 1 --pull-g 0 --pull-h 0 ; aim2_env.cmd: 2.1c's
+11-15 18:21:39 no firing cost in the command: every one at zero
+11-15 18:21:39 allowed arg --max-updates: run '1000' | reference '100'
+11-15 18:21:39 allowed arg --minutes: run '810' | reference '384'
+11-15 18:21:39 allowed arg --obs-half: run '<unset>' | reference ''
+11-15 18:21:39 allowed arg --pull: run '1' | reference '<unset>'
+11-15 18:21:39 allowed arg --pull-g: run '0' | reference '<unset>'
+11-15 18:21:39 allowed arg --pull-h: run '0' | reference '<unset>'
+11-15 18:21:39 allowed arg --run: run 'duel_gru_2_1d' | reference 'duel_gru_2_1c'
+11-15 18:21:39 settings check: PASS
+11-15 18:21:40 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\live.json: accepted
+11-15 18:21:40 the ramp ramp_21d.py: 112 files (clocks 0 to 111), all accepted
+11-15 18:21:40 LIVE ACCEPT: PASS
+11-15 18:21:40 trainer restarted: cmd 31144, --resume from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\policy.pt and opt.pt, 810 minutes, at most 1000 updates (--max-updates)
+11-15 18:21:55 live.json applied by the restarted trainer (2026-11-15 18:21:54)
+11-15 18:21:55 the watcher running: 34936
+11-15 18:21:55 the ramp running: 33060
+11-15 18:21:55 the self-play logger running: 38228
+11-15 20:16:34 restart.ps1 (the trainer only, from the run's last save): -Minutes 695 -Updates 1000 -Lam 0.998 -PullH 0
+11-15 20:16:34 train.cmd, 695 minutes, 1000 updates, head2-lam 0.998, pull horizon 0: wrote train.cmd: --minutes 695 --max-updates 1000 --head2-lam 0.998 --pull 1 --pull-g 0 --pull-h 0 ; aim2_env.cmd: 2.1c's
+11-15 20:16:34 no firing cost in the command: every one at zero
+11-15 20:16:34 allowed arg --max-updates: run '1000' | reference '100'
+11-15 20:16:34 allowed arg --minutes: run '695' | reference '384'
+11-15 20:16:34 allowed arg --obs-half: run '<unset>' | reference ''
+11-15 20:16:34 allowed arg --pull: run '1' | reference '<unset>'
+11-15 20:16:34 allowed arg --pull-g: run '0' | reference '<unset>'
+11-15 20:16:34 allowed arg --pull-h: run '0' | reference '<unset>'
+11-15 20:16:34 allowed arg --run: run 'duel_gru_2_1d' | reference 'duel_gru_2_1c'
+11-15 20:16:34 settings check: PASS
+11-15 20:16:35 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\live.json: accepted
+11-15 20:16:35 the ramp ramp_21d.py: 112 files (clocks 0 to 111), all accepted
+11-15 20:16:35 LIVE ACCEPT: PASS
+11-15 20:16:35 trainer restarted: cmd 39276, --resume from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\policy.pt and opt.pt, 695 minutes, at most 1000 updates (--max-updates)
+11-15 20:16:50 live.json applied by the restarted trainer (2026-11-15 20:16:50)
+11-15 20:16:50 the watcher running: 34936
+11-15 20:16:50 the ramp running: 27904
+11-15 20:16:50 the self-play logger running: 38228

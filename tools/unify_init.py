@@ -158,7 +158,7 @@ class TorchNet:
         import torch
         import legs_unify as LU_
         with torch.no_grad():
-            x = torch.from_numpy(np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float32))
+            x = torch.from_numpy(np.clip((obs - self.mean) / np.sqrt(self.var + 1e-8), -10, 10).astype(np.float16).astype(np.float32))
             e = self.enc(x)
             if self.attn is not None:
                 e = e + self.attn(x)

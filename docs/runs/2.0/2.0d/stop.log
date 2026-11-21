@@ -1,0 +1,4 @@
+﻿11-13 19:24:35 stop at update 57 by the owner (11-13: 'this performance is bad enough that I want to stop it now and save u50')
+11-13 19:24:35 kept keep\policy_u50_20d.pt + opt (policy.pt of 18:41:36 = update 50's save; sha 47942596AFC12977, source 47942596AFC12977)
+11-13 19:24:36 the trainer 33020 with 30 simulators; self-play logger and ramp: 4 processes
+11-13 19:24:41 the trainer, its simulators, the self-play logger and the ramp are stopped; the watcher is left to finish the check of update 50
