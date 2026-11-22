@@ -1,0 +1,43 @@
+PASS  1  the list: 1053 inputs at c99cc02, 1101 today (48 new); route True, the order's map numbers True
+PASS  1  off: the inputs, the pay and the rounds' ends as at c99cc02 over 2000 frames
+PASS  1  off: the new columns are zeros
+PASS  2  on with no instruction given: as off, to the bit (but the four finish inputs of the weapon in hand, live for every seat)
+PASS  2  ... every other new column zero; those four live
+PASS  3  given: zeros under none, one verb, every number in range (0 bad frames)
+PASS  3  a moment carries the instruction
+PASS  3  the columns are live under an instruction
+      the states reached, frames by verb (on the way, doing, done, failed):
+        check    [0, 1126, 474, 0]
+        contest  [2306, 0, 0, 0]
+        cut      [670, 968, 202, 0]
+        go       [2232, 0, 0, 0]
+        hold     [1485, 252, 0, 5]
+        out      [254, 0, 1655, 0]
+        push     [1689, 145, 13, 0]
+        spam     [903, 457, 0, 880]
+PASS  5  instr_feat() and instr_state() at every tick, nothing picked: as off, to the bit (but those four)
+PASS  5  ... and exactly as on with nothing read (a read changes nothing)
+PASS  5  the candidates: shapes, ranges, invalid rows, picks land, the force holds and lifts (0 bad ticks; 38 forced ticks)
+      valid seat-ticks by row (go 7, contest 4, hold 8, spam 4, push, cut 3, out 3, none, spare, check 3, spawn push 3, spawn spam 3): [3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 3956, 1306, 1308, 1333, 1207, 1616, 0, 0, 0, 3956, 3956, 3956, 3969, 0, 1616, 1616, 1616, 71, 71, 71, 71, 71, 71]
+PASS  5  a picked row reaches the hands' inputs
+PASS  6  the drills: 1 begun, 81 seat-frames, the longest 81 frames (the window 80), verbs {'hold': 81}
+PASS  6  (2.1a) drills begun in the middle of a game (DRILL_INS_RATE=0.05 a second, 2 s each): 105 begun, 8.8% of the seats' frames in one (0.05 x 2 / 1.1 = 9% less the dead and the waiting), the longest 81 frames, verbs {'hold': 1780, 'out': 1519, 'contest': 1377, 'push': 874, 'go': 1701, 'check': 972, 'spam': 243}
+PASS  7  the labels on (KNOWN_TRUTH, SPAWN_TRUTH), nothing picked: the game as with them off, to the bit
+PASS  7  the labels and the new rows: en_knows only with the enemy's sight or a fresh picture within reach, en_spawn where he stands, check rows only with a belief, spawn rows only in their seconds and about a real spawn point, quiet lands (0 bad frames)
+PASS  7  they occur: en_knows 26169 seat-frames, heard 9920, respawns labelled 9, check rows valid 18189, spawn rows valid 1119, quiet forced 38 ticks; under each verb [600, 3163, 1765, 3805, 445, 274, 0, 1341, 607]
+PASS  7  a moment carries quiet and the row's spawn point, not the quiet force
+PASS  8  with his stack belief on (EN_STACK=1): on with nothing given as off, to the bit (but those four)
+PASS  8  the head's pay label on (HEAD_PAY_TRUTH=1): the game as with it off, to the bit
+PASS  8  the finish time: the hands' columns and the rows' numbers within 0 .. 2 and equal to _fin(), zero for the dead, the cautious time never under the plain one, instr_state() of 8 numbers, instr_pattern() in 0, 1, 2 (0 bad frames)
+PASS  8  they occur: seat-frames with a belief 95328, under 2 s to finish with the weapon in hand 811, chunk hits 6, seat-ticks under an instruction 5860, with a wake 49, with the believed stack fallen since it was given 2025; pattern moments: after a hit 2854 seat-frames, a fight's start with both stacks high 238
+PASS  8  a moment carries the wake's and the pattern's books
+PASS  8  a chunk hit booked (note_dealt) marks the attacker alone and makes a pattern's moment where the enemy is near
+PASS  4b the two-player module (sim/duel_env.py) and the generated group module at two players, on bloodrun under instructions with every 2.1 switch on: the inputs (but the group block's 24), the pay and the rounds' ends alike to the bit
+PASS  9  the binding on (INS_BIND=1), no instruction given: as with it off, to the bit
+PASS  9  under instructions: the action set is the one definition's, a seat bound for 2 s holds the weapon (10595 seat-frames bound, the asked weapon in hand on 93% of them, a switch asked on 807; stats[ins_bind] readings, bound, not his own pick, weapon changes [23748.0, 2651.0, 2144.0, 2049.0])
+PASS  9  with it off under the same instructions: nothing bound, and the games differ
+PASS  10 (2.1a) the receiver's side on (INS_WAY=1), the rows read at every tick: the game as with it off, to the bit (the rows are the head's, not the hands')
+PASS  10 the rows are 3 wider, every number in range, an invalid row zero (0 bad ticks); of 293454 valid rows 30.0% have a watched spam point on the way, 0.6% at a teleporter's end; way_seen_t mean 1.433 spread 0.870
+NOT RUN  4  tools/ffa_check.py: it plays on the test map and there is no testlab.bsp under C:\Users\dacla\Documents\gh\BobbyBones\data\maps (4b above is its comparison on bloodrun)
+ALL PASSED
+exit 0

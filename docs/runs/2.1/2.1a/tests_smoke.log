@@ -1,0 +1,19 @@
+19:38:14 scratch_21a_smoke: done in 0.2 min; the log ends: exit 1
+19:38:14 FAIL the trainer exited 0
+19:38:14 PASS the optimizer's state loaded, no REFUSED
+19:38:14 FAIL 8 or more updates (0)
+19:38:14 FAIL damage taken weighs as dealt (zero-sum): within 15% over the run
+19:38:14 PASS the dodge gate open and the frozen record on every update
+19:38:14 PASS the frozen record never moves
+19:38:14 FAIL the instruction's records: ins, branch, drill_ins there
+19:38:14 PASS no NaN in the trainer's kl and entropy
+19:38:16 PASS the frozen decisions' weights the same to the bit after 10 updates (10 tensors; moved: [])
+19:38:16 FAIL the rest learns: the hands' encoder, his memory and the head's memory moved ([])
+19:38:26 scratch_21a_smoke: done in 0.2 min; the log ends: exit 1
+19:38:26 FAIL a restart from the save with its optimizer: loaded, no cold start, one more update (0 -> 0)
+19:39:34 check: exit 0; emory never start over) | opponent the whole game (clock, score and memory never start over)
+    he        bare 22% | first weapon 4.0 s | 150+ 49% | weapons 2.5/min | mega 15%, red 10% of spawns | yellow 2.75/min | in view 16% | firing 10% (55% of the time in view) | speed 324, standing 3% (over 3 s: 0%) | lives 3.5/min, own deaths 1.0 a game
+    opponent  bare 6% | first weapon 2.7 s | 150+ 70% | weapons 2.25/min | mega 102%, red 73% of spawns | yellow 0.75/min | in view 15% | firing 11% (60% of the time in view) | speed 333, standing 3% (over 3 s: 0%) | lives 1.5/min, own deaths 0.0 a game
+
+19:39:34 PASS a one-map check of the save against S0 finished (0-2)
+19:39:34 FAILED

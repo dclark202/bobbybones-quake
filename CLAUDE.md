@@ -18,6 +18,11 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    him before any delete command runs.
 2. **Do only what the owner asks.** A question is not a go. Ask before starting runs, servers, agents, or anything that
    changes something outside this session; before renaming or restarting fresh. Public servers only on his word.
+   **Exception: a run he approved that crashes is fixed and restarted without asking** (owner, 2026-11-15: "Obviously this
+   was meant to run overnight"; 2.1b sat dead 10 hours waiting for a go). Find the cause, fix it in the code, test the fix
+   (a scratch smoke that exercises the failing path), move the dead folder aside (`<run>_crashN`, nothing deleted) or resume
+   from the last save, restart with the same settings and the remaining length, add the crash and the restart to `RUNS.md`,
+   and report it at once. A fix that changes the design, the pay or the settings still goes to him first.
 3. **Settings check before every run, check and calibration, and before using its numbers:**
    `python tools/run/check_settings.py <train.cmd> --ref <reference.cmd>` (and `--ck <checkpoint>` for a run's own saves).
    Any difference not deliberately allowed = the data is not used. Never build a run tool from an older copy.
@@ -52,6 +57,46 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
    proposal never says "bring him to the pros' X%". Aim: each parameter is set from the pros' own measured value of that
    parameter (default = the average pro, better = p90, max = all off); what hit rate comes out is not tuned. Do not suggest
    otherwise again.
+13. **A new part is never trained to copy a rule we do not want to keep; it learns silently, then is blended in** (owner,
+   2026-11-12: "we do not train things to copy a rule that we do not want to replicate. We let them train silently first and then
+   blend them in"). No copy lesson, teacher or imitation target that points a new head, choice or network at an old rule's or an old
+   network's behaviour (b1.3a's copy lesson failed; 1.9a's first start had one and was restarted without it). "Silently" = it learns
+   from its own lessons (its value, its readouts, its pay on its own played choices) while it plays nothing or a small share, and its
+   share or gate then opens slowly. **Once a hand-built rule is out it never comes back** (the 8-second lock: "I don't want to ever see the
+   lock again").
+14. **Every decision is checked against the research notes** (owner, 2026-11-13: the issues "stem from a lack of understanding about
+   how the game works"). Before proposing a design, a pay change or a run card, read the relevant parts of `docs/research/`
+   (MECHANICS, DUEL_STRATEGY, PRO_INTERVIEWS, BOTS) and fill a **"Research check"** section answering the seven questions of
+   `docs/research/README.md`, citing file and section; "not covered" is said plainly. A change that works against a principle there,
+   or rests on a simulator value that the notes show is off the real game, says so up front. When a note proves wrong, fix it.
+
+15. **When an approach has failed more than once, change the structure, not the variant** (owner, 2026-11-15: "we've hit a
+   roadblock a bit and I think partially we're getting to be somewhat circular in our approaches. So rather than just offer some minor
+   tweak, I really want you to think critically about whether a plan will work and don't be afraid to tear down other parts of how
+   things are organized to get there"; "Stop thinking so linearly with what has been tried before ... just changing them slightly is
+   not going to be the solution"). Name the assumption every failed attempt shared and propose removing it. Say plainly, with odds,
+   whether a plan will work before it is built. "That is how it already is" is never a reason to keep a design: "I have no allegiance
+   to anything specific design wise. I want the bot that does the things I ask ... when you get blinders thinking that we have to
+   continue to do something a particular way because that's how it already is, it makes it a slog and I get frustrated." His part is
+   guidance on what seems reasonable and expertise on Quake ("I'm trying to axiomatize my understanding of quake"); his plain-words
+   description of how a player thinks is a design specification, to be mapped onto the mechanism (the lock's removal: six attempts
+   shared "something decides when a new draw counts"; the step forward removed the re-draw, then built his "I'm going to go get mega ...
+   every 200ms I ask myself what else should I be doing" as the slow plan and its pull, 2.1c and 2.1d). Never answer a design question
+   with "run a test first" in place of an idea. The other hard rules still hold.
+
+16. **In a Fable session, an Opus 5.5 subagent does the coding** (owner, 2026-11-15: "That is a standing order ... in a fable session
+   always have an opus 5.5 subagent do the coding"). Every code change (the trainer, the simulator, tools, run scripts, plugins) is
+   handed to a subagent started with the Opus model, with a full brief (the files, the exact change, the tests, what must not be
+   touched: a live run's files, its processes); the session itself designs, reviews the diff, runs and monitors. Docs and run records
+   (cards, `RUNS.md`, this file) are written by the session.
+   **Fable mode (owner, 2026-11-16: Fable "really just for thinking through plans and interacting with me, and all of the mechanical
+   simple stuff is handled by an Opus 5.5 subagent"; "the context blows up so quickly and you are overkill for monitoring").** A Fable
+   session thinks, criticises, designs, decides with the owner and writes the briefs and the owner's pages (cards, designs). Everything
+   mechanical goes to the `opus-worker` agent (`.claude/agents/opus-worker.md`, Opus 5.5): code, builds, tests, measurements and fits,
+   reading a diff or many files (it brings back only what differs from the card), git, starting an approved run from its `start.ps1`,
+   the run table and docs bookkeeping. **Run monitoring is a separate Opus 5.5 session**, started with a written brief when a run
+   starts; it reports to the owner directly, and the Fable session reads its reports or the run's records only to plan. The Fable
+   session still answers for the result: it checks the worker's key claims (the numbers a decision rests on) before it tells the owner.
 
 ## Where things are
 
@@ -61,10 +106,11 @@ v0.4.x) is kept whole in [docs/archive/CLAUDE_2026-11-11.md](docs/archive/CLAUDE
 | `docs/PLAN.md` | the goal, where things stand, what's next |
 | `docs/HISTORY.md` | notes beyond the table: design ideas tried that did not work or were abandoned, open problems, measurements without training, incidents, lessons that are now rules. Read it before proposing anything |
 | `docs/BACKLOG.md` | open work and ideas, numbered `B-nn` |
+| `docs/research/` | **the game, the pros and other bots** (2026-11-13): mechanics checked against the sim, duel strategy, the pros' own words, game-AI research; `README.md` has the one-page core and the decision checklist (hard rule 14) |
 | `docs/runs/<family>/` | one folder per family (`1.7/`, `2.0/`; older `b1.N/`, `v0.6.x/`): a `README.md` (the goal, the attempts) and a folder per attempt (`2.0/2.0c/`) with `CARD.md` (the owner's page + the checklist), `train.cmd`, `start.ps1`, the reference command, reports |
 | `docs/design/` | current designs · `docs/guides/` how-tos · `docs/archive/` old versions, the old daily log, old CLAUDE.md (frozen) |
 | `tools/run/` | the run tools: `check_settings`, `make_train_cmd`, `watch` (checks), `panel` (behaviour), `selfplay_loop` / `selfplay_log`, `live_accept`, `backup` |
-| `data/` (git-ignored) | `sim_runs/<run>/{keep,snapshots,live.json,watch,...}`, `maps/`, `sim_runs/brainppl/`, `owner.env`. Backed up nightly to `T:\BobbyBones_backup` |
+| `data/` (git-ignored) | `sim_runs/<run>/{keep,snapshots,live.json,watch,...}`, `maps/`, `sim_runs/brainppl/`, `owner.env`. Backed up nightly to `T:\BobbyBones_backup` (the hidden task "BobbyBones nightly", `tools/run/nightly.py`, 04:30). **Intermediates live on T:, not C:** (owner, 2026-11-11): `tools/run/offload.py` moves the checks' recorded games (`watch/panel`), the snapshots but the anchors and the scratch test folders of runs not trained for 3 days to the same paths under `T:\BobbyBones_backup\data`, removing a file from C: only after its copy was read back with the same SHA-256; `keep/` is never moved. An old run's panel or snapshot is read from T: |
 | `private/` (git-ignored) | the public servers' notes and scripts (`private/PUBLIC_SERVER.md` first; machine details in `data/SERVER.md`) |
 
 ## Starting and watching a run
@@ -129,9 +175,10 @@ the real run directly; its first 10 updates and the extra check at update 10 are
   over 1% of rows at the clip, each group's share at each reader), and at a run's end 200 games with a new group blanked. No drop = it does
   not stay. The list's length is on every card.
 
-- **The cleaned list 18 (2026-11-11; `docs/design/INPUTS_CLEANUP.md` "As built")**: `sim/input_list.py` + `sim/input_list_18.json` (876 of the
-  simulator's 1,053 columns by name: the brain reads the first 691, the hands' encoder the first 796, a tail of 80 is read by no first
-  layer); `sim/duel_env_ffa18.py` is the group module giving that list (the trainer's `--env`; the simulator's own code is unchanged and
+- **The cleaned list 18 (2026-11-11; `docs/design/INPUTS_CLEANUP.md` "As built")**: `sim/input_list.py` + `sim/input_list_18.json` (804 of the
+  simulator's 1,053 columns by name: the brain reads the first 691, the hands' encoder the first 796, a tail of 8 is read by no first
+  layer: the guessing lesson's four marks and the yellows' timers; the other 72 rule-made columns of v0.2 to v0.3.6, the pre-fire and
+  emergence among them, were cut the same day on the owner's word); `sim/duel_env_ffa18.py` is the group module giving that list (the trainer's `--env`; the simulator's own code is unchanged and
   `duel_env_ffa` stays the full list for every older network); `tools/inputs18.py convert` brings a 1,053-input network to it (cut and
   folded, resized, the optimizer's moments too; `same` proves it on real rows); a checkpoint of a list carries `inputs` and `input_names`,
   and the check tools give each network its columns by name. `tools/run/input_health.py <policy> <sample>` is the health report.
@@ -210,6 +257,15 @@ docker exec <name> python3 /tools/rcon.py "qlx !room suite" --wait 2  # rcon ("s
 - A wiring bug can look like a bad idea: 1.7c's false start (PPO's reference pass without the weapon key's mask) read as a slow
   collapse. When a check falls, look at the KL and the trainer's own pieces before the design.
 - Restart only right after a save (every 10 updates), keep a copy; pass `--fade-start <minute>` on every resume.
+- `--obs-half` is retired (owner, 2026-11-15: "There's no reason to keep it"): the rollout's stored inputs at half precision made the
+  learner's recomputed log-probabilities differ from the played ones (up to 0.08 to 0.12 at the worst frame at full size, 2.1d's proof);
+  the flag is retired and refused; a new run's command built from an older one strips it. Since 2026-11-15 (2.1d's restart at update 30)
+  the trainer always rounds the rollout's inputs to half precision at their source, so play and learning read the same values and the
+  stored inputs are float16 (full precision cost 12.6 GB a buffer and nearly exhausted the PC's memory). Every other reader now rounds
+  the same way, bit for bit, for every network (branch `bhalf`, to be merged after 2.1d ends): the checks' player (`test_suite.Policy.norm`),
+  the plugins' pass (`netpass.norm`; `movetest`), the tools that normalise on their own, the brain's lessons (`sim/obs_half.py`: torch's
+  `.half()` of a double rounds twice, so the torch paths round once in double precision). **The `qlbot` image must be rebuilt before any
+  server plays a network** (the export is unchanged: `policy.npz` keeps the mean and variance, the plugin rounds).
 - Write `.cmd` run files with the Write tool to the scratchpad and copy them over (Git Bash heredocs mangle backslashes; writing
   over an existing `.cmd` in a chain once failed silently and the old settings ran). After a patch to `sim/`, check the change is
   there (a write once failed with Errno 22 and left the file as it was).

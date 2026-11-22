@@ -39,7 +39,7 @@ def names(path):
 
 def fit_list(lst, n):
     """(1.7) a network made before the order's inputs (group "b17 order", appended at the end of the list): the list's first n"""
-    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
+    if len(lst) > n and all(g_ in ("b17 order", "b17b timers", "b20b space", "b20b targets", "b21 instruction", "b20d dodge") for g_, _ in lst[n:]):   # (1.7b: and the timers after them)
         return lst[:n]
     return lst
 
@@ -155,6 +155,9 @@ class SeatClock:
 # state (256) and the hands' fast memory (512), rounded to half precision, through Linear-ReLU-Linear
 WS_COLS = ("seed", "match", "t", "my_score", "op_score", "my_hp", "my_ar", "op_hp", "op_ar", "my_dead", "op_dead",
            "my_rl", "my_lg", "my_rg", "op_rl", "op_lg", "op_rg", "v_raw", "frags_d")
+WS_ITEMS = (os.environ.get("WS_ITEMS") or "") == "1"       # (1.9a, tools/run/fit_items.py) the next mega's and red armor's race, the truth (env.item_race)
+if WS_ITEMS:
+    WS_COLS = WS_COLS + tuple("{}_{}".format(it_, c_) for it_ in ("mh", "ra") for c_ in ("present", "tsp", "my_walk", "op_walk", "my_took", "op_took"))
 
 
 def ws_attach(pol, path):
@@ -185,6 +188,10 @@ def ws_row(E, env, t, ev, h, pol, score, seed):
     v = ws_value(pol, h)
     cols = [np.full(len(ev), seed), ev // 2, np.full(len(ev), t), score[ev], score[op], env.hp[ev], env.armor[ev], env.hp[op], env.armor[op],
             dead[ev], dead[op]] + [env.has[s_, w_] for s_ in (ev, op) for w_ in (E.RL, E.LG, E.RG)] + [v, env.frags_r[ev] - env.frags_r[op]]
+    if WS_ITEMS:                                             # (1.9a) the items' race of each row's two seats
+        ra_, rb_ = env.item_race(ev), env.item_race(op)
+        for j_ in range(2):
+            cols += [ra_["present"][:, j_], ra_["tsp"][:, j_], ra_["walk"][:, j_], rb_["walk"][:, j_], ra_["took"][:, j_], rb_["took"][:, j_]]
     return np.stack([np.asarray(c, np.float64) for c in cols], 1).astype(np.float32)
 
 
@@ -301,10 +308,17 @@ def play(job):
         kf_ = None
         if kp_:
             a[:, -1] = -1
-            kf_ = env.keep_feat()
+            kf_ = __import__("head2").np_kf_end(env)                             # (2.1c: with the trip-end column, for the held draw)
         ox_ = None                                                              # (1.7) the combat order's candidates after the frame before
-        if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False)):
+        dd_ = getattr(pol, "desc_due", False) or getattr(opp_pol, "desc_due", False)   # (2.2a) a network whose desc term plays reads the description
+        if hasattr(env, "order_feat") and (getattr(pol, "order_due", False) or getattr(opp_pol, "order_due", False) or dd_):
             ox_ = env.order_feat()                                              # (a keep reading of some seat: its head ticked on that frame)
+            if dd_:                                                             # (2.2a: + his weapons and the weapon in his hand, sim/desc22.py env_ox;
+                __import__("desc22").need_om(env)                               # (no map numbers: raise, never zeros)
+                ox_ = tuple(ox_) + (np.asarray(env.has[:env.n, :9], bool).copy(), np.asarray(env.weapon[:env.n], np.int64).copy())   # the map's name
+                for p_m in (pol, opp_pol):                                      # for the map sense's table)
+                    if p_m is not None and hasattr(p_m, "set_maps"):
+                        p_m.set_maps(mp)
         hev_ = None                                                             # (v0.4) the heads' tick events: one call of the simulator for both sides
         if hasattr(env, "head_events") and (pol.head_due(h).any() or (opp_pol is not None and opp_pol.head_due(h2).any())):
             hev_ = env.head_events()
@@ -318,7 +332,8 @@ def play(job):
         al, h = pol.act(obs[ev][:, idx], h, None if hev_ is None else hev_[ev], xl=None if xlu_ is None else xlu_[ev],
                         **({"pose": pz_[ev], "zmap": zz_[ev]} if getattr(pol, "needs_pose", False) else {}),
                         **({"kf": kf_[ev]} if (kp_ and pol.keep_on) else {}),
-                        **({"ox": (ox_[0][ev], ox_[1][ev])} if (ox_ is not None and pol.order_due) else {}))
+                        **({"ox": (tuple(v_[ev] for v_ in ox_) if getattr(pol, "desc_due", False) else (ox_[0][ev], ox_[1][ev]))}
+                           if (ox_ is not None and (pol.order_due or getattr(pol, "desc_due", False))) else {}))
         a[ev, :min(al.shape[1], nA_)] = al[:, :nA_]
         if kp_ and pol.keep_on:
             a[ev, -1] = al[:, -1]          # (a network with an output the module lacks: LEGS_TURN_ADD off)
@@ -326,7 +341,8 @@ def play(job):
             ao, h2 = opp_pol.act(obs[od][:, opp_idx], h2, None if hev_ is None else hev_[od], xl=None if xlu_ is None else xlu_[od],
                                  **({"pose": pz_[od], "zmap": zz_[od]} if getattr(opp_pol, "needs_pose", False) else {}),
                                  **({"kf": kf_[od]} if (kp_ and opp_pol.keep_on) else {}),
-                                 **({"ox": (ox_[0][od], ox_[1][od])} if (ox_ is not None and opp_pol.order_due) else {}))
+                                 **({"ox": (tuple(v_[od] for v_ in ox_) if getattr(opp_pol, "desc_due", False) else (ox_[0][od], ox_[1][od]))}
+                                    if (ox_ is not None and (opp_pol.order_due or getattr(opp_pol, "desc_due", False))) else {}))
             a[od, :min(ao.shape[1], nA_)] = ao[:, :nA_]
             if kp_ and opp_pol.keep_on:
                 a[od, -1] = ao[:, -1]

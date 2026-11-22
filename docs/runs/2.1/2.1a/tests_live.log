@@ -1,0 +1,8 @@
+19:38:06 PASS the start's live.json carries 2.1a's start ({'DMG_REWARD': 0.005, 'DMG_TAKEN_W': 1.0, 'RAIL_FAR_PAY': 0.1, 'KEEP_G': 1.0, 'HABIT_P': 0.0, 'WIN_ADD': 0.33, 'AIM3_W': 0.0, 'AIM3_SIZE_A': 1.0, 'AIM3_SIZE_B': 0.0, 'AIM3_LEAD': 0.0, 'AIM3_RELOAD': 1.0, 'DODGE_G': 0.0, 'BRANCH_P': 0.0, 'DRILL_INS_P': 0.0, 'DRILL_INS_RATE': 0.0, 'INS_GATE': -30.0, 'INS_G': 0.0, 'BRANCH_WPN_P': 0.0, 'H2_INS_PG': 0.0})
+19:38:16 PASS no refusal in the log
+19:38:16 FAIL live_status.json says applied ({})
+19:38:16 FAIL 3 updates or more (0)
+19:38:16 FAIL live_applied.json carries the mid values by the end ({'AIM3_W': None, 'AIM3_SIZE_A': None, 'AIM3_SIZE_B': None, 'AIM3_LEAD': None, 'AIM3_RELOAD': None, 'DODGE_G': None, 'BRANCH_P': None, 'DRILL_INS_P': None, 'DRILL_INS_RATE': None, 'INS_GATE': None, 'BRANCH_WPN_P': None}, from update None)
+19:38:16 FAIL the save's record carries the mid values ({'AIM3_W': None, 'AIM3_SIZE_A': None, 'AIM3_SIZE_B': None, 'AIM3_LEAD': None, 'AIM3_RELOAD': None, 'DODGE_G': None, 'BRANCH_P': None, 'DRILL_INS_P': None, 'DRILL_INS_RATE': None, 'INS_GATE': None, 'BRANCH_WPN_P': None})
+19:38:16 FAIL the last update's dodge gate: columns 0.5, token log(0.5) ({})
+19:38:16 FAILED

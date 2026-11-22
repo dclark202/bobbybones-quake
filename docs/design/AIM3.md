@@ -49,7 +49,7 @@ above 100 degrees a second (too few shots).
 | Lightning error by distance, half bodies: 200 / 325 / 500 / 750 / 1,150 units | 0.75 / 0.77 / 0.88 / 0.92 / 1.07 | 0.54 / 0.58 / 0.83 / **1.23 / 1.78** |
 | ... in degrees | 3.1 / 1.95 / 1.48 / 1.11 / 0.98 | 2.3 / 1.5 / 1.4 / **1.4 / 1.3** |
 | Lightning error in his first 250 ms in view / 250-400 ms / after 750 ms | 1.32 / 1.11 / 1.09 | **2.36 / 1.59** / 0.87 |
-| Lightning error by the enemy's crossing speed 0-20 / 20-50 / 50-100 deg/s | 0.89 / 1.16 / 1.81 | 0.89 / 0.84 / 1.01 |
+| Lightning error by the enemy's crossing speed 0-20 / 20-50 / 50-100 deg/s **(WRONG, see the correction below the table)** | 0.89 / 1.16 / 1.81 | 0.89 / 0.84 / 1.01 |
 | Lightning error 75-150 ms after a turn-round | 1.40 | 0.98 |
 | Rail error after a flick of 15-30 / 30-60 degrees (54, 25 shots) | 2.36 / 3.92 degrees | **4.91 / 6.39** |
 
@@ -57,8 +57,17 @@ above 100 degrees a second (too few shots).
   at 1.4 degrees from 400 units on; the pros' keeps falling to 1.0. Closer than 400 units he is tighter than they are.
 - **He is slow onto a new target**: nearly twice the pros' error in the first 250 ms, level with them only after 400 ms.
 - **His flicks land wide**: twice the pros' endpoint error on the larger ones.
-- **His tracking of a fast or turning enemy is tighter than the pros'** (1.01 against 1.81 at 50-100 deg/s; almost no dip after a
-  turn-round). Not changed here (owner: "keeping tracking roughly as it is"); it is a likely part of why the lightning dominates,
+- **Correction (2026-11-13, 2.0d's calibration; the same rows, `knobs_pros.npz`, `knobs_base.npz`, `knobs_aim3d.npz`):** the crossing
+  speed row above used the "settled" filter, which keeps only shots whose view moved under 6 degrees in 250 ms: at 50-100 deg/s that is
+  a pro NOT following the target (7% of the pros' rows there). Over every view the pros' lightning error is flat with crossing speed:
+  1.03 / 1.02 / 1.02 half bodies at 0-20 / 20-50 / 50-100 deg/s (1.11 above 100); within each distance band his grows about as theirs
+  (under 250 units: pros 0.87 to 0.93 up to 100 deg/s, 1.20 at 150-250; him under AIM3 0.59 to 0.61, 0.87). Hit share by crossing speed:
+  pros 44-49%, him 46-52%. **There is no crossing-speed limit to add.** Two real differences remain: (1) his level up close is about a
+  third tighter at every crossing speed (0.55-0.76 against 0.87-0.98 half bodies under 400 units; section 7's "part of theirs is choice");
+  (2) **after the target reverses** the pros' lightning error is x1.18 at 0-75 ms and x1.31 at 75-150 ms (hit share 46% → 42% → 35%),
+  his under AIM3 x1.12 and x1.14 (53% → 49% → 47%): the reversal costs a pro's lightning about twice what it costs his. The rail's
+  curve set the eye's lag (section 9); the lightning's extra at 75-150 ms is the hand's.
+- **His tracking of a turning enemy is tighter than the pros'** (see the correction: not of a fast one). Not changed here (owner: "keeping tracking roughly as it is"); it is a likely part of why the lightning dominates,
   and AIM2's notes already had the shallow dip. A lever if wanted later: the eye's gain below 1, or its lag longer.
 
 With the slip and the eccentricity terms against the eye (AIM3) or off, **without any training**, his flicks' endpoints come to the

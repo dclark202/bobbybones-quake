@@ -156,7 +156,7 @@ def _logits(pol, obs, h):
     import test_suite as T
     assert pol.cell is None and pol.slow is None
     obs = obs[:, :len(pol.mean)]
-    x = np.clip((obs - pol.mean) / np.sqrt(pol.var + 1e-8), -10, 10).astype(np.float32)
+    x = np.clip((obs - pol.mean) / np.sqrt(pol.var + 1e-8), -10, 10).astype(np.float16).astype(np.float32)
     xa = x
     x = np.tanh(x @ pol.w0.T + pol.b0)
     x = np.tanh(x @ pol.w1.T + pol.b1)

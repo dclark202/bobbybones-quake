@@ -1,0 +1,20 @@
+19:47:10 scratch_21a_id_z0_blend: done in 1.2 min; the log ends: exit 0
+19:47:10 PASS z0: the trainer ran 2 updates and dumped them (2 dumps)
+19:47:10 PASS z0: the optimizer loaded, not cold; the new tokens fresh; --freeze-choice on; the dodge token found; no REFUSED
+19:47:10 PASS z0: the frozen decisions' weights the same to the bit after 2 updates (10 tensors; moved: [])
+19:48:12 scratch_21a_id_z0b_blend: done in 1.0 min; the log ends: exit 0
+19:48:12 PASS z0b: the trainer ran 2 updates and dumped them (2 dumps)
+19:48:12 PASS z0b: the optimizer loaded, not cold; the new tokens fresh; --freeze-choice on; the dodge token found; no REFUSED
+19:48:12 PASS z0b: the frozen decisions' weights the same to the bit after 2 updates (10 tensors; moved: [])
+19:49:14 scratch_21a_id_z3_blend: done in 1.0 min; the log ends: exit 0
+19:49:14 PASS z3: the trainer ran 2 updates and dumped them (2 dumps)
+19:49:14 PASS z3: the optimizer loaded, not cold; the new tokens fresh; --freeze-choice on; the dodge token found; no REFUSED
+19:49:14 PASS z3: the frozen decisions' weights the same to the bit after 2 updates (10 tensors; moved: [])
+19:50:16 scratch_21a_id_zi_blend: done in 1.0 min; the log ends: exit 0
+19:50:16 PASS zi: the trainer ran 2 updates and dumped them (2 dumps)
+19:50:16 PASS zi: the optimizer loaded, not cold; the new tokens fresh; --freeze-choice on; the dodge token found; no REFUSED
+19:50:16 PASS zi: the frozen decisions' weights the same to the bit after 2 updates (10 tensors; moved: [])
+19:50:16 PASS the trainer repeats itself at a fixed seed (z0 = z0b, both updates, actions and log p)
+19:50:16 PASS z3's dials reach play: update 1's actions differ from z0's (0.2795 of them)
+19:50:16 PASS zi's dials reach play: update 1's actions differ from z0's (0.2957 of them)
+19:50:16 ALL PASSED

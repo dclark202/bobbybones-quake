@@ -1,0 +1,6 @@
+strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 973 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 69 + hands 512 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 685,932 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp; the keep choice (1.7a's) and its quiet layer on the stay value and 5 change signals (2.1)
+wrote C:/Users/dacla/AppData/Local/Temp/claude/5f037cea4cf0c78e/a568e475-861c-4cfd-8c16-6ca3e9bf0231/scratchpad/k21/policy_u10_keep.pt: the keep choice at share 0 (layout keep 2, 7 numbers); its quiet layer at zero (layout keepq 1, 7 numbers), share 0; its start (zero) at 5.0 readings a second:
+  every weight and the bias zero: p(re-decide) 0.5 a reading wherever it decides (it decides nowhere at share 0)
+copied the optimizer's state C:/Users/dacla/Documents/gh/BobbyBones/data/sim_runs/duel_gru_2_0e/keep/opt_u10_20e.pt -> C:/Users/dacla/AppData/Local/Temp/claude/5f037cea4cf0c78e/a568e475-861c-4cfd-8c16-6ca3e9bf0231/scratchpad/k21/opt_u10_keep.pt (the keep choice's groups are added by the trainer)
+
+[lowrun] exit code 0

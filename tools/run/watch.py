@@ -17,7 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import panel as P
 
-SR = os.path.join(ROOT_, "data", "sim_runs")
+SR = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT_, "data", "sim_runs")
 RUN = sys.argv[1] if len(sys.argv) > 1 else "duel_gru_v0_6_0"
 OUT = os.path.join(SR, RUN)
 PY = (os.environ.get("BB_PY") or r"C:\Users\dacla\anaconda3\python.exe")

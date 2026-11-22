@@ -1,0 +1,19 @@
+the first layers' sums on 47992 rows of real play, the largest difference: the hands' encoder 8.53e-14, the brain's input layer 1.28e-13, the head's 1.24e-14, the weapon part's 2.22e-15, the attention tokens 2.13e-14
+columns: 666 plain, 16 two-valued at the old clip (exact), 45 left with their old statistics, 79 constant in the sample (kept); rows at the new clip 0.0124%
+the size of the hands' columns after the normalizer (median, share under 0.3, share over 1.5): before 0.55, 34.3%, 4.5%; after 1.00, 7.6%, 2.1%
+the dodge columns (mean, spread) measured on the sample: the enemy's aim passes him, sideways -0.0010 0.476; the enemy's aim passes him, up or down -0.0148 0.350; his crossing of the enemy's line of fire -0.0098 0.496; the crossing's change -0.0001 0.521; damage taken, short 0.0511 0.159; damage taken, long 0.0483 0.093; the enemy's lightning on him 0.0962 0.216
+wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_20d_start\s1.pt: list 20d (821 inputs; the brain the first 691, the hands the first 813, the tail 8); 180 columns cut and folded; the head's 79 columns (2 cut), the weapon part's 45; the dodge columns at zero, the token 'dodge' last, shut
+the optimizer's moments converted C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_1_7a\keep\opt_u90_17a.pt -> C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\scratch_20d_start\s1_opt.pt: enc.0.weight, belief.inp.weight, head2.inp.weight, head2.winp.weight, 21 token kinds' first layers (the dodge columns, token and mark row: --opt-small-items)
+
+same (as played: the brain's inputs at half precision): 400 real rows x 8 seats, each network through its own columns, the new ones random: largest |h a - h b| = 0.365; actions that differ: 19 of 44800
+same (the brain's rounding off): 400 real rows x 8 seats, each network through its own columns, the new ones random: largest |h a - h b| = 0.000383; actions that differ: 1 of 44800
+ALL PASSED
+
+13:35:14 PASS inputs20d same: S1 answers as 1.7a's update 90
+13:35:14 PASS the shut tokens are the order and the dodge, at -30 ({'order': -30.0, 'dodge': -30.0})
+13:35:14 PASS list 20d: 821 inputs, the hands 813, the brain 691
+13:35:14 PASS the dodge columns 806..812 at zero weights in the encoder and the token
+13:35:14 PASS the head's 79 columns, its weapon part's 45
+13:35:14 PASS the file plays at DODGE_G 0 with DODGE_IN 1 ({'DODGE_IN': '1', 'DODGE_G': '0'})
+13:35:14 PASS the optimizer converted (107 moments)
+13:35:14 ALL PASSED

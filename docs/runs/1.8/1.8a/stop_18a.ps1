@@ -20,18 +20,18 @@ $last = @(Get-Content (Join-Path $D "metrics.jsonl") | Where-Object { $_.Trim() 
 if ((Get-FileHash (Join-Path $D "policy.pt")).Hash -ne (Get-FileHash $PU).Hash) { Log ("the run's policy.pt is no longer the save of update " + $Update + " (the last finished update is " + $last + "): nothing stopped"); exit 1 }
 Log ("update " + $Update + "'s save is kept (" + (Get-Item $PU).LastWriteTime.ToString("HH:mm:ss") + ") and is the run's policy.pt; the last finished update is " + $last)
 
-$all = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine }
-$tr = @($all | Where-Object { $_.CommandLine -like "*train_duel_rnn.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
+$procs = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine }
+$tr = @($procs | Where-Object { $_.CommandLine -like "*train_duel_rnn.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
 if ($tr.Count -ne 1) { Log ("expected one trainer, found " + $tr.Count + ": nothing stopped"); exit 1 }
 $tid = $tr[0].ProcessId
-$kids = @($all | Where-Object { $_.ParentProcessId -eq $tid -and $_.CommandLine -like "*multiprocessing.spawn*" -and $_.CommandLine -like "*parent_pid=$tid,*" })
+$kids = @($procs | Where-Object { $_.ParentProcessId -eq $tid -and $_.CommandLine -like "*multiprocessing.spawn*" -and $_.CommandLine -like "*parent_pid=$tid,*" })
 $more = @()
 if ($All) {
-    $more += @($all | Where-Object { $_.CommandLine -like "*ramp_18a.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
-    $sp = @($all | Where-Object { ($_.CommandLine -like "*selfplay_loop.py*" -or $_.CommandLine -like "*selfplay_log.py*") -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
+    $more += @($procs | Where-Object { $_.CommandLine -like "*ramp_18a.py*" -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
+    $sp = @($procs | Where-Object { ($_.CommandLine -like "*selfplay_loop.py*" -or $_.CommandLine -like "*selfplay_log.py*") -and $_.CommandLine -like "*$RUN*" -and $_.Name -like "python*" })
     $spIds = @($sp | ForEach-Object { $_.ProcessId })
     $more += $sp
-    $more += @($all | Where-Object { $spIds -contains $_.ParentProcessId -and $_.CommandLine -like "*ws_eval.py*" -and $_.CommandLine -like "*$RUN*" })
+    $more += @($procs | Where-Object { $spIds -contains $_.ParentProcessId -and $_.CommandLine -like "*ws_eval.py*" -and $_.CommandLine -like "*$RUN*" })
 }
 Log ("the trainer " + $tid + " with " + $kids.Count + " simulators" + $(if ($All) { "; the ramp and the self-play logger: " + $more.Count + " processes" } else { "; the watcher, the ramp and the logger are left running" }))
 foreach ($p in @($tr) + $kids + $more) {

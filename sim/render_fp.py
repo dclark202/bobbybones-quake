@@ -36,7 +36,7 @@ def policy(run):
     pi.load_state_dict({k[3:]: v for k, v in sd.items() if k.startswith("pi.")})
 
     def act(obs, rng):
-        x = torch.from_numpy(np.clip((obs - ck["obs_mean"]) / np.sqrt(ck["obs_var"] + 1e-8), -10, 10).astype(np.float32))
+        x = torch.from_numpy(np.clip((obs - ck["obs_mean"]) / np.sqrt(ck["obs_var"] + 1e-8), -10, 10).astype(np.float16).astype(np.float32))   # (half precision at the source, as the trainer: owner 2026-11-15)
         with torch.no_grad():
             return torch.stack([torch.distributions.Categorical(logits=l).sample()
                                 for l in pi(body(x)).split(ACTION_DIMS, -1)], -1).numpy()

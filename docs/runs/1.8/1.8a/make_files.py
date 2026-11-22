@@ -7,12 +7,12 @@ command (= 1.7a's with AIM3's seven set lines and --gate-open 0), every setting 
   --pass-odds 0            no pass readout (it belonged to 1.7a's order)
   --habit-p 0              no weapon habits on the league's seats (1.5a's, scrapped)
   --env duel_env_ffa18     the cleaned input list 18 (docs/design/INPUTS_CLEANUP.md; sim/input_list.py): the group module, its observe()
-                           giving the list's 876 columns
+                           giving the list's 804 columns
   set AIM3_FIX_TAU=0.05    AIM3's tuning (docs/design/AIM3.md, 11-11): the fixation time fitted to the pros' frame-by-frame error after the
                            enemy comes into view (tools/run/aim3_fit.py: 30 to 50 ms after the notice; it was 0.10 by eye)
   set AIM3_LEAD=0, AIM3_RELOAD=1   the rocket lead over his own delay and the slow weapons' reload wait: at their start (as before); live,
                            the ramp moves them to 1 and 0 with AIM3_W
-  --brain-fade 0           the brain's fade has nothing left to fade: the 76 rule-made columns are out of the brain's list (they were at 1)
+  --brain-fade 0           the brain's fade has nothing left to fade: the 76 rule-made columns are out of the brain's list (they were at 1; 72 of them out of the list)
   phase 1 (updates 0 to 150):   set INTENT_SWITCH=0.02, set WEAPON_OWN=0   (b1.2d's and 1.3b's: the switch cost, a held weapon no target)
   phase 2 (from the restart):   set INTENT_SWITCH=0,    set WEAPON_OWN=1   (1.4b's, as 1.7a's command)
 Everything that moves is live (live.json, ramp_18a.py): AIM3_W, AIM3_SIZE_A, AIM3_SIZE_B, H2_PG, INTENT_TEACH_W, SPEED_PAY, KEEP_G; fixed

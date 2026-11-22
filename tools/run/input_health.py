@@ -46,7 +46,7 @@ def main():
     I = ck.get("inputs") or {}
     nh, nb = int(I.get("n_hands", sd["enc.0.weight"].shape[1])), int(sd["belief.inp.weight"].shape[1]) if "belief.inp.weight" in sd else 0
     m, s = np.asarray(ck["obs_mean"], np.float64), np.sqrt(np.asarray(ck["obs_var"], np.float64) + 1e-8)
-    Z = np.clip((X - m) / s, -10, 10)
+    Z = np.clip((X - m) / s, -10, 10).astype(np.float16).astype(np.float64)   # (owner, 2026-11-15) as every reader reads them: half precision
     zs, clip, const = Z.std(0), (np.abs((X - m) / s) >= 10).mean(0), (X.max(0) - X.min(0)) == 0
     fade = set(int(c) for c in ((ck.get("rule_fade") or {}).get("cols") or ())) if float((ck.get("rule_fade") or {}).get("g", 0.0)) >= 1.0 else set()
     Zh = Z.copy()

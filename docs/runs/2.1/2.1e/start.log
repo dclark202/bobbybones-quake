@@ -1,0 +1,68 @@
+11-16 09:57:42 train.cmd, 542 minutes, 100 updates, slow clocks 5,10,20: wrote train.cmd: --minutes 542 --max-updates 100 --slow-half 1 --slow-clocks 5,10,20 ; aim2_env.cmd: 2.1d's
+11-16 09:57:42 no firing cost in the command: every one at zero
+11-16 09:57:42 allowed arg --max-updates: run '100' | reference '1000'
+11-16 09:57:42 allowed arg --minutes: run '542' | reference '695'
+11-16 09:57:42 allowed arg --run: run 'duel_gru_2_1e' | reference 'duel_gru_2_1d'
+11-16 09:57:42 allowed arg --slow-clocks: run '5,10,20' | reference '<unset>'
+11-16 09:57:42 allowed arg --slow-half: run '1' | reference '<unset>'
+11-16 09:57:42 settings check: PASS
+11-16 09:57:43 allowed checkpoint AIM3_LEAD: checkpoint '1.0' | command '0'
+11-16 09:57:43 allowed checkpoint AIM3_RELOAD: checkpoint '0.0' | command '1'
+11-16 09:57:43 allowed checkpoint AIM3_SIZE_A: checkpoint '0.39' | command '1'
+11-16 09:57:43 allowed checkpoint AIM3_SIZE_B: checkpoint '0.355' | command '0'
+11-16 09:57:43 allowed checkpoint AIM3_W: checkpoint '1.0' | command '0'
+11-16 09:57:43 allowed checkpoint CONTACT_FREE: checkpoint '1.0' | command '<unset>'
+11-16 09:57:43 allowed checkpoint DODGE_G: checkpoint '1.0' | command '0'
+11-16 09:57:43 allowed checkpoint LEVEL_PULL: checkpoint '1.0' | command '<unset>'
+11-16 09:57:43 allowed checkpoint RAIL_FAR_PAY: checkpoint '0.1' | command '0.12'
+11-16 09:57:43 settings check: PASS
+11-16 09:57:44 backup: copied 0 files 0.0 GB to T:\BobbyBones_backup
+11-16 09:57:46 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\policy.pt: the slow halves inside the head (head2.slow.0..2: head state 256 + goal 19 -> 128 -> GRU 128 -> 128 -> horizons [10, 25] x 17; clocks [5, 10, 20] head ticks); the read-back's 128 columns at zero (the head's input 957 -> 1085); mix 0, back 0, pick 1; the slow plan, its Adam (plan_opt kept) and the pull (2.0000) kept
+11-16 09:57:46 strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1120 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 69 + hands 512 + goal 19 + slowback 128 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 1,188,674 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp; the slow plan inside (2.1d): 256 -> 128 -> 128 -> 2 horizons [10, 25] x 17 targets, refreshed every 5 keep readings, the pull's floor 0.01; the slow halves inside (2.1e): 3 of 128 (head state + goal -> 128 -> GRU 128 -> 128 -> horizons [10, 25] x 17), clocks [5, 10, 20] head ticks, the read-back 128 columns
+11-16 09:57:57 slow_init same: same: 400 real rows x 8 seats (400 head ticks) at pull the file's (2.0): actions that differ at mix 0, back 0: 0 of 48000
+11-16 09:57:57 slow_init same: same: 400 real rows x 8 seats (400 head ticks) at pull 1.0: actions that differ at mix 0, back 0: 0 of 48000
+11-16 09:57:57 slow_init same: for information: b at pull 1.0, mix 1.0, back 1.0 on the same rows (its halves at even odds, the read-back's weights zero): actions that differ 915 of 48000; the picked half's ticks by cause (clock, trip end, change) [0, 141, 426]
+11-16 09:57:57 slow_init same: ALL PASSED
+11-16 09:57:59 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_13b.pt: the head given the slow halves (clocks [5, 10, 20], hid 128) with their last layers at zero (even odds), never pulling (mix 0), the read-back's 128 columns at zero (back 0)
+11-16 09:58:01 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_15a.pt: the head given the slow halves (clocks [5, 10, 20], hid 128) with their last layers at zero (even odds), never pulling (mix 0), the read-back's 128 columns at zero (back 0)
+11-16 09:58:02 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_16a.pt: the head given the slow halves (clocks [5, 10, 20], hid 128) with their last layers at zero (even odds), never pulling (mix 0), the read-back's 128 columns at zero (back 0)
+11-16 09:58:04 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_20e.pt: the head given the slow halves (clocks [5, 10, 20], hid 128) with their last layers at zero (even odds), never pulling (mix 0), the read-back's 128 columns at zero (back 0)
+11-16 09:58:06 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_21c.pt: the head given the slow halves (clocks [5, 10, 20], hid 128) with their last layers at zero (even odds), never pulling (mix 0), the read-back's 128 columns at zero (back 0)
+11-16 09:58:08 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_b11.pt: no strategy head in this file, written as it is
+11-16 09:58:10 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_b12d.pt: no strategy head in this file, written as it is
+11-16 09:58:11 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_v060_end.pt: no strategy head in this file, written as it is
+11-16 09:58:13 wrote C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\snapshots\anchor_21d.pt: the head given the slow halves (clocks [5, 10, 20], hid 128) with their last layers at zero (even odds), never pulling (mix 0), the read-back's 128 columns at zero (back 0)
+11-16 09:58:13 live.json: 2.1e's new names at the start: {"SLOW_MIX": 0.0, "SLOW_BACK": 0.0, "SLOW_PICK": 1}; PULL_G (2.0) and HELD_G (1.0) as 2.1d's file has them; every other value as 2.1d's file (49 names)
+11-16 09:58:13 live.json: written: C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\live.json
+11-16 09:58:14 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\live.json: accepted
+11-16 09:58:14 the ramp ramp_21e.py: 82 files (clocks 0 to 81), all accepted
+11-16 09:58:14 LIVE ACCEPT: PASS
+11-16 09:58:14 from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\keep\policy_end_21d.pt with the three slow halves inside the head (slow_init add: clocks 5,10,20, mix 0, back 0, pick 1), with its optimizer; anchors anchor_13b.pt, anchor_15a.pt, anchor_16a.pt, anchor_20e.pt, anchor_21c.pt, anchor_b11.pt, anchor_b12d.pt, anchor_v060_end.pt and anchor_21d.pt (the source), given halves that never pull; the judge C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\judge\judge_v060_wpn.npz
+11-16 09:58:14 trainer started: cmd 39932, from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1d\keep\policy_end_21d.pt, 542 minutes, at most 100 updates (--max-updates)
+11-16 09:58:29 live.json applied by the trainer before its first rollout (2026-11-16 09:58:27)
+11-16 09:58:34 watcher 37012 | ramp 17760 (ramp_21e.py: SLOW_MIX 0 to update 20, 0 -> 1 over 20 to 50; SLOW_BACK 0 to 50, 0 -> 1 over 50 to 80; SLOW_PICK the owner's at update 20, PULL_G and HELD_G never written; marks 20, 50, 80; never held or stepped back; a check under 40% a MAJOR PROBLEM in watch.log) | self-play logger 11184 | all on 0x3C3C
+11-16 09:58:44 trainer: strategy head (v0.4.3): GRU 256 a tick every 8 frames (0.20 s) on 1120 numbers (brain 256 + trk 27 + trz 28 + ahead 42 + ctrl 4 + obs 69 + hands 512 + goal 19 + slowback 128 + wobs 35), plan 64 into the hands' input, a bias on 17 intentions, its value at gamma 0.9998 (125 s); 1,188,674 weights; its weapon part: 10 scores added to the weapon key's, its 35 inputs read by winp; the slow plan inside (2.1d): 256 -> 128 -> 128 -> 2 horizons [10, 25] x 17 targets, refreshed every 5 keep readings, the pull's floor 0.01; the slow halves inside (2.1e): 3 of 128 (head state + goal -> 128 -> GRU 128 -> 128 -> horizons [10, 25] x 17), clocks [5, 10, 20] head ticks, the read-back 128 columns
+11-16 09:58:44 trainer: optimizer: head2.inp.weight carried over, (256, 957) -> (256, 1085)
+11-16 09:58:44 trainer: optimizer: its state loaded from opt.pt (--learn-nosync: 101 step counts moved to the host)
+11-16 09:58:44 trainer: slow plan INSIDE the head (2.1d): head state 256 -> 128 -> 128 -> 2 horizons x 17 targets (horizons [10, 25] head ticks, refresh every 5 keep readings and at a new draw); its Adam 0.0003 (from the checkpoint); lesson: his own odds BEFORE the pull; THE PULL: his target scores + PULL_G x log(max(odds of horizon 0 (10 ticks), 0.01)), strength 0.0000 now (live PULL_G); the plan's last layer decayed at the live H2_L2 (rule 11)
+11-16 09:58:44 trainer: slow halves INSIDE the head (2.1e): 3 halves, clocks [5, 10, 20] head ticks (and at a trip's end, at a change of mind; reset at a death): head state 256 + goal 19 -> 128 -> GRU 128 -> 128 -> horizons [10, 25] x 17; their Adam 0.0003 (new); lesson: his own fast odds BEFORE the pull over the next h readings, through each half's memory over the rollout's ticks; the last layers decayed at the live H2_L2 (rule 11). Played: the half 1 (live SLOW_PICK): the pull's source mix 0.0000 (live SLOW_MIX), the read-back's gate 0.0000 (live SLOW_BACK, 128 columns of the head's input, |w| 0)
+11-16 09:58:44 trainer: held draw (2.1c): share 0.0000 of his trips (the rest: the lock rule, INTENT_HOLD)
+11-16 09:58:44 trainer: recurrent self-play on bloodrun,aerowalk,lostworld,sinister,furiousheights,battleforged,campgrounds,hektik,toxicity,cure: 10080 players, 4247420 weights, device cuda, 542.0 min
+11-16 09:58:44 trainer: the dodge token (2.0d): gate 0.00 now (follows live DODGE_G = 0: log of it, shut at 0)
+11-16 12:56:20 restart.ps1 (the trainer only, from the run's last save): -Minutes 364 -Updates 100 -Clocks 5,10,20
+11-16 12:56:20 train.cmd, 364 minutes, 100 updates, slow clocks 5,10,20: wrote train.cmd: --minutes 364 --max-updates 100 --slow-half 1 --slow-clocks 5,10,20 ; aim2_env.cmd: 2.1d's
+11-16 12:56:20 no firing cost in the command: every one at zero
+11-16 12:56:21 allowed arg --max-updates: run '100' | reference '1000'
+11-16 12:56:21 allowed arg --minutes: run '364' | reference '695'
+11-16 12:56:21 allowed arg --run: run 'duel_gru_2_1e' | reference 'duel_gru_2_1d'
+11-16 12:56:21 allowed arg --slow-clocks: run '5,10,20' | reference '<unset>'
+11-16 12:56:21 allowed arg --slow-half: run '1' | reference '<unset>'
+11-16 12:56:21 settings check: PASS
+11-16 12:56:21 the file C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\live.json: accepted
+11-16 12:56:21 the ramp ramp_21e.py: 82 files (clocks 0 to 81), all accepted
+11-16 12:56:21 LIVE ACCEPT: PASS
+11-16 12:56:21 trainer restarted: cmd 36792, --resume from C:\Users\dacla\Documents\gh\BobbyBones\data\sim_runs\duel_gru_2_1e\policy.pt and opt.pt, 364 minutes, at most 100 updates (--max-updates)
+11-16 12:56:36 live.json applied by the restarted trainer (2026-11-16 12:56:36)
+11-16 12:56:37 the watcher running: 37012
+11-16 12:56:37 !!!! THE RAMP IS NOT RUNNING (no process like *ramp_21e.py*duel_gru_2_1e*): this script starts none; start it as start.ps1 does (ramp_21e.py with --resume) !!!!
+11-16 12:56:37 the self-play logger running: 11184

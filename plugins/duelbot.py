@@ -1039,10 +1039,14 @@ class duelbot(minqlx.Plugin):
             p_, z_ = _net.pose(self.P, self.env, self.mapname)    # (fill_player put them in the simulator this frame)
             pz = dict(pose=p_[:1], zmap=z_[:1])
         col_ = (_net.column_on(self.P) if hasattr(_net, "column_on") else (hasattr(_net, "keep_g") and _net.keep_g(self.P) > 0))
-        kf = (self.env.keep_feat()[:1] if (col_ and hasattr(self.env, "keep_feat"))
+        kf = ((_net.kf_rows(self.P, self.env) if hasattr(_net, "kf_rows") else self.env.keep_feat())[:1] if (col_ and hasattr(self.env, "keep_feat"))
               else None)                                     # (1.4c) what his keep choice reads (the simulator's numbers after the last frame)
         kw_ = {} if kf is None else dict(kf=kf)
-        if hasattr(_net, "order_due") and _net.order_due(self.P) and hasattr(self.env, "order_feat"):
+        if hasattr(_net, "desc_due") and _net.desc_due(self.P) and hasattr(self.env, "order_feat"):
+            import desc22 as desc22_b                        # (2.2a) a keep reading with desc's term playing: the description of the targets
+            kw_["ox"] = tuple(v_[:1] for v_ in desc22_b.env_ox(self.env))    # (the simulator's order_feat() with DESC_OX=1, his weapons) and the map's
+            kw_["mapname"] = self.mapname                    # name (the map sense's table: <QLBOT_ROOT>/data/maps/space_<map>.npz on the server)
+        elif hasattr(_net, "order_due") and _net.order_due(self.P) and hasattr(self.env, "order_feat"):
             X_, C_, _ = self.env.order_feat()                # (1.7) a keep reading: the combat order's candidates now (the checks' and the
             kw_["ox"] = (X_[:1], C_[:1])                     # trainer's: after the head's tick)
         self.P["_wdial"] = self.WDIAL_LEVELS.get(getattr(self, "wdial", "off"), 0.0)    # (!weapons) the dial's push, read in step()
@@ -2405,9 +2409,15 @@ class duelbot(minqlx.Plugin):
                 am_ = {w_: getattr(os_.ammo, w_) for w_ in E.WEAPONS if w_ != "g"}
                 wn_ = E.WEAPONS[int(env.weapon[1])] if int(env.weapon[1]) < len(E.WEAPONS) else "mg"
                 pa_ = getattr(self, "opp_ammo", None)
-                if pa_ is not None and os_.health > 0 and wn_ in am_ and am_[wn_] < pa_.get(wn_, am_[wn_]):
+                ofired_ = pa_ is not None and os_.health > 0 and wn_ in am_ and am_[wn_] < pa_.get(wn_, am_[wn_])
+                if ofired_:
                     env.note_shots(np.array([1]))                    # the weapon in his hand lost ammo: he fired
                 self.opp_ammo = am_
+                if getattr(E, "DODGE_IN", False):                    # (2.0e, the dodge inputs) what step() sets for _dodge and a server
+                    ow_ = int(env.weapon[1])                         # never ran: the enemy's beam this frame (lightning, rail), and the
+                    env.dg_fire = np.array([False, bool(ofired_) and ow_ in (E.LG, E.RG)])     # lightning ticks that hit him (the hits
+                    env.dg_fire_lg = np.array([False, bool(ofired_) and ow_ == E.LG])          # of the frame before, as fb's damage)
+                    env.dg_lghit = np.array([float(getattr(self, "dg_hit_next", 0.0)), 0.0], np.float32)
             po = self.prev_opp
             if po is not None and os_.health > 0:
                 if oc_[1] & 1:                                       # the opponent is firing
@@ -2504,6 +2514,11 @@ class duelbot(minqlx.Plugin):
                 self.es_dealt0 = dn_
                 if hit_ > 0 and os_.health > 0:
                     env.note_dealt(0, 1, hit_)
+            if getattr(E, "DODGE_IN", False):                # (2.0e) the enemy's lightning ticks that hit him this frame: the damage the
+                od_ = int(opp.stats.damage_dealt)            # opponent dealt by the game's count, while the lightning is in his hand
+                dd_ = max(0, od_ - self.__dict__.get("dg_dealt0", od_))
+                self.dg_dealt0 = od_
+                self.dg_hit_next = float(max(1, round(dd_ / max(1.0, float(E.W_DMG[E.LG]))))) if (dd_ > 0 and int(env.weapon[1]) == E.LG) else 0.0
             if hasattr(env, "note_hit") and getattr(env, "flinch_on", False):
                 on_ = int(opp.stats.damage_dealt)            # being shot at throws his aim off for a moment: only the enemy's own
                 by_ = max(0, on_ - self.__dict__.get("fl_dealt0", on_))   # hits, by the game's count of the damage the opponent dealt, as

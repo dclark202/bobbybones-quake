@@ -1,0 +1,31 @@
+15:01:11 after update 1: live.json {'DRILL_INS_P': 0.25, 'DRILL_INS_RATE': 0.02, 'BRANCH_P': 0.3, 'INS_GATE': -6.0, 'SPEED_PAY': 0.06}
+15:01:44 after update 2: live.json {'INS_GATE': 0.0, 'BRANCH_P': 0.5, 'SPEED_PAY': 0.0}
+15:02:23 after update 3: live.json {'INS_G': 0.5, 'BRANCH_WPN_P': 0.3, 'BRANCH_LONG_P': 0.2, 'INS_LONG_W': 0.25}
+15:02:59 after update 4: live.json {'INS_G': 1.0, 'INS_LONG_W': 0.5}
+15:03:35 after update 5: live.json {'H2_INS_PG': 0.5}
+15:04:11 after update 6: live.json {'H2_INS_PG': 1.0}
+15:04:47 after update 7: live.json {'SFADE': 0.5}
+15:05:23 after update 8: live.json {'SFADE': 1.0}
+15:09:02 PASS plain: fourteen updates ran (14 in metrics)
+15:09:02 PASS plain: no NaN in his step (kl by update [0.0147, 0.0101, 0.0129, 0.0135, 0.0135, 0.0088, 0.0127, 0.0138, 0.0128, 0.0123, 0.0166, 0.0122, 0.0163, 0.0193])
+15:09:02 PASS plain: no REFUSED live file; ignored: ['BRAIN_FADE'] (BRAIN_FADE alone: the command has --brain-fade 0)
+15:09:02    update 14 ins: {"g": 1.0, "teach": 1.0, "pg": 1.0, "temp": 0.05, "warm": true, "rows": 2304, "own": 1919, "taught": 1919, "entropy": 3.2752, "offered": 25.75, "kl_to_appraisals": 0.0, "best_row_agrees": 0.0683, "verbs": [0.0, 0.2335, 0.1152, 0.2939, 0.1001, 0.0292, 0.0, 0.111, 0.1172], "weapons": [0.1105, 0.1365, 0.0521, 0.2892, 0.0448, 0.0782, 0.0245, 0.0, 0.2642], "picks": 1919, "row_blocks": {"go": 0.2335, "contest": 0.1152, "hold": 0.2939, "spam": 0.0985, "push": 0.0292, "cut": 0.0, "out": 0.111, "none": 0.0, "spare": 0.0, "check": 0.1172, "spush": 0.0, "sspam": 0.0016}, "quiet": 0.0089, "quiet_by_verb": [0.0, 0.0089, 0.0181, 0.0071, 0.0156, 0.0179, 0.0, 0.0047, 0.0], "changes_a_second": 4.1645, "forec
+15:09:02    update 14 ins_bind: {"bound": 0.7071, "not_his_pick": 0.5807, "weapon_changes_min": 130.435}
+15:09:02    update 14 drill_ins: {"seat_secs": 75.5, "doing": 0.0599, "done": 0.095, "failed": 0.0453}
+15:09:02    update 14 branch: {"p": 0.5, "moments": 2, "branches": 6, "held": 6, "rows": 14, "cut": 0.0, "wpn": {"branches": 0, "after_hit": 0, "fight_start": 0, "by_weapon": {}}, "spam": 0, "long_spam": 0, "long": 2, "best_by_win_vs_full": {"moments": 2, "differ": 0, "share": 0.0}, "net_forced": 14.83, "net_free": 36.0, "dv_forced": 0.5295, "dv_free": 0.8238, "secs": 0.013, "long_p": 0.2, "long_reading": 9, "long_learnt": 0, "long_seen": 19}
+15:09:02    update 14 appraise: {"w": 1.0, "rows": 14, "dealt": {"n": 14, "mean": 36.4286, "r2": -0.0124}, "taken": {"n": 14, "mean": 18.5714, "r2": -0.0052}, "he_dies": {"n": 14, "mean": 0.1429, "brier": 0.1253, "brier_const": 0.1224, "skill": -0.0229}, "i_die": {"n": 14, "mean": 0.0, "brier": 0.0165, "brier_const": 0.0, "skill": null}, "item": {"n": 14, "mean": 0.0, "brier": 0.0216, "brier_const": 0.0, "skill": null}, "dv": {"n": 14, "mean": 0.5716, "r2": 0.0295}, "secs": 0.046}
+15:09:02    update 14 pay_of: {"hands": "the pay table + the win part as today", "head_old": "his whole pay (the table + the win part)", "head_ins": "win chance only", "win_gain": 1.0, "win_abs": 0.001737, "full_abs": 0.002293, "v_win": -0.6068, "v_win_loss": 0.064552}
+15:09:02 PASS plain: the instruction's records are there at the end (ins, ins_bind, branch, appraise, pay_of)
+15:09:02 PASS plain: the lesson toward the appraisals' order was taught ([0, 0, 0, 0, 0, 1825, 1910, 1832, 1808, 1851, 2055, 1834, 2034, 1919] readings by update)
+15:09:02 PASS plain: THE WIRING: the instruction's choice recomputed before the step is the one played: KL on every update ([0.0, 0.0, 0.0, 0.0, 0.0, 5.6e-05, -1e-06, -9e-06, 0.000416, -9.7e-05, 4.6e-05, -1e-06, -0.000274, 9.4e-05])
+15:09:02    update 14 the tick readouts: {"played": {"ticks": 1919, "changes_a_second": 4.853, "best_changes_a_second": 1.62, "cont": 0.0295, "stands_secs": 0.206, "entropy": 3.2755, "under_none": 0.0, "best_agrees": 0.1183}, "shadow": {"ticks": 0, "changes_a_second": 0.0, "best_changes_a_second": 0.0, "cont": 0.0, "stands_secs": 0.2, "entropy": 0.0, "under_none": 0.0, "best_agrees": null}}
+15:09:02    update 14 ins_norow: {"readings": 5847, "no_real_row": 0.000855, "n": 5, "on_a_map_without_tables": 0, "no_none": true}
+15:09:02 PASS plain: the head's share at 1, 'none' not offered: played seats' ticks under none 0.0 (only where no real row was valid: 5 of 5847 readings)
+15:09:02 PASS plain: the head re-decides at every tick: the played seats' orders stand 0.206 s on average, continue 0.0295
+15:09:02 PASS plain: the last dials were applied (SFADE 1.0, SPEED_PAY 0.0, INS_G 1.0, H2_INS_PG 1.0; the lock 8.0, the switch cost 0.02 as update 50)
+15:09:02    the target-switch cost a player-minute by update: [-0.3711, -0.3281, -0.2695, -0.3164, -0.125, -0.0469, -0.0469, -0.043, -0.043, -0.0781, -0.0156, -0.0352, -0.0469, -0.0547]
+15:10:22 scratch_21a_smoke_plain_z: done in 1.3 min; the log ends: exit 0
+15:10:22 PASS plain: the resume from the save ran 2 more updates (14 -> 16), the optimizer's group 'ins' loaded by name
+15:10:22    optimizer: its state loaded from opt.pt
+15:10:22    optimizer: its state loaded from opt.pt
+15:10:22 ALL PASSED (10 checks)

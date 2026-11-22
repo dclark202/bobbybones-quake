@@ -53,8 +53,11 @@ def main():
         n_ = 0
         for clock_ in range(0, int(end_) + 2):
             d_ = dict(base)
-            for nm_, lo, hi, v0, v1, pre in R.DIALS:
-                d_[nm_] = round(R.dial_at(float(clock_), lo, hi, v0, v1, pre), 6)
+            if hasattr(R, "values"):                         # (1.9a: a ramp whose names may have several segments gives its own values)
+                d_.update({nm_: round(x_, 6) for nm_, x_ in R.values(float(clock_)).items()})
+            else:
+                for nm_, lo, hi, v0, v1, pre in R.DIALS:
+                    d_[nm_] = round(R.dial_at(float(clock_), lo, hi, v0, v1, pre), 6)
             w_ = read(d_)
             n_ += 1
             if w_ is not None:

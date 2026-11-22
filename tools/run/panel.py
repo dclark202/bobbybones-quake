@@ -25,7 +25,7 @@ SP = os.path.dirname(HERE)
 CODE = os.environ.get("PANEL_CODE") or ROOT_   # (v0.6.1: branch v061 = aim2 + the shaping and the warm-up)
 RUN_ = os.environ.get("PANEL_RUN") or "duel_gru_v0_6_0"
 PY = (os.environ.get("BB_PY") or r"C:\Users\dacla\anaconda3\python.exe")
-CTRL = os.environ.get("PANEL_CTRL") or os.path.join(ROOT_, "data", "sim_runs", "duel_gru_v0_4_2", "keep", "policy_end_v042.pt")   # (v0.6.1: v0.6.0's end)
+CTRL = os.environ.get("PANEL_CTRL") or os.path.join(os.environ.get("QLBOT_ROOT") or ROOT_, "data", "sim_runs", "duel_gru_v0_4_2", "keep", "policy_end_v042.pt")   # (v0.6.1: v0.6.0's end)
 PAR = int(os.environ.get("PANEL_PAR") or 6)              # (v0.6.1: games at once; the watcher passes 3 while a check plays beside it)
 SELF_MAPS = ("bloodrun", "hektik", "aerowalk", "campgrounds")
 WATCH_MAPS = ("bloodrun", "hektik")
@@ -40,7 +40,7 @@ PLAY.update(dict(x_.split("=", 1) for x_ in (os.environ.get("PANEL_SETS") or "AI
 def live_caps():
     """PERCEPT_SPEED_MAX_RG / _LG as the run's live.json has them now (none before the restart of 2026-10-26)"""
     try:
-        d = json.load(open(os.path.join(os.path.join(ROOT_, "data", "sim_runs"), RUN_, "live.json")))
+        d = json.load(open(os.path.join(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT_, "data", "sim_runs"), RUN_, "live.json")))
     except Exception:                                        # noqa: BLE001
         return {}
     return {k: str(d[k]) for k in ("PERCEPT_SPEED_MAX_RG", "PERCEPT_SPEED_MAX_LG") if d.get(k)}
@@ -57,7 +57,7 @@ def save_level(pol):
 
 def settings(ps, pol=None):
     S_ = json.load(open(os.path.join(HERE, "check_sets.json")))   # (the checks' play switches; from the scratchpad's v044w/, 2026-10-28)
-    S_["LEGS_NET"] = os.path.join(ROOT_, "data", "sim_runs", "move_v17_look", "policy.npz")   # (the file carried the old checkout's path)
+    S_["LEGS_NET"] = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT_, "data", "sim_runs", "move_v17_look", "policy.npz")   # (the file carried the old checkout's path)
     S_.update(PLAY)
     S_["PERCEPT_SPEED"] = str(ps)
     S_.update(live_caps())                                   # (the cap by weapon, as the run has it now; both seats alike)
@@ -82,6 +82,12 @@ def settings(ps, pol=None):
             S_["SPACE_IN"] = "1"                             # without it the check's simulator gives him zeros there (a network without
             if ev_.get("SPACE_GATE") not in (None, ""):      # the inputs takes the first columns and plays as before)
                 S_["SPACE_GATE"] = str(ev_["SPACE_GATE"])
+        if ev_.get("DESC_OX") not in (None, "", "0", 0, "0.0"):   # (2.2a) and the order's map numbers: a network whose desc term plays reads
+            S_["DESC_OX"] = "1"                              # the description of the targets (without them it would read zeros: the readers raise)
+        if ev_.get("DODGE_IN") not in (None, "", "0", 0, "0.0"):   # (2.0d) and the dodge inputs: without it the check's simulator gives him
+            S_["DODGE_IN"] = "1"                             # zeros there (the other seat, reading its columns by name, is not touched),
+            if ev_.get("DODGE_G") not in (None, ""):         # at the gate the save trained at (both seats see it: one simulator)
+                S_["DODGE_G"] = str(ev_["DODGE_G"])
     return ["{}={}".format(k, v) for k, v in S_.items() if k != "OVERTIME"] + ["OVERTIME=1"]
 
 
@@ -226,7 +232,7 @@ def summary(M):
 
 
 def run(save, tag, ps, root=None):
-    root = root or os.path.join(ROOT_, "data", "sim_runs", RUN_, "panel")
+    root = root or os.path.join(os.environ.get("QLBOT_ROOT") or ROOT_, "data", "sim_runs", RUN_, "panel")
     out_s = os.path.join(root, tag, "save")
     out_c = os.path.join(root, "ctrl_{}_ps{}".format(os.path.splitext(os.path.basename(CTRL))[0], ps))   # (v0.6.1: the fixed control's
     #                                                         panel once for every save, by its live PERCEPT_SPEED: half the cost)

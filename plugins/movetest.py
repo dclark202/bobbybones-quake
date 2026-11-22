@@ -84,7 +84,7 @@ class movetest(minqlx.Plugin):
 
     def act(self, obs):
         P = self.P
-        x = np.clip((obs - P["obs_mean"]) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float32)
+        x = np.clip((obs - P["obs_mean"]) / np.sqrt(P["obs_var"] + 1e-8), -10, 10).astype(np.float16).astype(np.float32)   # (owner, 2026-11-15: half precision, as every reader)
         h = np.tanh(x @ P["w0"].T + P["b0"])
         h = np.tanh(h @ P["w1"].T + P["b1"])
         logits = h @ P["wp"].T + P["bp"]

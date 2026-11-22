@@ -48,8 +48,8 @@ import btoken as BT  # noqa: E402
 import netpass as N  # noqa: E402
 
 FR, MAP = a.frames, a.map
-nav_ = os.path.join(ROOT, "data", "maps", "nav_{}_sim.json".format(MAP))
-env = E.DuelEnv(os.path.join(ROOT, "data", "maps", MAP + ".bsp"), n_matches=1, seed=7, loadout="all", nav=nav_ if os.path.exists(nav_) else None)
+nav_ = os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", "nav_{}_sim.json".format(MAP))
+env = E.DuelEnv(os.path.join(os.environ.get("QLBOT_ROOT") or ROOT, "data", "maps", MAP + ".bsp"), n_matches=1, seed=7, loadout="all", nav=nav_ if os.path.exists(nav_) else None)
 pol = T.Policy(a.policy, seed=3)
 assert pol.btok is not None, "this network has no brain token"
 pol.set_gate(1.0)
@@ -116,7 +116,11 @@ def play_policy(g, fg=None):
         A_.append(ac), H_.append(hh.copy())
         if rec["clr"][t].any():
             p.clear(hh, rec["clr"][t])
-    return np.array(A_), np.array(H_), box, p.dims
+    Hs_ = np.array(H_)
+    if getattr(p, "insL", None) is not None:               # (2.1) the checks' player keeps the instruction's held numbers inside a seat's array,
+        import head2 as head2_c                              # the plugin's pass beside it (P["_ist"]): left out, so the two arrays line up
+        Hs_ = np.delete(Hs_, np.s_[p.i_at:p.i_at + head2_c.ins_held_width(p.insL)], -1)
+    return np.array(A_), Hs_, box, p.dims
 
 
 def play_net(mod, path, g, fg=None):
@@ -149,6 +153,11 @@ def compare(tag, x, y, dims):
     out = dict(action_frames_differ=int((Ax != Ay).any(-1).any(-1).sum()), logits=float(np.abs(lx - ly).max()),
                logp=float(max(np.abs(logp(lx[t], dims, Ax[t]) - logp(ly[t], dims, Ay[t])).max() for t in range(FR))),
                memory=float(np.abs(Hx[..., :w] - Hy[..., :w]).max()))
+    if out["memory"] > 0:                                   # (where the two memory arrays differ: the columns, and each array's width)
+        d_ = np.abs(Hx[..., :w] - Hy[..., :w]).reshape(-1, w).max(0)
+        nz_ = np.nonzero(d_ > 0)[0]
+        out["memory_cols"] = [int(nz_.min()), int(nz_.max()), int(len(nz_))]
+        out["widths"] = [int(Hx.shape[-1]), int(Hy.shape[-1])]
     if bx[0][1] is not None and by[0][1] is not None:
         out["token"] = float(np.abs(np.array([b[1] for b in bx]) - np.array([b[1] for b in by])).max())
     print("{:58s} {}".format(tag, json.dumps(out)), flush=True)

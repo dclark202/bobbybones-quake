@@ -1,0 +1,67 @@
+280 frozen moments on 8 maps, 11200 branches; at a holding place: 280
+
+all moments (deals, takes: points of stack in the window; 1st dmg: the median from the enemy in view to his first damage)
+  option          moments |  deals  takes    less (s.e.) |  frags |   pay less opp |  contact | 1st dmg  shots   hit
+  free                280 |   37.8   35.3    +2.5 ( 1.3) |  +0.00 |  +0.032 (0.040) |     64% |   800ms      0     -
+  free_rg             280 |   36.7   36.5    +0.3 ( 1.2) |  -0.04 |  -0.040 (0.038) |     65% |   775ms      0     -
+  rg_oracle           280 |   22.8   43.2   -20.4 ( 2.7) |  -0.37 |  -0.593 (0.068) |     57% |   850ms   1145   31% | first shot 425 ms after he is in view, hit 29% (717)
+  rg_oracle_rel       280 |   25.3   38.4   -13.1 ( 2.3) |  -0.22 |  -0.354 (0.052) |     55% |  1188ms    638   30% | first shot 400 ms after he is in view, hit 30% (638)
+  rg_fair             280 |   20.7   44.9   -24.1 ( 2.9) |  -0.40 |  -0.671 (0.070) |     54% |   900ms    988   31% | first shot 450 ms after he is in view, hit 30% (637)
+  rg_fair_rel         280 |   25.3   39.5   -14.2 ( 2.4) |  -0.23 |  -0.370 (0.055) |     53% |  1525ms    589   29% | first shot 450 ms after he is in view, hit 29% (589)
+  lg_oracle_rel       280 |   32.1   38.4    -6.3 ( 1.6) |  -0.16 |  -0.219 (0.046) |     56% |   650ms   7748   23% | first shot 275 ms after he is in view, hit 13% (737)
+  rl_oracle_rel       280 |   25.0   33.8    -8.8 ( 1.8) |  -0.12 |  -0.175 (0.039) |     53% |  1588ms    960     - | first shot 350 ms after he is in view, - (681)
+
+moments at a holding place
+  option          moments |  deals  takes    less (s.e.) |  frags |   pay less opp |  contact | 1st dmg  shots   hit
+  free                280 |   37.8   35.3    +2.5 ( 1.3) |  +0.00 |  +0.032 (0.040) |     64% |   800ms      0     -
+  free_rg             280 |   36.7   36.5    +0.3 ( 1.2) |  -0.04 |  -0.040 (0.038) |     65% |   775ms      0     -
+  rg_oracle           280 |   22.8   43.2   -20.4 ( 2.7) |  -0.37 |  -0.593 (0.068) |     57% |   850ms   1145   31% | first shot 425 ms after he is in view, hit 29% (717)
+  rg_oracle_rel       280 |   25.3   38.4   -13.1 ( 2.3) |  -0.22 |  -0.354 (0.052) |     55% |  1188ms    638   30% | first shot 400 ms after he is in view, hit 30% (638)
+  rg_fair             280 |   20.7   44.9   -24.1 ( 2.9) |  -0.40 |  -0.671 (0.070) |     54% |   900ms    988   31% | first shot 450 ms after he is in view, hit 30% (637)
+  rg_fair_rel         280 |   25.3   39.5   -14.2 ( 2.4) |  -0.23 |  -0.370 (0.055) |     53% |  1525ms    589   29% | first shot 450 ms after he is in view, hit 29% (589)
+  lg_oracle_rel       280 |   32.1   38.4    -6.3 ( 1.6) |  -0.16 |  -0.219 (0.046) |     56% |   650ms   7748   23% | first shot 275 ms after he is in view, hit 13% (737)
+  rl_oracle_rel       280 |   25.0   33.8    -8.8 ( 1.8) |  -0.12 |  -0.175 (0.039) |     53% |  1588ms    960     - | first shot 350 ms after he is in view, - (681)
+
+only branches in which the enemy came into his view
+  option          moments |  deals  takes    less (s.e.) |  frags |   pay less opp |  contact | 1st dmg  shots   hit
+  free                249 |   50.9   48.3    +2.6 ( 1.8) |  -0.01 |  +0.018 (0.052) |    100% |   800ms      0     -
+  free_rg             244 |   50.6   48.9    +1.7 ( 1.7) |  -0.06 |  -0.040 (0.048) |    100% |   775ms      0     -
+  rg_oracle           202 |   36.8   69.2   -32.4 ( 4.1) |  -0.57 |  -0.976 (0.098) |    100% |   850ms   1145   31% | first shot 425 ms after he is in view, hit 29% (717)
+  rg_oracle_rel       195 |   40.8   64.1   -23.4 ( 3.8) |  -0.37 |  -0.660 (0.080) |    100% |  1188ms    638   30% | first shot 400 ms after he is in view, hit 30% (638)
+  rg_fair             196 |   36.3   77.4   -41.0 ( 4.3) |  -0.66 |  -1.175 (0.103) |    100% |   900ms    988   31% | first shot 450 ms after he is in view, hit 30% (637)
+  rg_fair_rel         185 |   43.4   67.6   -24.2 ( 3.7) |  -0.42 |  -0.720 (0.086) |    100% |  1525ms    589   29% | first shot 450 ms after he is in view, hit 29% (589)
+  lg_oracle_rel       192 |   52.1   64.1   -12.0 ( 2.6) |  -0.28 |  -0.435 (0.071) |    100% |   650ms   7748   23% | first shot 275 ms after he is in view, hit 13% (737)
+  rl_oracle_rel       195 |   40.4   55.7   -15.2 ( 2.7) |  -0.20 |  -0.348 (0.062) |    100% |  1588ms    960     - | first shot 350 ms after he is in view, - (681)
+
+the enemy 300 to 700 units away at the copy
+  option          moments |  deals  takes    less (s.e.) |  frags |   pay less opp |  contact | 1st dmg  shots   hit
+  free                 65 |   48.6   45.9    +2.7 ( 3.1) |  +0.03 |  +0.051 (0.105) |     72% |   750ms      0     -
+  free_rg              65 |   51.8   50.8    +1.0 ( 2.3) |  -0.09 |  -0.084 (0.101) |     76% |   738ms      0     -
+  rg_oracle            65 |   26.7   53.4   -26.7 ( 6.6) |  -0.34 |  -0.651 (0.152) |     59% |   850ms    285   32% | first shot 475 ms after he is in view, hit 31% (181)
+  rg_oracle_rel        65 |   34.0   53.4   -19.4 ( 5.6) |  -0.20 |  -0.407 (0.102) |     59% |  1550ms    163   33% | first shot 400 ms after he is in view, hit 33% (163)
+  rg_fair              65 |   27.3   63.1   -35.8 ( 7.0) |  -0.43 |  -0.845 (0.161) |     60% |   825ms    263   35% | first shot 462 ms after he is in view, hit 34% (166)
+  rg_fair_rel          65 |   31.3   53.0   -21.7 ( 6.2) |  -0.21 |  -0.451 (0.122) |     57% |  1650ms    149   34% | first shot 450 ms after he is in view, hit 34% (149)
+  lg_oracle_rel        65 |   41.2   49.2    -8.1 ( 3.8) |  -0.16 |  -0.251 (0.101) |     58% |   625ms   1948   29% | first shot 300 ms after he is in view, hit 18% (179)
+  rl_oracle_rel        65 |   35.8   43.3    -7.5 ( 4.6) |  -0.09 |  -0.122 (0.090) |     55% |  1550ms    236     - | first shot 375 ms after he is in view, - (166)
+
+the enemy 700 to 1100 units away at the copy
+  option          moments |  deals  takes    less (s.e.) |  frags |   pay less opp |  contact | 1st dmg  shots   hit
+  free                125 |   40.2   36.6    +3.6 ( 2.0) |  -0.01 |  +0.043 (0.056) |     68% |   875ms      0     -
+  free_rg             125 |   37.4   36.3    +1.1 ( 2.1) |  -0.04 |  -0.017 (0.052) |     67% |   838ms      0     -
+  rg_oracle           125 |   25.0   45.5   -20.5 ( 4.3) |  -0.43 |  -0.661 (0.107) |     60% |   775ms    536   33% | first shot 425 ms after he is in view, hit 32% (335)
+  rg_oracle_rel       125 |   23.5   38.6   -15.1 ( 3.7) |  -0.27 |  -0.431 (0.087) |     59% |  1050ms    293   31% | first shot 450 ms after he is in view, hit 31% (293)
+  rg_fair             125 |   20.7   44.7   -24.1 ( 4.1) |  -0.45 |  -0.730 (0.105) |     57% |   888ms    456   31% | first shot 475 ms after he is in view, hit 29% (299)
+  rg_fair_rel         125 |   25.5   40.7   -15.2 ( 3.3) |  -0.30 |  -0.464 (0.086) |     55% |  1350ms    278   30% | first shot 475 ms after he is in view, hit 30% (278)
+  lg_oracle_rel       125 |   32.1   40.6    -8.5 ( 2.2) |  -0.21 |  -0.293 (0.071) |     61% |   525ms   3823   24% | first shot 275 ms after he is in view, hit 13% (361)
+  rl_oracle_rel       125 |   24.7   36.0   -11.3 ( 2.4) |  -0.15 |  -0.236 (0.055) |     57% |  1475ms    445     - | first shot 325 ms after he is in view, - (319)
+
+the enemy 1100 to 1500 units away at the copy
+  option          moments |  deals  takes    less (s.e.) |  frags |   pay less opp |  contact | 1st dmg  shots   hit
+  free                 90 |   26.5   25.7    +0.8 ( 1.8) |  -0.01 |  +0.002 (0.058) |     54% |   750ms      0     -
+  free_rg              90 |   24.9   26.3    -1.4 ( 1.9) |  -0.02 |  -0.039 (0.059) |     53% |   750ms      0     -
+  rg_oracle            90 |   16.9   32.5   -15.6 ( 3.7) |  -0.30 |  -0.457 (0.103) |     50% |  1125ms    324   25% | first shot 425 ms after he is in view, hit 23% (201)
+  rg_oracle_rel        90 |   21.7   27.4    -5.6 ( 2.9) |  -0.16 |  -0.209 (0.074) |     47% |  1425ms    182   25% | first shot 400 ms after he is in view, hit 25% (182)
+  rg_fair              90 |   16.0   31.9   -15.9 ( 4.4) |  -0.30 |  -0.465 (0.113) |     47% |  1062ms    269   28% | first shot 450 ms after he is in view, hit 26% (172)
+  rg_fair_rel          90 |   20.7   28.0    -7.3 ( 3.3) |  -0.13 |  -0.181 (0.084) |     46% |  1875ms    162   23% | first shot 400 ms after he is in view, hit 23% (162)
+  lg_oracle_rel        90 |   25.5   27.6    -2.0 ( 2.8) |  -0.09 |  -0.093 (0.069) |     48% |   850ms   1977   16% | first shot 225 ms after he is in view, hit 7% (197)
+  rl_oracle_rel        90 |   17.6   23.9    -6.3 ( 2.9) |  -0.09 |  -0.130 (0.066) |     46% |  2075ms    279     - | first shot 325 ms after he is in view, - (196)
