@@ -260,7 +260,10 @@ def main():
     frame(bot)
     check("switch: 1.6a loaded, its files in the flat names", bot.ver_name == "1.6a" and flat_is("1.6a") and loads == ["1.6a"], "{} {}".format(bot.ver_name, loads))
     check("switch: said with its minutes", ("msg", "^5BobbyBones^7 ^21.6a^7 loaded (^524,388^7 min of training).") in said, str(said))
-    check("switch: the aim is the person's remembered max on 1.6a", bot.aim_level() == "max" and json.loads(str(bot.P["env_vars"]))["NET"] == "1.6a")
+    if hasattr(DB.duelbot, "aim_saved"):                    # (pub-perf: !aim remembers a person's setting; main does not)
+        check("switch: the aim is the person's remembered max on 1.6a", bot.aim_level() == "max" and json.loads(str(bot.P["env_vars"]))["NET"] == "1.6a")
+    else:
+        check("switch: the aim is 1.6a's default (no remembered aim on this branch)", bot.aim_level() == "default" and json.loads(str(bot.P["env_vars"]))["NET"] == "1.6a")
     check("switch: remembered", json.load(open(os.path.join(d, "version_choices.json"))) == {bot.aim_key(PERSON): "1.6a"})
     ev_ = [r for r in recs if r.get("event") == "version"]
     check("switch: a version event with its times", ev_ and ev_[-1]["version"] == "1.6a" and ev_[-1]["was"] == "2.2e" and "copy_ms" in ev_[-1], str(ev_[-1:]))
