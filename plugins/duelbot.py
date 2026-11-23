@@ -13,7 +13,7 @@ human is measured with the same metrics, giving a human baseline card (docs/guid
 Opponent: the first human on the server; with DUEL_OPP=bot a plain Nightmare bot fills in while no human is
 there. The server is held in warmup on the three maps.
 
-Chat commands: !help, !maps, !aim, !weapons, !note <text>, !mind (the owner); !map is plugins/botmode.py's. (Test rooms: no chat command since 2026-10-26.)
+Chat commands: !help, !maps, !aim, !version (2026-11-22: which network he plays, when versions are served), !weapons, !note <text>, !mind (the owner); !map is plugins/botmode.py's. (Test rooms: no chat command since 2026-10-26.)
 Load with QLX_PLUGINS="botctl, duelbot". Needs /tmp/practice/policy.npz (sim/export_duel.py); rooms need
 /maps/nav_<map>_sim.json. Writes /tmp/practice/sessions/<session>/ and /tmp/practice/suite/.
 """
@@ -238,6 +238,7 @@ class duelbot(minqlx.Plugin):
         # (owner, 2026-10-26: duels on the ten maps only: !duel, !match, !reflex, !movement, !room, !rooms, !drill, !arena,
         # !spar, !nosg removed; their code below is no longer reachable from chat)
         self.add_command("aim", self.cmd_aim, 0, usage="[default|max]")
+        self.add_command("version", self.cmd_version, 0, usage="[<version>]")     # (owner, 2026-11-22; silent without a versions folder)
         self.add_command("weapons", self.cmd_weapons, 0, usage="[off|light|strong|pros]")
         self.add_command("mind", self.cmd_mind, 5, usage="<on|off>")
         self.mind_w = None                                   # (B-283, !mind on) the mind view's log: a mindlog.Writer while it is on
@@ -246,6 +247,8 @@ class duelbot(minqlx.Plugin):
             self.mind_map, self.mind_fr = None, 0
             self.log("mind view: on from the start (DUEL_MIND=1; mind.jsonl in the data folder)")
         self.aim_prof, self.aim_names, self.aim_bad, self.aim_who = {}, [], {}, set()   # (!aim, aim_build, aim_frame)
+        self.ver_name, self.ver_job, self.ver_pending, self.ver_for = None, None, None, None   # (!version)
+        self.ver_reset()                                     # (the start: the default version, then the default aim)
         self.aim_reset()                                     # (the start: the default aim, whatever policy.npz was left at)
         self.wdial = self.WDIAL_DEFAULT                      # (!weapons) the weapon dial's setting
         self.arena = None                                    # a fight in one room of the test map (see cmd_arena)
@@ -329,7 +332,8 @@ class duelbot(minqlx.Plugin):
                     opponent_name=opp.clean_name if is_bot(opp) else "human", policy=str(self.P["run"]),
                     train_minutes=int(self.P["minutes"]), env=str(self.P["env"]),
                     react_ms=int(self.react_ms), frame_ms=25, frame_columns=FRAME_COLS,
-                    weapons=getattr(self, "wdial", "off"))           # (!weapons, the dial at the session's start; changes: events "weapons")
+                    weapons=getattr(self, "wdial", "off"),           # (!weapons, the dial at the session's start; changes: events "weapons")
+                    version=self.bot_version())                       # (!version: a switch ends the session, so one version a session)
         with open(os.path.join(self.sess, "meta.json"), "w") as f:
             json.dump(meta, f, indent=1)
         self.frames_f = open(os.path.join(self.sess, "frames.csv"), "a")
@@ -393,7 +397,7 @@ class duelbot(minqlx.Plugin):
     def end_session(self):
         if self.sess:
             self.inputs_flush()
-            self.record(event="end", **self.score)
+            self.record(event="end", version=self.bot_version(), **self.score)
             self.frames_f.close()
             if getattr(self, "missiles_f", None):
                 self.missiles_f.close()
@@ -459,6 +463,9 @@ class duelbot(minqlx.Plugin):
     def cmd_help(self, player, msg, channel):
         for line in self.HELP:
             player.tell(line)
+        if self.FACTORY == "duel" and len(self.ver_here()) > 1:     # (!version, owner, 2026-11-22)
+            player.tell("^3Versions:^7 ^2!version^7 names the version of me playing; ^2!version {}^7 changes it (the player in the duel, in warmup).".format(
+                "|".join(self.ver_order())))
         lad = minqlx.Plugin._loaded_plugins.get("ladder")    # the leaderboard, where it is loaded (plugins/ladder.py)
         if lad is not None:
             player.tell(lad.HELP)
@@ -482,6 +489,9 @@ class duelbot(minqlx.Plugin):
             player.tell(self.WELCOME)
             if self.FACTORY == "duel":                       # (!aim, owner, 2026-10-21: the 1v1 plugin's command)
                 player.tell(self.aim_welcome())
+                vw_ = self.ver_welcome()                     # (!version, owner, 2026-11-22: only when more than one is served)
+                if vw_:
+                    player.tell(vw_)
                 if self.WDIAL_LEVELS:                        # (!weapons, owner, 2026-11-07)
                     player.tell(self.WEAPONS_WELCOME)
             lad = minqlx.Plugin._loaded_plugins.get("ladder")
@@ -500,6 +510,8 @@ class duelbot(minqlx.Plugin):
     def bot_version(self):
         """the network's version name (docs: v0.1, v0.2, v0.3, ...): BOBBY_VERSION if the server sets it, else from the run's
         name (duel_gru_v0_3 -> v0.3, duel_gru_v0_2_1 -> v0.2.1; v0.1 is the run duel_gru_v15c)"""
+        if getattr(self, "ver_name", None):                  # (!version) the version loaded, by its folder's version.json
+            return self.ver_say(self.ver_name)
         v = os.environ.get("BOBBY_VERSION", "").strip()
         if v:
             return v
@@ -565,6 +577,9 @@ class duelbot(minqlx.Plugin):
         if self.room is not None or self.queue or self.arena:
             player.tell("^3A test is running:^7 F3 when it is over.")
             return
+        if self.ver_busy():                                  # (!version) a version is loading
+            player.tell("^3A version is loading:^7 F3 in a moment.")
+            return
         if getattr(self, "go_f3", 0.0):                      # the start is already on its way
             return
         if player.id in self.ready_ids:
@@ -592,7 +607,7 @@ class duelbot(minqlx.Plugin):
             weapons = {k.lower(): {q: v.get(q, 0) for q in ("S", "H", "DG", "DR", "K", "D", "T", "P")}
                        for k, v in (d.get("WEAPONS") or {}).items() if v.get("S") or v.get("T") or v.get("P")}
             seat = getattr(self, "seat", {}).get(pl.id) if pl is not None and isinstance(getattr(self, "seat", None), dict) else None
-            self.record(event="player_stats", bot=bool(bot), who=(d.get("NAME") if bot else "person"), seat=seat,
+            self.record(event="player_stats", bot=bool(bot), who=(d.get("NAME") if bot else "person"), seat=seat, version=self.bot_version(),
                         warmup=bool(d.get("WARMUP")), aborted=bool(d.get("ABORTED")), play_time=d.get("PLAY_TIME"),
                         kills=d.get("KILLS"), deaths=d.get("DEATHS"), damage=d.get("DAMAGE"), weapons=weapons,
                         pickups={k.lower(): v for k, v in (d.get("PICKUPS") or {}).items() if v})
@@ -896,6 +911,7 @@ class duelbot(minqlx.Plugin):
         self.alive = {}
         self.room, self.queue = None, []
         self.game_over_t, self.go_f3 = 0.0, 0.0              # a new map: a game's end sequence is over with it
+        self.ver_reset()                                     # (!version first, then the aim)
         self.aim_reset()
         self.wdial_reset("new map")
         if EARLY_BOBBY:
@@ -982,6 +998,7 @@ class duelbot(minqlx.Plugin):
         self.P, self.attn = _net.load(os.path.join(D, "policy.npz"))     # (v0.2: with the attention part, if it has one)
         self.mapname = mapname                               # (v0.4.1: the zones' map number of the brain's token, netpass.pose)
         self.policy_mtime = os.path.getmtime(os.path.join(D, "policy.npz"))
+        self.ver_identify()                                  # (!version) which of the versions served this network is
         self.dims = [int(x) for x in self.P["action_dims"]]
         if "legs" in self.P:                                 # his legs' network (duel_env's LEGS), exported beside the policy file
             os.environ["LEGS_NET"] = os.path.join(D, str(self.P["legs"]))
@@ -1940,6 +1957,389 @@ class duelbot(minqlx.Plugin):
         except Exception as e:                               # noqa: BLE001
             self.log("aim reset ({}): {!r}".format(why, e))
 
+    # ------------------------------------------------------------------ !version (owner, 2026-11-22)
+    # Which network he plays: one folder per version served, D/versions/<name>/ with its own policy_default.npz, policy_max.npz,
+    # legs.npz (when the network has legs) and version.json ({"name", "run", "minutes", "updated", "legs"}; tools/version_set.py
+    # writes it). The versions served are the folders whose files are all there. No versions folder: none of this (the flat files,
+    # no !version, as before). A switch copies the version's files over the flat names the rest of the plugin reads (legs,
+    # policy_default, policy_max, then policy.npz = its default, last), in a background thread, each to a .ver.tmp file renamed into
+    # place on the game's thread; then setup() loads it (its own simulator module and switches, env_module) and the aim's settings
+    # are rebuilt (aim_build, in setup). Warmup only: asked for during a game it is promised for the next warmup. Like !aim: the
+    # person in the duel or the server's owner may change it; a person's choice is remembered (version_choices.json, keyed as
+    # aim_choices.json) and comes back when they are seated; back to the default on a new map with nobody's choice and when the
+    # person in the duel leaves. The version is switched first, then the aim (aim_frame waits while a version loads; the aim
+    # after a switch is that version's default, or the person's remembered aim).
+    VER_DIR = "versions"
+    VER_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$")
+    VER_COPY = (("legs.npz", "legs.npz"), ("policy_default.npz", "policy_default.npz"), ("policy_max.npz", "policy_max.npz"),
+                ("policy_default.npz", "policy.npz"))        # (source in the version's folder, flat name in D), policy.npz last
+    VER_EVERY = 30.0                                         # seconds a look at the folders is kept
+
+    def ver_here(self, fresh=False):
+        """{folder name: version.json + dir} of the versions served (every file there); {} without a versions folder"""
+        now = time.time()
+        c_ = self.__dict__.get("_ver_cache")
+        if c_ is not None and not fresh and now - c_[0] < self.VER_EVERY:
+            return c_[1]
+        out = {}
+        root = os.path.join(D, self.VER_DIR)
+        try:
+            names = sorted(os.listdir(root)) if os.path.isdir(root) else []
+        except OSError:
+            names = []
+        bad = self.__dict__.setdefault("_ver_bad", {})
+        for n in names:
+            p = os.path.join(root, n)
+            if not os.path.isdir(p):
+                continue
+            try:
+                if not self.VER_NAME_RE.match(n):
+                    raise ValueError("not a version's name")
+                with open(os.path.join(p, "version.json"), encoding="utf-8") as f:
+                    info = json.load(f)
+                if not isinstance(info, dict):
+                    raise ValueError("version.json is not a table")
+                need = list(self.AIM_FILES.values()) + (["legs.npz"] if info.get("legs") else [])
+                miss = [f_ for f_ in need if not os.path.isfile(os.path.join(p, f_))]
+                if miss:
+                    raise ValueError("missing " + ", ".join(miss))
+                out[n] = dict(info, dir=p, name=str(info.get("name") or n), run=str(info.get("run", "")),
+                              minutes=int(info.get("minutes", -1)))
+                bad.pop(n, None)
+            except Exception as e:                           # noqa: BLE001 - a broken folder is not offered
+                why_ = "{}: {}".format(type(e).__name__, e)
+                if bad.get(n) != why_:
+                    bad[n] = why_
+                    self.log("version {}: not offered ({})".format(n, why_))
+        self._ver_cache = (now, out)
+        return out
+
+    def ver_default(self, vs=None):
+        """the default version: BOBBY_VERSION_DEFAULT when it is served, else the newest (version.json "updated", then minutes)"""
+        vs = self.ver_here() if vs is None else vs
+        if not vs:
+            return None
+        want = os.environ.get("BOBBY_VERSION_DEFAULT", "").strip()
+        if want in vs:
+            return want
+        return max(vs, key=lambda n_: (str(vs[n_].get("updated", "")), vs[n_]["minutes"], n_))
+
+    def ver_order(self, vs=None):
+        """the versions served, the default first, then the newest first"""
+        vs = self.ver_here() if vs is None else vs
+        d_ = self.ver_default(vs)
+        rest = sorted((n_ for n_ in vs if n_ != d_), key=lambda n_: (str(vs[n_].get("updated", "")), vs[n_]["minutes"], n_), reverse=True)
+        return ([d_] if d_ else []) + rest
+
+    def ver_match(self, run, minutes, vs=None):
+        """the version a network is (by its run and minutes of training), None if it is none of those served"""
+        vs = self.ver_here() if vs is None else vs
+        for n_ in self.ver_order(vs):
+            if vs[n_]["run"] == str(run) and vs[n_]["minutes"] == int(minutes):
+                return n_
+        return None
+
+    def ver_of_file(self, path, vs=None):
+        """the version of a policy file on disk (its run and minutes only are read); None if unknown or unreadable"""
+        try:
+            with np.load(path, allow_pickle=False) as z:
+                run, mins = str(z["run"]), int(z["minutes"])
+        except Exception:                                    # noqa: BLE001
+            return None
+        return self.ver_match(run, mins, vs)
+
+    def ver_identify(self):
+        """(setup) the version of the network just loaded: self.ver_name (None without versions or for another network)"""
+        try:
+            vs = self.ver_here(fresh=True)
+            self.ver_name = self.ver_match(str(self.P["run"]), int(self.P["minutes"]), vs) if vs else None
+        except Exception as e:                               # noqa: BLE001
+            self.ver_name = None
+            self.log("version: {!r}".format(e))
+
+    def ver_say(self, name):
+        """a version's display name"""
+        v_ = self.ver_here().get(name)
+        return v_["name"] if v_ else str(name)
+
+    def ver_copy(self, name):
+        """copy a version's files to .ver.tmp files beside their flat names; [(tmp, flat path)] in the order of the renames"""
+        v_ = self.ver_here()[name]
+        pairs = []
+        for src_, dst_ in self.VER_COPY:
+            s_ = os.path.join(v_["dir"], src_)
+            if src_ == "legs.npz" and not v_.get("legs"):
+                continue                                     # (a network without legs: legs.npz is not read)
+            tmp = os.path.join(D, dst_ + ".ver.tmp")
+            shutil.copyfile(s_, tmp)
+            pairs.append((tmp, os.path.join(D, dst_)))
+        return pairs
+
+    @staticmethod
+    def ver_place(pairs):
+        for tmp, dst in pairs:                               # (legs first, policy.npz last: what the hot reload watches)
+            os.replace(tmp, dst)
+
+    def ver_busy(self):
+        return self.__dict__.get("ver_job") is not None
+
+    def ver_warm(self, now=None):
+        """may a version be loaded now: warmup (not a game, its countdown or its end), no F3 on its way, no test"""
+        now = time.time() if now is None else now
+        try:
+            state_ = self.game.state if self.game is not None else "warmup"
+        except Exception:                                    # noqa: BLE001
+            state_ = None
+        return state_ in ("warmup", None) and not self.after_game(now) and not getattr(self, "go_f3", 0.0) \
+            and getattr(self, "room", None) is None and not getattr(self, "queue", None)
+
+    def ver_start(self, name, why, say=None):
+        """start loading a version: its files are copied by a background thread; ver_tick finishes on the game's thread"""
+        if self.ver_busy():
+            return False
+        import threading
+        job = dict(name=name, why=why, say=say, t0=time.perf_counter(), pairs=None, err=None, copy_ms=None)
+
+        def work():
+            if hasattr(_mind, "idle_thread"):                # (the 1-vCPU servers) the copy takes the core only when the game leaves it
+                _mind.idle_thread()
+            t_ = time.perf_counter()
+            try:
+                job["pairs"] = self.ver_copy(name)
+            except Exception as e:                           # noqa: BLE001 - told on the game's thread
+                job["err"] = "{}: {}".format(type(e).__name__, e)
+            job["copy_ms"] = 1000.0 * (time.perf_counter() - t_)
+        job["th"] = threading.Thread(target=work, name="version-copy", daemon=True)
+        self.ver_job = job
+        self.ver_pending = None
+        job["th"].start()
+        self.log("version {}: loading ({})".format(name, why))
+        return True
+
+    def ver_tick(self):
+        """every frame: a version's copy done -> its files into place, the network loaded (setup), the aim rebuilt"""
+        job = self.__dict__.get("ver_job")
+        if job is None or job["th"].is_alive():
+            return
+        self.ver_job = None
+        name = job["name"]
+        if job["err"]:
+            self.log("version {}: the copy failed ({}); the network stays".format(name, job["err"]))
+            self.msg("^3Version^7 ^2{}^7 could not be loaded.".format(name))
+            return
+        t1 = time.perf_counter()
+        self.ver_place(job["pairs"])
+        was = getattr(self, "ver_name", None)
+        if getattr(self, "ready", False):                    # (not ready: a map's load, and setup() loads it then)
+            self.end_session()
+            self.setup()                                     # (the network, its module, the aim's settings: aim_build)
+        load_ms = 1000.0 * (time.perf_counter() - t1)
+        self.aim_for = None                                  # (aim_frame: the person's own aim, if this version has it)
+        self.mind_map = None                                 # (the mind log's meta line names the new version)
+        self.record(event="version", version=name, was=was, why=job["why"], copy_ms=round(job["copy_ms"] or 0.0, 1),
+                    load_ms=round(load_ms, 1))
+        self.log("version {} loaded ({}): copy {:.0f} ms in the background, files placed and network loaded in {:.0f} ms in the frame".format(
+            name, job["why"], job["copy_ms"] or 0.0, load_ms))
+        if job["say"] is not False:
+            P = getattr(self, "P", None)
+            mins = int(P["minutes"]) if P is not None and "minutes" in P else self.ver_here().get(name, {}).get("minutes", 0)
+            self.msg("^5BobbyBones^7 ^2{}^7 loaded (^5{:,}^7 min of training).".format(self.ver_say(name), int(mins)))
+
+    def ver_reset(self):
+        """a new map (and the plugin's start), before the aim's reset: the default version, or the version of the one person
+        seated if they chose one; copied now (the map is loading, setup() loads it once it is up). A copy under way is finished
+        first."""
+        self.ver_for, self.ver_pending = None, None
+        job = self.__dict__.get("ver_job")
+        if job is not None:
+            job["th"].join()
+            self.ver_job = None
+            if not job["err"]:
+                try:
+                    self.ver_place(job["pairs"])
+                except OSError as e:
+                    self.log("version reset: {!r}".format(e))
+        vs = self.ver_here(fresh=True)
+        if not vs:
+            return
+        want, sid_ = self.ver_default(vs), None
+        try:
+            here = [str(p.steam_id) for p in self.players() if not is_bot(p) and p.team in ("free", "red", "blue")]
+            if len(here) == 1 and self.ver_saved(here[0]):
+                sid_ = here[0]
+                want = self.ver_saved(sid_)
+        except Exception:                                    # noqa: BLE001 - the plugin's start: no players yet
+            pass
+        on_disk = self.ver_of_file(os.path.join(D, "policy.npz"), vs)
+        if sid_ is not None:
+            self.ver_for = sid_
+        if on_disk == want:
+            return
+        try:
+            t_ = time.perf_counter()
+            self.ver_place(self.ver_copy(want))
+            self.ver_said = sid_ is None and on_disk is not None
+            self.log("new map: version {} ({}; was {}), copied in {:.0f} ms".format(
+                want, "the choice of the person seated" if sid_ else "the default", on_disk or "another network",
+                1000.0 * (time.perf_counter() - t_)))
+        except Exception as e:                               # noqa: BLE001
+            self.log("version reset: {!r}".format(e))
+
+    def ver_choices(self):
+        """{key: version}, read once; an unreadable file counts as empty"""
+        c_ = self.__dict__.get("ver_chosen")
+        if c_ is None:
+            try:
+                with open(os.path.join(D, "version_choices.json"), encoding="utf-8") as f:
+                    c_ = json.load(f)
+                c_ = c_ if isinstance(c_, dict) else {}
+            except (OSError, ValueError):
+                c_ = {}
+            self.ver_chosen = c_
+        return c_
+
+    def ver_saved(self, sid):
+        """this person's chosen version, None if they chose none (or it is no longer served)"""
+        n_ = self.ver_choices().get(self.aim_key(sid))
+        return n_ if isinstance(n_, str) and n_ in self.ver_here() else None
+
+    def ver_remember(self, player, name):
+        """keep the choice of the person playing the duel (the owner's from the spectators is not theirs to keep); the
+        default removes the line"""
+        try:
+            if is_bot(player) or player.team not in ("free", "red", "blue"):
+                return
+            c_, k_ = self.ver_choices(), self.aim_key(player.steam_id)
+            if name == self.ver_default():
+                if c_.pop(k_, None) is None:
+                    return
+            else:
+                c_[k_] = name
+            path = os.path.join(D, "version_choices.json")
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(c_, f)
+            os.replace(path + ".tmp", path)
+            self.ver_for = str(player.steam_id)
+        except Exception as e:                               # noqa: BLE001 - the rcon console has no team or Steam ID
+            self.log("version choice not kept: {!r}".format(e))
+
+    def ver_welcome(self):
+        """the welcome's version line, only when more than one version is served"""
+        names = self.ver_order()
+        if len(names) < 2:
+            return None
+        return "^3My versions:^7 " + ", ".join("^2!version {}^7{}".format(n_, " ^6(default)^7" if i_ == 0 else "")
+                                               for i_, n_ in enumerate(names)) + ". The player in the duel can change it in warmup."
+
+    def cmd_version(self, player, msg, channel):
+        """!version: the version now and those served. !version <name>: that version (in warmup; during a game, from the next
+        warmup). Nothing without a versions folder (as before !version)."""
+        vs = self.ver_here(fresh=True)
+        if not vs:
+            return
+        names = self.ver_order(vs)
+        cur = getattr(self, "ver_name", None)
+        cur_s = self.ver_say(cur) if cur else self.bot_version()
+        if len(msg) < 2:
+            player.tell("^3Version^7 ^2{}^7 (^2!version {}^7 to change, in warmup)".format(cur_s, "|".join(names)))
+            return
+        want = next((n_ for n_ in names if n_.lower() == msg[1].strip().lower()), None)
+        if want is None:
+            want = next((n_ for n_ in names if vs[n_]["name"].lower() == msg[1].strip().lower()), None)
+        if want is None:
+            player.tell("^3Versions:^7 " + ", ".join("^2!version {}^7{}".format(n_, " (default)" if i_ == 0 else "")
+                                                       for i_, n_ in enumerate(names)))
+            return
+        try:
+            team_, bot_ = getattr(player, "team", "spectator"), is_bot(player)
+        except Exception:                                    # noqa: BLE001
+            team_, bot_ = "spectator", False
+        if not self.aim_may(team_, bot_, self.aim_owner(player)):
+            player.tell("^3Only the player in the duel can change the version.^7")
+            return
+        job = self.__dict__.get("ver_job")
+        if job is not None:
+            player.tell("^3Version^7 ^2{}^7 is loading: a moment.".format(job["name"]))
+            return
+        if want == cur:
+            self.ver_remember(player, want)
+            self.ver_pending = None
+            self.msg("^3Version^7 ^2{}^7 stays.".format(want))
+            return
+        self.ver_remember(player, want)
+        if not self.ver_warm() or not getattr(self, "ready", False):
+            self.ver_pending = want
+            self.log("version {}: asked for outside warmup, promised for the next warmup".format(want))
+            self.msg("^3Version^7 ^2{}^7 from the next warmup (it changes between games).".format(want))
+            return
+        if self.ver_start(want, "asked for"):
+            self.msg("^3Loading version^7 ^2{}^7 ...".format(want))
+
+    def ver_left(self, why):
+        """the person in the duel left: back to the default version for the next person (now in warmup, else at the next)"""
+        d_ = self.ver_default()
+        self.ver_pending = None
+        if d_ is None or getattr(self, "ver_name", None) in (d_, None):
+            return
+        if self.ver_warm() and getattr(self, "ready", False) and not self.ver_busy():
+            self.log("version back to {}: the player in the duel {}".format(d_, why))
+            if self.ver_start(d_, "the player in the duel " + why):
+                self.msg("^3Version reset to^7 ^2{}^7: loading ...".format(d_))
+        else:
+            self.ver_pending = d_
+
+    def ver_frame(self, now):
+        """(before aim_frame) a copy done: finished (every frame); twice a second: the line of a new map's reset, a person's
+        own version when they are seated, a promised version once in warmup, the default when the person in the duel left
+        (out of the game for 3 s, as aim_frame)"""
+        self.ver_tick()
+        if now < getattr(self, "ver_check", 0.0):
+            return
+        self.ver_check = now + 0.5
+        vs = self.ver_here()
+        if not vs:
+            return
+        try:
+            here = {str(p.steam_id) for p in self.players() if not is_bot(p) and p.team in ("free", "red", "blue")}
+        except Exception:                                    # noqa: BLE001
+            return
+        kept = {sid: self.ver_saved(sid) for sid in here}
+        kept = {sid: n_ for sid, n_ in kept.items() if n_ is not None}
+        cur = getattr(self, "ver_name", None)
+        if getattr(self, "ver_said", False) and getattr(self, "ready", False):     # (ver_reset) the last map ended at another version
+            self.ver_said = False
+            if cur == self.ver_default(vs) and not kept:
+                self.msg("^3Version reset to^7 ^2{}^7.".format(cur))
+        warm = self.ver_warm(now) and getattr(self, "ready", False)
+        sid_ = next(iter(here)) if len(here) == 1 else None
+        if sid_ is not None and sid_ != getattr(self, "ver_for", None) and getattr(self, "ready", False) and not self.ver_busy():
+            self.ver_for = sid_
+            n_ = kept.get(sid_)
+            if n_ is not None and n_ != cur:
+                if warm and self.ver_start(n_, "the choice of the person seated"):
+                    self.msg("^3Version back to your last choice:^7 ^2{}^7 (^2!version {}^7 to change) ...".format(n_, "|".join(self.ver_order(vs))))
+                elif not warm:
+                    self.ver_pending = n_
+        pend = getattr(self, "ver_pending", None)
+        if pend is not None and warm and not self.ver_busy():
+            if pend == cur:
+                self.ver_pending = None
+            elif pend in vs:
+                self.ver_start(pend, "promised for this warmup")
+            else:
+                self.ver_pending = None
+        seen = self.__dict__.setdefault("ver_seen", {})     # steam id -> the last time he was in the game
+        for sid in here:
+            seen[sid] = now
+        gone = [sid for sid, t_ in seen.items() if sid not in here and now - t_ > 3.0]
+        for sid in gone:
+            del seen[sid]
+        if gone:
+            if getattr(self, "ver_for", None) in gone:
+                self.ver_for = None
+            if not kept:                                     # (somebody seated at their own version: it stays)
+                self.ver_left("left")
+
 
     # ------------------------------------------------------------------ !weapons (owner, 2026-11-07)
     # "What I want to see is him use rockets both in close and medium range, and for zoning. Use LG at close range, and rail
@@ -2144,7 +2544,7 @@ class duelbot(minqlx.Plugin):
             if self.aim_level() == self.AIM_DEFAULT and not kept:
                 self.msg("^3Aim reset to^7 ^2{}^7.".format(self.AIM_DEFAULT))
         sid_ = next(iter(here)) if len(here) == 1 else None
-        if sid_ is not None and sid_ != getattr(self, "aim_for", None) and getattr(self, "ready", False):
+        if sid_ is not None and sid_ != getattr(self, "aim_for", None) and getattr(self, "ready", False) and not self.ver_busy():
             self.aim_for = sid_
             lv = kept.get(sid_)
             try:
@@ -2263,6 +2663,7 @@ class duelbot(minqlx.Plugin):
                         self.P["run"], int(self.P["minutes"])))
             except OSError:
                 pass
+        self.ver_frame(now)                                  # (!version first, then the aim)
         self.aim_frame(now)
         bobby, human, filler = self.cast()
         real_human = human is not None and not is_bot(human)

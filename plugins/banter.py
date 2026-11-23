@@ -320,7 +320,14 @@ class banter(minqlx.Plugin):
                         here_ = pl_.aim_here() if pl_ is not None and hasattr(pl_, "aim_here") else list(AIM_ORDER)
                     except Exception:                                        # noqa: BLE001
                         here_ = list(AIM_ORDER)
-                    self.say(p.id, "Aim ^2{}^7 (^2!aim {}^7 to change)".format(lv, "|".join(here_)), delay)
+                    ver_ = None                              # (!version, owner 2026-11-22) and the version, when more than one is served
+                    try:
+                        if pl_ is not None and hasattr(pl_, "ver_here") and len(pl_.ver_here()) > 1:
+                            ver_ = pl_.bot_version()
+                    except Exception:                        # noqa: BLE001
+                        ver_ = None
+                    self.say(p.id, ("Version ^2{}^7, aim ^2{}^7".format(ver_, lv) if ver_ else "Aim ^2{}^7".format(lv)) +
+                             " (^2!aim {}^7 to change)".format("|".join(here_)), delay)
                     delay += 0.8 + self.rng.random()
 
     # ------------------------------------------------------------------ a game's start and end

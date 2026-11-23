@@ -10,7 +10,7 @@ packed copy <data>/archive/<name>.tar.gz, or any folder named with --sessions) a
 <data>/games). The id is ratings.game_id: <server>-<UTC start yyyymmdd-hhmmss>-<map>, the same on every machine.
 
 What a summary holds (schema 1, all integers but the clock, positions in units of Q = 8 game units, times in seconds
-from the game's start): the game (id, srv, map, t0, len, score [person, Bobby], forfeit, ot, aim, net), pos (both players'
+from the game's start): the game (id, srv, map, t0, len, score [person, Bobby], forfeit, ot, aim, net, ver: the version he played, 2026-11-22), pos (both players'
 places twice a second, flat [x, y, x, y, ...] / Q: "b" Bobby, "p" the person), frags ([t, victim 0 Bobby | 1 person,
 x / Q, y / Q, the killing weapon (the game's numbers, 0 unknown), distance, 1 if the killer saw the victim, -1 if the
 death was the victim's own (a suicide or the map: the game takes a point off him)], the running score after it), items
@@ -271,7 +271,7 @@ def summarise(line, srv, sess, frags_all, win, mind_path=None):
                           taken=int(dmg.get("TAKEN") or 0), w=w)
     out = dict(v=SCHEMA, id=R.game_id(line, srv), srv=srv, map=mp, t0=int(t0), len=int(round(length)),
                score=[int(x) for x in line.get("score", [0, 0])], forfeit=int(bool(line.get("forfeit"))),
-               ot=int(float(line.get("minutes") or 0.0) > 10.03), aim=str(line.get("aim") or ""), net=str(line.get("net") or ""), q=Q,
+               ot=int(float(line.get("minutes") or 0.0) > 10.03), aim=str(line.get("aim") or ""), net=str(line.get("net") or ""), ver=R.line_version(line), q=Q,
                pos=dict(b=pos_b, p=pos_p), frags=frags, items=items, win=wp, stats=stats)
     if mind_path:
         m = mind_section(mind_path, mp, t0, t_end, ev, fr_txt)

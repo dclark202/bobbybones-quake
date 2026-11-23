@@ -140,9 +140,21 @@ BOARD_SCHEMA = 1
 
 
 def version_of(net):
-    """the docs' version name of a run (as sim/export_duel.py: duel_gru_v0_3_1b -> v0.3.1, duel_gru_v15c -> v0.1)"""
+    """the docs' version name of a run (as sim/export_duel.py: duel_gru_v0_3_1b -> v0.3.1, duel_gru_v15c -> v0.1; the families'
+    runs, 2026-11-22: duel_gru_2_2e -> 2.2e, as the servers' version line names them)"""
     m = re.match(r"duel_gru_v(\d+(?:_\d+)+)[a-z]?$", str(net))
-    return "v" + m.group(1).replace("_", ".") if m else "v0.1" if net == "duel_gru_v15c" else str(net)
+    if m:
+        return "v" + m.group(1).replace("_", ".")
+    m = re.match(r"duel_gru_(\d+)_(\d+)([a-z])$", str(net))
+    if m:
+        return "{}.{}{}".format(*m.groups())
+    return "v0.1" if net == "duel_gru_v15c" else str(net)
+
+
+def line_version(d):
+    """the version of a frag or duel line: its "version" (written from 2026-11-22, !version), else from its network's run"""
+    v = d.get("version") if isinstance(d, dict) else None
+    return str(v) if v else version_of(d.get("net", "") if isinstance(d, dict) else "")
 
 
 FORFEIT_WIN_MIN = 5.0                                  # minutes (owner, 2026-10-24)

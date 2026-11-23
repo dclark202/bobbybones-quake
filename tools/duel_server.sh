@@ -23,6 +23,7 @@
 # OBSDUMP=1 / FFA_OBSDUMP=1 (his inputs, to obs_dump.npy there; with a v0.4.1 brain in the 1v1 plugin also brain_dump.npy: his
 # pose, the enemy's true place and the brain's answer). BTOKEN_GATE=<g>: play the brain's token at this gate in place of the
 # file's (0: shut; plugins/netpass.py NET_BTOKEN_GATE).
+# BOBBY_VERSION_DEFAULT=<name>: the default of !version (plugins/duelbot.py: the folders data/duellive/versions/<name>/; unset: the newest).
 # QLSTATS=1 switches the leaderboard's QLStats lookup on (plugins/ladder.py; off by default: a person's Steam id then goes
 # to qlstats.net once a day, he is told so on joining and "!qlstats off" stops it); QLSTATS_URL=<address> another service
 # address (tests: a fake of one's own).
@@ -90,7 +91,7 @@ MIND_ON="${MIND:-1}"
 PLUGINS="botctl, banlist, ladder, banter, botmode, duelbot"; MODE="1v1"     # botmode: !map (the ten duel maps); banlist: the owner's !kick and !ban; ladder: the leaderboard
 [ -n "$FFA" ] && echo "FFA=$FFA ignored: the server is 1v1 only (owner, 2026-10-23)"
 [ -n "$PLUGINS_EXTRA" ] && PLUGINS="$PLUGINS, $PLUGINS_EXTRA"
-docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e DUEL_GC_FREEZE="${GC_FREEZE:-1}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" -e DUEL_EARLY_BOBBY="$EARLY" -e DUEL_LIST_BOT_AS_PLAYER="$LISTBOT" -e DUEL_MIND="$MIND_ON" -e DUEL_PUBLIC="$([ "$PUBLIC" = "1" ] && echo 1)" \
+docker run -d $RESTART_OPT --name "$NAME" $ONE_THREAD -e QLX_PLUGINS="$PLUGINS" -e LAB_MAP="$MAP" -e QLX_OWNER="$QLX_OWNER" -e DUEL_OBSDUMP="${OBSDUMP:-}" -e DUEL_TIMING="${TIMING:-}" -e DUEL_GC_FREEZE="${GC_FREEZE:-1}" -e QLSTATS="${QLSTATS:-}" -e QLSTATS_URL="${QLSTATS_URL:-}" -e BOBBY_AUTOHOP="${BOBBY_AUTOHOP:-1}" -e NET_BTOKEN_GATE="${BTOKEN_GATE:-}" -e DUEL_EARLY_BOBBY="$EARLY" -e DUEL_LIST_BOT_AS_PLAYER="$LISTBOT" -e DUEL_MIND="$MIND_ON" -e DUEL_PUBLIC="$([ "$PUBLIC" = "1" ] && echo 1)" -e BOBBY_VERSION_DEFAULT="${BOBBY_VERSION_DEFAULT:-}" \
     -p "$PORT:$PORT/udp" -v "$ROOT/$DATA:/tmp/practice" -v "$ROOT/data/maps:/maps:ro" $MAP_MOUNTS $DOCKER_EXTRA "$IMAGE" +set net_port "$PORT" $LISTED \
     +set sv_hostname "${HOSTNAME_QL:-BobbyBones playtest}" +set g_password "$PW" >/dev/null
 echo "play-test server up on port $PORT, map $MAP, $MODE ($([ -n "$PW" ] && echo "password set" || echo "no password"), $([ "$PUBLIC" = "1" ] && echo "listed publicly" || echo "unlisted")$([ "$LISTBOT" = "1" ] && echo ", Bobby listed as a player"))"

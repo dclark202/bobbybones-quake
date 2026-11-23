@@ -26,7 +26,8 @@ PC's tools can set his games apart. Neither his id nor his name goes anywhere ne
 A person's key for the session logs: person_key() (duelbot.note_person writes it beside the seat he takes).
 
 Finished duels: duels.jsonl, one line per finished duel between one person and Bobby in 1v1 mode, a real game (F3) or a
-timed one (!duel): {t, map, net, key, owner, minutes, score: [person, bobby], forfeit, kind: game | timed}.
+timed one (!duel): {t, map, net, version, key, owner, minutes, score: [person, bobby], forfeit, kind: game | timed}. "version" (from
+2026-11-22, !version): the version Bobby played the game with, read at its start; frags.jsonl lines carry it too.
 
 QLStats (docs/design/QLSTATS.md, section 4; owner, 2026-10-12: "Build the qlstats lookup"). OFF unless the server is
 started with QLSTATS=1; QLSTATS_URL sets the service's address (default https://qlstats.net). At a person's first join of
@@ -233,6 +234,15 @@ class ladder(minqlx.Plugin):
                 return pl
         return None
 
+    @staticmethod
+    def version_now(pl):
+        """(!version, owner 2026-11-22) the version of Bobby playing now, as the welcome names it (duelbot.bot_version: the
+        version folder's name when versions are served, else the network's own)"""
+        try:
+            return str(pl.bot_version()) if pl is not None and hasattr(pl, "bot_version") else ""
+        except Exception:                                    # noqa: BLE001
+            return ""
+
     def bobby_key(self):
         pl = self.bot_plugin()
         return None if pl is None else _ra.BOT + str(pl.P["run"])
@@ -382,7 +392,7 @@ class ladder(minqlx.Plugin):
                 rb = self.table.players.get(b[0]) or dict(r=_ra.R0)
             line = dict(t=round(now, 2), map=(minqlx.get_cvar("mapname") or "").lower(),
                         state=state,
-                        mode=getattr(pl, "FACTORY", "duel"), net=str(pl.P["run"]), killer=a[0], victim=b[0],
+                        mode=getattr(pl, "FACTORY", "duel"), net=str(pl.P["run"]), version=self.version_now(pl), killer=a[0], victim=b[0],
                         r=[round(ra["r"], 1), round(rb["r"], 1)])
             if SRV:
                 line["srv"] = SRV
@@ -454,7 +464,7 @@ class ladder(minqlx.Plugin):
             k_ = _ra.duel_result(d)
             if k_ is None:
                 continue
-            for v_ in ("all", self.version_of(d.get("net", ""))):
+            for v_ in ("all", _ra.line_version(d)):
                 out.setdefault(v_, [0, 0, 0])[k_] += 1
         self._rec = ((mt, self.board_mt), out)
         return out
@@ -501,7 +511,8 @@ class ladder(minqlx.Plugin):
             bots = [(p, sc) for p, sc in playing if is_bot(p) and any(n in p.clean_name for n in names)]
             if "key" not in d:
                 if len(people) == 1 and len(bots) == 1 and len(playing) == 2:
-                    d.update(key=self.key(people[0][0]), owner=int(self.is_owner(people[0][0])), net=str(pl.P["run"]), left=False)
+                    d.update(key=self.key(people[0][0]), owner=int(self.is_owner(people[0][0])), net=str(pl.P["run"]),
+                             version=self.version_now(pl), left=False)     # (the version at the game's start: !version changes only in warmup)
                 return
             mine = [(p, sc) for p, sc in people if self.key(p) == d["key"]]
             d["left"] = not mine
@@ -520,7 +531,7 @@ class ladder(minqlx.Plugin):
             limit = float(minqlx.get_cvar("timelimit") or 0) * 60.0
             forfeit = d.get("left") or "forfeit" in msg or ("limit hit" not in msg and limit > 0 and secs < limit - 5)
             self.note_duel(d["key"], d["owner"], secs / 60.0, d["score"][0], d["score"][1], forfeit, "game", net=d["net"],
-                           t0=d.get("t0"))                  # (wall time at the start: a server that falls behind plays
+                           t0=d.get("t0"), version=d.get("version"))                  # (wall time at the start: a server that falls behind plays
                                                             # GAME_LENGTH game seconds in more wall seconds)
             self.report_t = time.time()
             if not forfeit:
@@ -528,20 +539,22 @@ class ladder(minqlx.Plugin):
         except Exception as e:                               # noqa: BLE001
             minqlx.console_print("[ladder] duel: {}\n".format(type(e).__name__))
 
-    def note_duel(self, key, owner, minutes, person, bobby, forfeit, kind, net=None, t0=None):
+    def note_duel(self, key, owner, minutes, person, bobby, forfeit, kind, net=None, t0=None, version=None):
         """one finished duel between a person and Bobby: a real game of the 1v1 mode ("game", from on_game_end) or a
         timed one in warmup ("timed": !duel, from duelbot.arena_end). Keys only, no name."""
         try:
             pl = self.bot_plugin()
             if net is None:
                 net = str(pl.P["run"]) if pl is not None else ""
+            if version is None:                              # (!version) the version Bobby played the game with
+                version = self.version_now(pl)
             try:                                             # (owner, 2026-10-23) the aim level the duel was played at
                 aim = pl.aim_level() if pl is not None and hasattr(pl, "aim_level") else ""
             except Exception:                                # noqa: BLE001
                 aim = ""
             line = dict(t=round(time.time(), 2), map=(minqlx.get_cvar("mapname") or "").lower(), net=net, key=key,
                         owner=int(bool(owner)), minutes=round(float(minutes), 2), score=[int(person), int(bobby)],
-                        forfeit=int(bool(forfeit)), kind=kind, aim=str(aim))
+                        forfeit=int(bool(forfeit)), kind=kind, aim=str(aim), version=str(version or ""))
             if t0 is not None:
                 line["t0"] = round(float(t0), 2)             # (the game's start: its id on the site, ratings.game_id)
             if SRV:

@@ -102,7 +102,7 @@ def merge(servers, history, prev=None):
         k_ = R.duel_result(d)
         if k_ is None:
             continue
-        for v_ in ("all", R.version_of(d.get("net", ""))):
+        for v_ in ("all", R.line_version(d)):
             rec.setdefault(v_, [0, 0, 0])[k_] += 1
         c = people[d["key"]]["duels"].setdefault(d["srv"], [0, 0, 0])
         c[{0: 1, 1: 0, 2: 2}[k_]] += 1                       # (the person's side: Bobby's loss is his win)
@@ -172,7 +172,7 @@ def game_history(frags, duels, names, private, now=None, days=HISTORY_DAYS):
         mins = float(d.get("minutes") or 0.0)               # (the game's own clock: a server that falls behind is slower than wall time)
         rows.append(dict(id=R.game_id(d, d.get("srv")), srv=d.get("srv"), t0=int(t0), len=int(round(60.0 * mins)),
                          map=d.get("map"), score=[int(x) for x in d.get("score", [0, 0])], forfeit=int(bool(d.get("forfeit"))),
-                         ot=int(mins > 10.03), aim=str(d.get("aim") or ""), ver=R.version_of(d.get("net", "")),
+                         ot=int(mins > 10.03), aim=str(d.get("aim") or ""), ver=R.line_version(d),
                          name=nm, who=R.page_id(d.get("key")) if nm else None,
                          r=[int(round(b[0])), int(round(b[1]))], dr=[int(round(b[0] - a[0])), int(round(b[1] - a[1]))]))
     rows.sort(key=lambda x: -x["t0"])
